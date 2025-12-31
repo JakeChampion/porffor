@@ -61,12 +61,20 @@ var __assert__isSameValue = (a, b) => {
   return a !== a && b !== b;
 };
 
+var __assert__toString = value => {
+  if (value === 0 && 1 / value === -Infinity) return '-0';
+  // avoid calling toString on objects that might cause issues
+  if (typeof value === 'object' && value !== null) return '[object]';
+  if (typeof value === 'function') return '[function]';
+  return '' + value;
+};
+
 var __assert_sameValue = (actual, expected) => {
   if (assert._isSameValue(actual, expected)) {
     return;
   }
 
-  throw new Test262Error('assert.sameValue failed');
+  throw new Test262Error('Expected SameValue(«' + assert._toString(actual) + '», «' + assert._toString(expected) + '») to be true');
 };
 
 var __assert_notSameValue = (actual, unexpected) => {
@@ -74,7 +82,7 @@ var __assert_notSameValue = (actual, unexpected) => {
     return;
   }
 
-  throw new Test262Error('assert.notSameValue failed');
+  throw new Test262Error('Expected SameValue(«' + assert._toString(actual) + '», «' + assert._toString(unexpected) + '») to be false');
 };
 
 /// compareArray.js
@@ -103,10 +111,35 @@ var compareArray = (a, b) => {
   return true;
 };
 
-var __assert_compareArray = (actual, expected) => {
+var __compareArray_format = arrayLike => {
+  var out = '[';
+  for (var i = 0; i < arrayLike.length; i++) {
+    if (i > 0) out += ', ';
+    var val = arrayLike[i];
+    if (typeof val === 'symbol') {
+      out += val.toString();
+    } else {
+      out += val;
+    }
+  }
+  return out + ']';
+};
+
+var __assert_compareArray = (actual, expected, message) => {
+  message = message === undefined ? '' : message;
+
+  // Check for primitive arguments
+  if (actual === null || (typeof actual !== 'object' && typeof actual !== 'function')) {
+    throw new Test262Error("Actual argument [" + actual + "] shouldn't be primitive. " + message);
+  }
+  if (expected === null || (typeof expected !== 'object' && typeof expected !== 'function')) {
+    throw new Test262Error("Expected argument [" + expected + "] shouldn't be primitive. " + message);
+  }
+
   if (compareArray(actual, expected)) return;
 
-  throw new Test262Error('assert.compareArray failed');
+  var format = compareArray.format;
+  throw new Test262Error('Actual ' + format(actual) + ' and expected ' + format(expected) + ' should have the same contents. ' + message);
 };
 
 /// isConstructor.js
@@ -450,6 +483,10 @@ function verifyProperty(obj, name, desc, options) {
     return true;
   }
 
+  if (typeof desc !== 'object' || desc === null) {
+    throw new Test262Error('verifyProperty: desc must be an object');
+  }
+
   if (!Object.hasOwn(obj, name)) throw new Test262Error('verifyProperty: obj should have own property');
 
   if (Object.hasOwn(desc, 'value')) {
@@ -479,8 +516,13 @@ function verifyProperty(obj, name, desc, options) {
     }
   }
 
-  if (options && options.restore) {
-    Object.defineProperty(obj, name, originalDesc);
+  // delete the property (if configurable), then restore if requested
+  if (originalDesc.configurable) {
+    delete obj[name];
+
+    if (options && options.restore) {
+      Object.defineProperty(obj, name, originalDesc);
+    }
   }
 
   return true;
@@ -1282,7 +1324,8 @@ function isBoxed(value) {
   return value instanceof String
     || value instanceof Number
     || value instanceof Boolean
-    || value instanceof Symbol;
+    || value instanceof Symbol
+    || value instanceof BigInt;
 }
 
 function fail() {
@@ -1332,6 +1375,7 @@ function isPrimitiveEquatable(value) {
     case 'number':
     case 'boolean':
     case 'symbol':
+    case 'bigint':
       return true;
     default:
       return isBoxed(value);
