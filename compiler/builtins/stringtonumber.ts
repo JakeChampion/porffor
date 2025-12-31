@@ -46,6 +46,43 @@ export const __Porffor_stn_float = (str: unknown, i: i32): f64 => {
     } else if (chr == 46) { // .
       if (dec) return NaN;
       dec = 1;
+    } else if (chr == 69 || chr == 101) { // E or e
+      // Handle exponent
+      let expNeg: boolean = false;
+      let exp: i32 = 0;
+
+      // Check for +/- after E
+      if (i < len) {
+        const expSign: i32 = str.charCodeAt(i);
+        if (expSign == 43) { // +
+          i++;
+        } else if (expSign == 45) { // -
+          expNeg = true;
+          i++;
+        }
+      }
+
+      // Must have at least one digit after E
+      if (i >= len) return NaN;
+
+      // Parse exponent digits
+      let hasExpDigit: boolean = false;
+      while (i < len) {
+        const expChr: i32 = str.charCodeAt(i++);
+        if (expChr >= 48 && expChr <= 57) {
+          exp = (exp * 10) + expChr - 48;
+          hasExpDigit = true;
+        } else {
+          return NaN;
+        }
+      }
+
+      if (!hasExpDigit) return NaN;
+
+      // Apply exponent
+      if (expNeg) exp = -exp;
+      n = n * (10 ** exp);
+      return n;
     } else {
       return NaN;
     }
