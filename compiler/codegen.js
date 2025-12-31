@@ -5658,6 +5658,7 @@ const generateArray = (scope, decl, global = false, name = '$undeclared', static
 
   const out = [];
   let pointer;
+  let usedDepth = false;
 
   if (staticAlloc || decl._staticAlloc) {
     const uniqueName = name === '$undeclared' ? name + uniqId() : name;
@@ -5668,7 +5669,10 @@ const generateArray = (scope, decl, global = false, name = '$undeclared', static
     scope.arrays ??= new Map();
     scope.arrays.set(uniqueName, ptr);
   } else {
-    const tmp = localTmp(scope, '#create_array' + uniqId(), Valtype.i32);
+    // use depth-based naming to handle nested arrays while minimizing local count
+    scope.arrayDepth ??= 0;
+    usedDepth = true;
+    const tmp = localTmp(scope, '#create_array_' + scope.arrayDepth++, Valtype.i32);
     out.push(
       number(pageSize, Valtype.i32),
       [ Opcodes.call, includeBuiltin(scope, '__Porffor_malloc').index ],
@@ -5731,6 +5735,8 @@ const generateArray = (scope, decl, global = false, name = '$undeclared', static
     pointer,
     Opcodes.i32_from_u
   );
+
+  if (usedDepth) scope.arrayDepth--;
 
   typeUsed(scope, TYPES.array);
   return out;
