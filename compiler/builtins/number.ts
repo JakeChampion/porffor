@@ -66,7 +66,7 @@ export const __Number_prototype_toString = (_this: number, radix: number|any) =>
 
   let i: f64 = Math.trunc(_this);
 
-  let digits: bytestring = ''; // byte "array"
+  let digits: bytestring = Porffor.malloc(64); // byte "array" scratch buffer
 
   let l: i32 = 0;
   if (radix == 10) {
@@ -290,7 +290,7 @@ export const __Number_prototype_toFixed = (_this: number, fractionDigits: number
 
   let i: f64 = Math.trunc(_this);
 
-  let digits: bytestring = ''; // byte "array"
+  let digits: bytestring = Porffor.malloc(64); // byte "array" scratch buffer
 
   let l: i32 = 0;
 
@@ -384,7 +384,7 @@ export const __Number_prototype_toExponential = (_this: number, fractionDigits: 
 
   let i: f64 = _this;
 
-  let digits: bytestring = ''; // byte "array"
+  let digits: bytestring = Porffor.malloc(64); // byte "array" scratch buffer
 
   let l: i32 = 0;
   let e: i32 = 0;
