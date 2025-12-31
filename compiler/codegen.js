@@ -1220,6 +1220,8 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
 
   const knownLeft = knownTypeWithGuess(scope, leftType);
   const knownRight = knownTypeWithGuess(scope, rightType);
+  const originalLeftType = leftType;
+  const originalRightType = rightType;
 
   const eqOp = ['==', '===', '!=', '!==', '>', '>=', '<', '<='].includes(op);
   const strictOp = op === '===' || op === '!==';
@@ -1297,15 +1299,22 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
   if (!Array.isArray(ops)) ops = [ ops ];
   ops = [ ops ];
 
-  let tmpLeft, tmpRight;
+  let tmpLeft, tmpRight, tmpLeftType, tmpRightType;
+  let captureTypes = false;
   // if equal op, check if strings for compareStrings
   // todo: intelligent partial skip later
   // if neither known are string, stop this madness
   // we already do known checks earlier, so don't need to recheck
 
   if (op === '+' && (knownLeft == null && knownRight == null)) {
+    tmpLeftType = localTmp(scope, '__tmpop_left_type', Valtype.i32);
+    tmpRightType = localTmp(scope, '__tmpop_right_type', Valtype.i32);
+    captureTypes = true;
     tmpLeft = localTmp(scope, '__tmpop_left');
     tmpRight = localTmp(scope, '__tmpop_right');
+
+    leftType = [ [ Opcodes.local_get, tmpLeftType ] ];
+    rightType = [ [ Opcodes.local_get, tmpRightType ] ];
 
     ops.unshift(
       // if left or right are string or bytestring
@@ -1324,6 +1333,15 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
   }
 
   if ((op === '===' || op === '==' || op === '!==' || op === '!=') && (knownLeft == null && knownRight == null)) {
+    if (!tmpLeftType) {
+      tmpLeftType = localTmp(scope, '__tmpop_left_type', Valtype.i32);
+      tmpRightType = localTmp(scope, '__tmpop_right_type', Valtype.i32);
+    }
+    captureTypes = true;
+
+    leftType = [ [ Opcodes.local_get, tmpLeftType ] ];
+    rightType = [ [ Opcodes.local_get, tmpRightType ] ];
+
     tmpLeft = localTmp(scope, '__tmpop_left');
     tmpRight = localTmp(scope, '__tmpop_right');
 
@@ -1345,8 +1363,10 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
   return finalize([
     ...left,
     ...(tmpLeft != null ? [ [ Opcodes.local_tee, tmpLeft ] ] : []),
+    ...(captureTypes ? [ ...originalLeftType, [ Opcodes.local_set, tmpLeftType ] ] : []),
     ...right,
     ...(tmpRight != null ? [ [ Opcodes.local_tee, tmpRight ] ] : []),
+    ...(captureTypes ? [ ...originalRightType, [ Opcodes.local_set, tmpRightType ] ] : []),
     ...ops
   ]);
 };
