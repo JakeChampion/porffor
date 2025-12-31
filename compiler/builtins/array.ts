@@ -69,8 +69,16 @@ export const __Array_from = (arg: any, mapFn: any): any[] => {
     if (len > 4294967295) throw new RangeError('Invalid array length');
     if (len < 0) len = 0;
 
-    for (let i: i32 = 0; i < len; i++) {
-      out[i] = (arg as object)[i];
+    if (Porffor.type(mapFn) != Porffor.TYPES.undefined) {
+      if (Porffor.type(mapFn) != Porffor.TYPES.function) throw new TypeError('Called Array.from with a non-function mapFn');
+
+      for (let i: i32 = 0; i < len; i++) {
+        out[i] = mapFn((arg as object)[i], i);
+      }
+    } else {
+      for (let i: i32 = 0; i < len; i++) {
+        out[i] = (arg as object)[i];
+      }
     }
 
     out.length = len;
