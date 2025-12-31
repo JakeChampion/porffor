@@ -244,9 +244,12 @@ return`;
 };
 
 export const __Porffor_object_isObject = (arg: any): boolean => {
+  // null is type object (7) with value 0, but Boolean(false) is type booleanobject (31) with value 0
+  // so check arg != null first
+  if (arg == null) return false;
+
   const t: i32 = Porffor.wasm`local.get ${arg+1}`;
   return Porffor.fastAnd(
-    arg != 0, // null
     t > 0x05,
     t != Porffor.TYPES.string,
     t != Porffor.TYPES.bytestring
