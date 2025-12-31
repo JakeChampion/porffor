@@ -142,7 +142,8 @@ export const __ecma262_StringToNumber = (str: unknown): number => {
       str.charCodeAt(i + 4) == 110 && // n
       str.charCodeAt(i + 5) == 105 && // i
       str.charCodeAt(i + 6) == 116 && // t
-      str.charCodeAt(i + 7) == 121 // y
+      str.charCodeAt(i + 7) == 121 && // y
+      i + 8 == str.length // ensure no trailing chars (whitespace already trimmed)
     ) {
       // no way, it matched
       let n: f64 = Infinity;
