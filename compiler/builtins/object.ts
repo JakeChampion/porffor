@@ -210,13 +210,45 @@ export const __Object_assign = (target: any, ...sources: any[]): any => {
   if (target == null) throw new TypeError('Argument is nullish, expected object');
 
   for (const x of sources) {
-    // todo: switch to for..in once it supports non-pure-object
+    // Object.assign copies both string and symbol enumerable own properties
+    // First copy string keys
     const keys: any[] = __Object_keys(x);
     const vals: any[] = __Object_values(x);
 
     const len: i32 = keys.length;
     for (let i: i32 = 0; i < len; i++) {
       target[keys[i]] = vals[i];
+    }
+
+    // Then copy symbol keys (if source is an object)
+    const srcObj: any = __Porffor_object_underlying(x);
+    if (Porffor.type(srcObj) == Porffor.TYPES.object) {
+      let ptr: i32 = Porffor.wasm`local.get ${srcObj}` + 8;
+      const endPtr: i32 = ptr + Porffor.wasm.i32.load16_u(srcObj, 0, 0) * 18;
+
+      for (; ptr < endPtr; ptr += 18) {
+        if (!Porffor.object.isEnumerable(ptr)) continue;
+
+        // Check if key is a symbol
+        const rawKey: i32 = Porffor.wasm.i32.load(ptr, 0, 4);
+        const msb: i32 = rawKey >>> 30;
+        if (msb != 3) continue; // not a symbol, skip
+
+        // Get the symbol key
+        let symKey: any;
+        Porffor.wasm`i32.const 5
+local.set ${symKey+1}
+local.get ${ptr}
+i32.to_u
+i32.load 0 4
+i32.const 1073741823
+i32.and
+i32.from_u
+local.set ${symKey}`;
+
+        // Get and copy the value
+        target[symKey] = Porffor.object.readValue(ptr);
+      }
     }
   }
 
