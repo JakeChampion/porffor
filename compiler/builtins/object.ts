@@ -84,6 +84,10 @@ export const __Object_values = (obj: any): any[] => {
       const tail: i32 = Porffor.wasm.i32.load16_u(ptr, 0, 16);
       if (!(tail & 0b0100)) continue; // not enumerable
 
+      // Check if key is a symbol - if so, skip it (Object.values only returns values for string keys)
+      const rawKey: i32 = Porffor.wasm.i32.load(ptr, 0, 4);
+      if ((rawKey >>> 30) == 3) continue;
+
       if (tail & 0b0001) {
         // accessor
         const get: Function = Porffor.object.accessorGet(ptr);
