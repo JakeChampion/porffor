@@ -1,5 +1,14 @@
 import type {} from './porffor.d.ts';
 
+// SameValueZero comparison (used by Set and Map)
+// Like === but NaN === NaN is true, and +0 === -0 is true
+export const __Porffor_map_sameValueZero = (x: any, y: any): boolean => {
+  if (x === y) return true;
+  // NaN !== NaN, but SameValueZero(NaN, NaN) should be true
+  if (Number.isNaN(x) && Number.isNaN(y)) return true;
+  return false;
+};
+
 export const __Map_prototype_size$get = (_this: Map) => {
   return Porffor.wasm.i32.load(Porffor.wasm.i32.load(_this, 0, 0), 0, 0);
 };
@@ -7,7 +16,7 @@ export const __Map_prototype_size$get = (_this: Map) => {
 export const __Map_prototype_has = (_this: Map, key: any) => {
   const keys: any[] = Porffor.wasm.i32.load(_this, 0, 0);
   for (const x of keys) {
-    if (x === key) return true;
+    if (__Porffor_map_sameValueZero(x, key)) return true;
   }
 
   return false;
@@ -19,7 +28,7 @@ export const __Map_prototype_get = (_this: Map, key: any) => {
 
   const size: i32 = Porffor.wasm.i32.load(keys, 0, 0);
   for (let i: i32 = 0; i < size; i++) {
-    if (keys[i] === key) return vals[i];
+    if (__Porffor_map_sameValueZero(keys[i], key)) return vals[i];
   }
 
   return undefined;
@@ -31,7 +40,7 @@ export const __Map_prototype_set = (_this: Map, key: any, value: any) => {
 
   const size: i32 = keys.length;
   for (let i: i32 = 0; i < size; i++) {
-    if (keys[i] === key) {
+    if (__Porffor_map_sameValueZero(keys[i], key)) {
       vals[i] = value;
       return _this;
     }
@@ -54,7 +63,7 @@ export const __Map_prototype_delete = (_this: Map, key: any) => {
 
   const size: i32 = keys.length;
   for (let i: i32 = 0; i < size; i++) {
-    if (keys[i] === key) {
+    if (__Porffor_map_sameValueZero(keys[i], key)) {
       Porffor.array.fastRemove(keys, i, size);
       Porffor.array.fastRemove(vals, i, size);
       return true;

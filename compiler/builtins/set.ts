@@ -1,5 +1,14 @@
 import type {} from './porffor.d.ts';
 
+// SameValueZero comparison (used by Set and Map)
+// Like === but NaN === NaN is true, and +0 === -0 is true
+export const __Porffor_set_sameValueZero = (x: any, y: any): boolean => {
+  if (x === y) return true;
+  // NaN !== NaN, but SameValueZero(NaN, NaN) should be true
+  if (Number.isNaN(x) && Number.isNaN(y)) return true;
+  return false;
+};
+
 export const __Set_prototype_size$get = (_this: Set) => {
   return Porffor.wasm.i32.load(_this, 0, 0);
 };
@@ -24,7 +33,7 @@ export const __Set_prototype_has = (_this: Set, value: any) => {
   const size: number = Porffor.wasm.i32.load(_this, 0, 0);
 
   for (let i: number = 0; i < size; i++) {
-    if ((_this as any[])[i] === value) return true;
+    if (__Porffor_set_sameValueZero((_this as any[])[i], value)) return true;
   }
 
   return false;
@@ -35,7 +44,7 @@ export const __Set_prototype_add = (_this: Set, value: any) => {
 
   // check if already in set
   for (let i: number = 0; i < size; i++) {
-    if ((_this as any[])[i] === value) return _this;
+    if (__Porffor_set_sameValueZero((_this as any[])[i], value)) return _this;
   }
 
   // not, add it
@@ -52,7 +61,7 @@ export const __Set_prototype_delete = (_this: Set, value: any) => {
   // check if already in set
   const size: number = Porffor.wasm.i32.load(_this, 0, 0);
   for (let i: number = 0; i < size; i++) {
-    if ((_this as any[])[i] === value) {
+    if (__Porffor_set_sameValueZero((_this as any[])[i], value)) {
       // found, delete
       Porffor.array.fastRemove(_this, i, size);
       return true;
