@@ -130,7 +130,7 @@ export const BuiltinVars = ({ builtinFuncs }) => {
   const makePrefix = name => (name.startsWith('__') ? '' : '__') + name + '_';
 
   const done = new Set();
-  const object = (name, props) => {
+  const object = (name, props, toStringTag = null) => {
     done.add(name);
     const prefix = name === 'globalThis' ? '' : makePrefix(name);
 
@@ -220,6 +220,44 @@ export const BuiltinVars = ({ builtinFuncs }) => {
             number(TYPES.number, Valtype.i32),
 
             [ Opcodes.call, builtin(add ? '__Porffor_object_fastAdd' : '__Porffor_object_define') ]
+          );
+        }
+
+        // add Symbol.toStringTag if specified
+        if (toStringTag) {
+          // Symbol.toStringTag property: { writable: false, enumerable: false, configurable: true }
+          const flags = 0b0010; // configurable only
+
+          out.push(
+            [ Opcodes.local_get, 0 ],
+            number(TYPES.object, Valtype.i32),
+
+            // get Symbol.toStringTag (well-known symbol) - use same pattern as __Symbol_* getters
+            [ Opcodes.block, Valtype.f64 ],
+              ...glbl(Opcodes.global_get, `#wellknown_toStringTag`, Valtype.f64),
+              Opcodes.i32_to_u,
+              [ Opcodes.if, Blocktype.void ],
+                ...glbl(Opcodes.global_get, `#wellknown_toStringTag`, Valtype.f64),
+                [ Opcodes.br, 1 ],
+              [ Opcodes.end ],
+
+              ...makeString(scope, `Symbol.toStringTag`),
+              number(TYPES.bytestring, Valtype.i32),
+              [ Opcodes.call, builtin('Symbol') ],
+              ...glbl(Opcodes.global_set, `#wellknown_toStringTag`, Valtype.f64),
+              ...glbl(Opcodes.global_get, `#wellknown_toStringTag`, Valtype.f64),
+            [ Opcodes.end ],
+            Opcodes.i32_to_u,  // convert f64 symbol to i32
+            number(TYPES.symbol, Valtype.i32),
+
+            // value is the toStringTag string
+            ...makeString(scope, toStringTag),
+            number(TYPES.bytestring, Valtype.i32),
+
+            number(flags, Valtype.i32),
+            number(TYPES.number, Valtype.i32),
+
+            [ Opcodes.call, builtin('__Porffor_object_fastAdd') ]
           );
         }
 
@@ -329,7 +367,7 @@ export const BuiltinVars = ({ builtinFuncs }) => {
     }),
 
     ...autoFuncs('Math')
-  });
+  }, 'Math');
 
   // automatically generate objects for prototypes
   for (const x of builtinFuncKeys.reduce((acc, x) => {
@@ -430,8 +468,11 @@ export const BuiltinVars = ({ builtinFuncs }) => {
     }, autoFuncKeys(x).slice(0, 12)));
   }
 
+  // Objects that need Symbol.toStringTag per spec
+  const objectsWithToStringTag = new Set(['JSON', 'Math', 'Atomics', 'Reflect']);
+
   for (const x of [ 'Array', 'ArrayBuffer', 'Atomics', 'Date', 'Error', 'JSON', 'Object', 'Promise', 'Reflect', 'String', 'Symbol', 'Uint8Array', 'Int8Array', 'Uint8ClampedArray', 'Uint16Array', 'Int16Array', 'Uint32Array', 'Int32Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array', 'SharedArrayBuffer', 'BigInt', 'Boolean', 'DataView', 'AggregateError', 'TypeError', 'ReferenceError', 'SyntaxError', 'RangeError', 'EvalError', 'URIError', 'Function', 'Map', 'RegExp', 'Set', 'WeakMap', 'WeakRef', 'WeakSet' ]) {
-    object(x, autoFuncs(x));
+    object(x, autoFuncs(x), objectsWithToStringTag.has(x) ? x : null);
   }
 
   const enumerableGlobals = [ 'atob', 'btoa', 'performance', 'crypto', 'navigator' ];
