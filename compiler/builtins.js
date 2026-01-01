@@ -551,7 +551,6 @@ export const BuiltinFuncs = () => {
     [ 'sign', Opcodes.f64_copysign, [ number(1), [ Opcodes.local_get, 0 ] ] ],
     [ 'floor', Opcodes.f64_floor ],
     [ 'ceil', Opcodes.f64_ceil ],
-    [ 'round', Opcodes.f64_nearest ],
     [ 'trunc', Opcodes.f64_trunc ]
   ]) {
    _[`__Math_${name}`] = {
@@ -566,20 +565,6 @@ export const BuiltinFuncs = () => {
     };
   }
 
-  // todo: does not follow spec with +-Infinity and values >2**32
-  _.__Math_clz32 = {
-    params: [ valtypeBinary ],
-    locals: [],
-    returns: [ valtypeBinary ],
-    returnType: TYPES.number,
-    wasm: () => [
-      [ Opcodes.local_get, 0 ],
-      Opcodes.i32_to_u,
-      [ Opcodes.i32_clz ],
-      Opcodes.i32_from
-    ]
-  };
-
   _.__Math_fround = {
     params: [ valtypeBinary ],
     locals: [],
@@ -589,22 +574,6 @@ export const BuiltinFuncs = () => {
       [ Opcodes.local_get, 0 ],
       [ Opcodes.f32_demote_f64 ],
       [ Opcodes.f64_promote_f32 ]
-    ]
-  };
-
-  // todo: this does not overflow correctly
-  _.__Math_imul = {
-    params: [ valtypeBinary, valtypeBinary ],
-    locals: [],
-    returns: [ valtypeBinary ],
-    returnType: TYPES.number,
-    wasm: () => [
-      [ Opcodes.local_get, 0 ],
-      Opcodes.i32_to,
-      [ Opcodes.local_get, 1 ],
-      Opcodes.i32_to,
-      [ Opcodes.i32_mul ],
-      Opcodes.i32_from
     ]
   };
 

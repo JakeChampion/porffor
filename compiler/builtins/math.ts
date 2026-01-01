@@ -597,3 +597,65 @@ export const __Math_sumPrecise = (values: any[]): number => {
 
   return sum;
 };
+
+export const __Math_round = (x: number): number => {
+  if (!Number.isFinite(x)) return x;
+  if (x == 0) return x; // preserve -0
+
+  if (Math.trunc(x) == x) return x;
+
+  // For negative numbers in range [-0.5, 0), result should be -0
+  if (x >= -0.5 && x < 0) return 0 * x;
+
+  const intPart: number = Math.floor(x);
+  const fracPart: number = x - intPart;
+  if (fracPart < 0.5) return intPart;
+  return intPart + 1;
+};
+
+export const __Math_clz32 = (x: any): number => {
+  const n: number = ecma262.ToNumber(x);
+
+  if (Number.isNaN(n) || !Number.isFinite(n)) return 32;
+
+  let u32: number = n % 4294967296;
+  if (u32 < 0) u32 += 4294967296;
+
+  if (u32 == 0) return 32;
+
+  let count: i32 = 0;
+
+  if (u32 < 65536) { count += 16; u32 *= 65536; }
+  if (u32 < 16777216) { count += 8; u32 *= 256; }
+  if (u32 < 268435456) { count += 4; u32 *= 16; }
+  if (u32 < 1073741824) { count += 2; u32 *= 4; }
+  if (u32 < 2147483648) { count += 1; }
+
+  return count;
+};
+
+export const __Math_imul = (x: any, y: any): number => {
+  const xn: number = ecma262.ToNumber(x);
+  const yn: number = ecma262.ToNumber(y);
+
+  let a: number = Math.trunc(xn) % 4294967296;
+  let b: number = Math.trunc(yn) % 4294967296;
+
+  if (a < 0) a += 4294967296;
+  if (b < 0) b += 4294967296;
+
+  const aLo: number = a % 65536;
+  const aHi: number = Math.trunc(a / 65536);
+  const bLo: number = b % 65536;
+  const bHi: number = Math.trunc(b / 65536);
+
+  const loLo: number = aLo * bLo;
+  const mid: number = aHi * bLo + aLo * bHi;
+
+  let product: number = loLo + (mid % 65536) * 65536;
+  product = product % 4294967296;
+
+  if (product >= 2147483648) product -= 4294967296;
+
+  return product;
+};
