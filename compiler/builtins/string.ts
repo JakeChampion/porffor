@@ -3034,7 +3034,9 @@ export const __ByteString_prototype_trim = (_this: bytestring) => {
 };
 
 
-export const __String_prototype_concat = (_this: string, ...vals: any[]) => {
+export const __String_prototype_concat = (_this: any, ...vals: any[]) => {
+  _this = ecma262.ToString(_this);
+
   let out: any = Porffor.malloc();
   Porffor.clone(_this, out);
 
