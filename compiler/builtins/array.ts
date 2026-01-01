@@ -1,5 +1,13 @@
 import type {} from './porffor.d.ts';
 
+// Like === but NaN === NaN is true, and +0 === -0 is true
+export const __Porffor_array_sameValueZero = (x: any, y: any): boolean => {
+  if (x === y) return true;
+  // NaN !== NaN, but SameValueZero(NaN, NaN) should be true
+  if (Number.isNaN(x) && Number.isNaN(y)) return true;
+  return false;
+};
+
 export const Array = function (...args: any[]): any[] {
   const argsLen: number = args.length;
   if (argsLen == 0) {
@@ -384,6 +392,8 @@ export const __Array_prototype_fill = (_this: any[], value: any, _start: any, _e
 // @porf-typed-array
 export const __Array_prototype_indexOf = (_this: any[], searchElement: any, _position: any) => {
   const len: i32 = _this.length;
+  if (len == 0) return -1;
+
   let position: i32 = ecma262.ToIntegerOrInfinity(_position);
   if (position >= 0) {
     if (position > len) position = len;
@@ -402,6 +412,8 @@ export const __Array_prototype_indexOf = (_this: any[], searchElement: any, _pos
 // @porf-typed-array
 export const __Array_prototype_lastIndexOf = (_this: any[], searchElement: any, _position: any) => {
   const len: i32 = _this.length;
+  if (len == 0) return -1;
+
   let position: i32 = _position == null ? len - 1 : ecma262.ToIntegerOrInfinity(_position);
   if (position >= 0) {
     if (position > len - 1) position = len - 1;
@@ -419,6 +431,8 @@ export const __Array_prototype_lastIndexOf = (_this: any[], searchElement: any, 
 // @porf-typed-array
 export const __Array_prototype_includes = (_this: any[], searchElement: any, _position: any) => {
   const len: i32 = _this.length;
+  if (len == 0) return false;
+
   let position: i32 = ecma262.ToIntegerOrInfinity(_position);
   if (position >= 0) {
     if (position > len) position = len;
@@ -428,7 +442,7 @@ export const __Array_prototype_includes = (_this: any[], searchElement: any, _po
   }
 
   for (let i: i32 = position; i < len; i++) {
-    if (_this[i] === searchElement) return true;
+    if (__Porffor_array_sameValueZero(_this[i], searchElement)) return true;
   }
 
   return false;
@@ -625,6 +639,7 @@ export const __Array_prototype_findIndex = (_this: any[], callbackFn: any, thisA
     if (!!callbackFn.call(thisArg, _this[i], i, _this)) return i;
     i++;
   }
+  return -1;
 };
 
 // @porf-typed-array
@@ -634,6 +649,7 @@ export const __Array_prototype_findLastIndex = (_this: any[], callbackFn: any, t
   while (i > 0) {
     if (!!callbackFn.call(thisArg, _this[--i], i, _this)) return i;
   }
+  return -1;
 };
 
 // @porf-typed-array
