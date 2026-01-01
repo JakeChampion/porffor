@@ -670,6 +670,56 @@ export const __Math_clz32 = (x: any): number => {
   return count;
 };
 
+// 21.3.2.24 Math.max ( ...args )
+// https://tc39.es/ecma262/#sec-math.max
+export const __Math_max = (...args: any[]): number => {
+  let highest: number = -Infinity;
+
+  for (let i: i32 = 0; i < args.length; i++) {
+    const n: number = ecma262.ToNumber(args[i]);
+
+    // If any value is NaN, return NaN
+    if (Number.isNaN(n)) return NaN;
+
+    // Handle -0: max(+0, -0) = +0, max(-0, +0) = +0
+    if (n == 0 && highest == 0) {
+      // If n is +0 or highest is +0, result is +0
+      if (!Object.is(n, -0) || !Object.is(highest, -0)) {
+        highest = 0;
+      }
+    } else if (n > highest) {
+      highest = n;
+    }
+  }
+
+  return highest;
+};
+
+// 21.3.2.25 Math.min ( ...args )
+// https://tc39.es/ecma262/#sec-math.min
+export const __Math_min = (...args: any[]): number => {
+  let lowest: number = Infinity;
+
+  for (let i: i32 = 0; i < args.length; i++) {
+    const n: number = ecma262.ToNumber(args[i]);
+
+    // If any value is NaN, return NaN
+    if (Number.isNaN(n)) return NaN;
+
+    // Handle -0: min(+0, -0) = -0, min(-0, +0) = -0
+    if (n == 0 && lowest == 0) {
+      // If either is -0, result is -0
+      if (Object.is(n, -0) || Object.is(lowest, -0)) {
+        lowest = -0;
+      }
+    } else if (n < lowest) {
+      lowest = n;
+    }
+  }
+
+  return lowest;
+};
+
 export const __Math_imul = (x: any, y: any): number => {
   const xn: number = ecma262.ToNumber(x);
   const yn: number = ecma262.ToNumber(y);
