@@ -1444,19 +1444,62 @@ export const RegExp = function (pattern: any, flags: any): RegExp {
 
 
 export const __RegExp_prototype_exec = (_this: RegExp, input: any) => {
-  if (Porffor.type(input) !== Porffor.TYPES.bytestring) input = ecma262.ToString(input);
+  const t: i32 = Porffor.type(input);
+  if (t != Porffor.TYPES.bytestring && t != Porffor.TYPES.string) {
+    input = ecma262.ToString(input);
+  }
+
+  // If it's a regular string (2-byte chars), convert to bytestring (1-byte chars)
+  // for the regex interpreter which only handles bytestrings
+  if (Porffor.type(input) == Porffor.TYPES.string) {
+    const len: i32 = (input as string).length;
+    const bs: bytestring = Porffor.malloc();
+    for (let i: i32 = 0; i < len; i++) {
+      Porffor.bytestring.appendChar(bs, (input as string).charCodeAt(i));
+    }
+    input = bs;
+  }
+
   return __Porffor_regex_interpret(_this, input, false);
 };
 
 export const __RegExp_prototype_test = (_this: RegExp, input: any) => {
-  if (Porffor.type(input) !== Porffor.TYPES.bytestring) input = ecma262.ToString(input);
+  const t: i32 = Porffor.type(input);
+  if (t != Porffor.TYPES.bytestring && t != Porffor.TYPES.string) {
+    input = ecma262.ToString(input);
+  }
+
+  // If it's a regular string (2-byte chars), convert to bytestring (1-byte chars)
+  if (Porffor.type(input) == Porffor.TYPES.string) {
+    const len: i32 = (input as string).length;
+    const bs: bytestring = Porffor.malloc();
+    for (let i: i32 = 0; i < len; i++) {
+      Porffor.bytestring.appendChar(bs, (input as string).charCodeAt(i));
+    }
+    input = bs;
+  }
+
   return __Porffor_regex_interpret(_this, input, true);
 };
 
 
 export const __Porffor_regex_match = (regexp: any, input: any) => {
   if (Porffor.type(regexp) !== Porffor.TYPES.regexp) regexp = new RegExp(regexp);
-  if (Porffor.type(input) !== Porffor.TYPES.bytestring) input = ecma262.ToString(input);
+
+  const t: i32 = Porffor.type(input);
+  if (t != Porffor.TYPES.bytestring && t != Porffor.TYPES.string) {
+    input = ecma262.ToString(input);
+  }
+
+  // If it's a regular string (2-byte chars), convert to bytestring (1-byte chars)
+  if (Porffor.type(input) == Porffor.TYPES.string) {
+    const len: i32 = (input as string).length;
+    const bs: bytestring = Porffor.malloc();
+    for (let i: i32 = 0; i < len; i++) {
+      Porffor.bytestring.appendChar(bs, (input as string).charCodeAt(i));
+    }
+    input = bs;
+  }
 
   if (__RegExp_prototype_global$get(regexp)) {
     // global should return all matches as just complete string result
