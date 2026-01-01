@@ -84,7 +84,16 @@ export const __String_fromCharCode = (...codes: any[]): bytestring|string => {
 
   let bytestringable: boolean = true;
   for (let i: i32 = 0; i < len; i++) {
-    const v: i32 = __ecma262_ToIntegerOrInfinity(codes[i]);
+    // ToUint16: NaN, +0, -0, +Infinity, -Infinity all become 0
+    const n: number = ecma262.ToNumber(codes[i]);
+    let v: i32;
+    if (Number.isNaN(n) || !Number.isFinite(n)) {
+      v = 0;
+    } else {
+      // ToUint16: use modulo to handle values > 2^31 correctly
+      v = Math.trunc(n) % 65536;
+      if (v < 0) v += 65536;
+    }
     if (v > 0xFF) bytestringable = false;
 
     Porffor.wasm.i32.store16(Porffor.wasm`local.get ${out}` + i * 2, v, 0, 4);

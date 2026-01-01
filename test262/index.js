@@ -162,7 +162,7 @@ if (cluster.isPrimary) {
         } else {
           spawn();
         }
-      }, 65000);
+      }, 15000);
     };
 
     worker.on('message', int => {
