@@ -33,6 +33,31 @@ export const Number = function (value: any): number|NumberObject {
   return n as NumberObject;
 };
 
+export const __Number_isFinite = (number: any): boolean => {
+  if (Porffor.type(number) != Porffor.TYPES.number) return false;
+  return (number - number) == 0;
+};
+
+export const __Number_isNaN = (number: any): boolean => {
+  if (Porffor.type(number) != Porffor.TYPES.number) return false;
+  return number != number;
+};
+
+export const __Number_isInteger = (number: any): boolean => {
+  if (Porffor.type(number) != Porffor.TYPES.number) return false;
+  if ((number - number) != 0) return false;
+  if (Math.trunc(number) != number) return false;
+  return true;
+};
+
+export const __Number_isSafeInteger = (number: any): boolean => {
+  if (Porffor.type(number) != Porffor.TYPES.number) return false;
+  if ((number - number) != 0) return false;
+  if (Math.trunc(number) != number) return false;
+  if (Math.abs(number) <= 9007199254740991) return true;
+  return false;
+};
+
 // radix: number|any for type check
 export const __Number_prototype_toString = (_this: number, radix: number|any) => {
   if (Porffor.type(radix) != Porffor.TYPES.number) {

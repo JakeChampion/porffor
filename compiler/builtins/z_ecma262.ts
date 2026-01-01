@@ -187,3 +187,13 @@ export const __ecma262_IsConstructor = (argument: any): boolean => {
   if (Porffor.type(argument) != Porffor.TYPES.function) return false;
   return (__Porffor_funcLut_flags(argument) & 0b10) == 2;
 };
+
+export const isNaN = (number: any): boolean => {
+  const num: number = __ecma262_ToNumber(number);
+  return num != num;
+};
+
+export const isFinite = (number: any): boolean => {
+  const num: number = __ecma262_ToNumber(number);
+  return (num - num) == 0;
+};
