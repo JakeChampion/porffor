@@ -31037,7 +31037,9 @@
     "language/statements/while/S12.6.2_A2.js",
     "language/statements/while/S12.6.2_A3.js",
     "language/statements/while/S12.6.2_A4_T1.js",
+    "language/statements/while/S12.6.2_A4_T2.js",
     "language/statements/while/S12.6.2_A4_T3.js",
+    "language/statements/while/S12.6.2_A4_T4.js",
     "language/statements/while/S12.6.2_A6_T1.js",
     "language/statements/while/S12.6.2_A6_T2.js",
     "language/statements/while/S12.6.2_A6_T3.js",
@@ -38646,6 +38648,7 @@
     "staging/sm/String/split-order.js",
     "staging/sm/String/split.js",
     "staging/sm/String/string-code-point-upper-lower-mapping.js",
+    "staging/sm/String/string-upper-lower-mapping.js",
     "staging/sm/String/unicode-braced.js",
     "staging/sm/Symbol/as-base-value.js",
     "staging/sm/Symbol/conversions.js",
@@ -38975,13 +38978,10 @@
     "built-ins/RegExp/property-escapes/generated/XID_Continue.js",
     "built-ins/RegExp/property-escapes/generated/XID_Start.js",
     "language/module-code/top-level-await/while-dynamic-evaluation.js",
-    "language/statements/while/S12.6.2_A4_T2.js",
-    "language/statements/while/S12.6.2_A4_T4.js",
     "staging/sm/Math/cosh-approx.js",
     "staging/sm/Math/expm1-monotonicity.js",
     "staging/sm/String/AdvanceStringIndex.js",
-    "staging/sm/String/match-forward-lookahead.js",
-    "staging/sm/String/string-upper-lower-mapping.js"
+    "staging/sm/String/match-forward-lookahead.js"
   ],
   "total": 51946
 }
