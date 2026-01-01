@@ -28,6 +28,10 @@ export const __Object_keys = (obj: any): any[] => {
     for (; ptr < endPtr; ptr += 18) {
       if (!Porffor.object.isEnumerable(ptr)) continue;
 
+      // Check if key is a symbol - if so, skip it (Object.keys only returns string keys)
+      const rawKey: i32 = Porffor.wasm.i32.load(ptr, 0, 4);
+      if ((rawKey >>> 30) == 3) continue;
+
       let key: any;
       Porffor.wasm`local raw i32
 local msb i32
@@ -41,12 +45,7 @@ i32.const 30
 i32.shr_u
 local.tee msb
 if 127
-  i32.const 5 ;; symbol
   i32.const 67 ;; string
-  local.get msb
-  i32.const 3
-  i32.eq
-  select
   local.set ${key+1}
 
   local.get raw
