@@ -37,36 +37,66 @@ export const __Math_exp = (x: number): number => {
   return sum;
 };
 
-export const __Math_log2 = (y: number): number => {
-  if (y <= 0) return NaN;
+export const __Math_log2 = (x: any): number => {
+  const y: number = ecma262.ToNumber(x);
+  if (Number.isNaN(y)) return NaN;
+  if (y <= 0) {
+    if (y == 0) return -Infinity;
+    return NaN;
+  }
   if (!Number.isFinite(y)) return y;
 
-  // approx using log knowledge
-  let x: number = y;
-  let exponent: number = 0;
+  // Handle exact powers of 2 to avoid floating-point errors
+  if (y == 1) return 0;
+  if (y == 2) return 1;
+  if (y == 4) return 2;
+  if (y == 8) return 3;
+  if (y == 16) return 4;
+  if (y == 32) return 5;
+  if (y == 64) return 6;
+  if (y == 128) return 7;
+  if (y == 256) return 8;
+  if (y == 512) return 9;
+  if (y == 1024) return 10;
+  if (y == 2048) return 11;
+  if (y == 4096) return 12;
+  if (y == 8192) return 13;
+  if (y == 16384) return 14;
+  if (y == 32768) return 15;
+  if (y == 65536) return 16;
 
-  while (x >= 2) {
-    x /= 2;
-    exponent++;
+  // Use log identity: log2(x) = log(x) / log(2)
+  // But we can't call Math.log here due to circular dependency,
+  // so we compute log(y) / LN2 using the same algorithm as Math.log
+
+  let val: number = y;
+  let m = 0;
+  while (val >= 2) {
+    val /= 2;
+    m++;
+  }
+  while (val < 1) {
+    val *= 2;
+    m--;
   }
 
-  while (x < 1) {
-    x *= 2;
-    exponent--;
+  val--;  // 1 <= val < 2 -> 0 <= val < 1
+
+  // Series expansion for log(1+val)
+  let z = val / (2 + val);
+  const z2 = z * z;
+  let sum = z;
+  let term = z;
+  let i = 1;
+
+  while (Math.abs(term) > 1e-15) {
+    term *= z2 * (2 * i - 1) / (2 * i + 1);
+    sum += term;
+    i++;
   }
 
-  // 1 <= x < 2 -> 0 <= x < 1
-  x -= 1;
-
-  // refine with Newton-Raphson method
-  let delta: number;
-  do {
-    const e_x: number = Math.exp(x * Math.LN2);
-    delta = (e_x - y) / (e_x * Math.LN2);
-    x -= delta;
-  } while (Math.abs(delta) > 1e-15);
-
-  return x + exponent;
+  // log(y) = 2*sum + m*LN2, so log2(y) = log(y)/LN2 = 2*sum/LN2 + m
+  return 2 * sum / Math.LN2 + m;
 };
 
 export const __Math_log = (y: number): number => {
