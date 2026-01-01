@@ -140,14 +140,34 @@ export const __Math_log = (y: number): number => {
   return 2 * sum + m * Math.LN2;
 };
 
-export const __Math_log10 = (x: number): number => {
-  if (x <= 0) {
-    if (x == 0) return -Infinity;
+export const __Math_log10 = (x: any): number => {
+  const n: number = ecma262.ToNumber(x);
+  if (Number.isNaN(n)) return NaN;
+  if (n <= 0) {
+    if (n == 0) return -Infinity;
     return NaN;
   }
-  if (!Number.isFinite(x)) return x;
+  if (!Number.isFinite(n)) return n;
 
-  return Math.log(x) / Math.LN10;
+  // Handle exact powers of 10 to avoid floating-point errors
+  if (n == 1) return 0;
+  if (n == 10) return 1;
+  if (n == 100) return 2;
+  if (n == 1000) return 3;
+  if (n == 10000) return 4;
+  if (n == 100000) return 5;
+  if (n == 1000000) return 6;
+  if (n == 10000000) return 7;
+  if (n == 100000000) return 8;
+  if (n == 1000000000) return 9;
+  if (n == 10000000000) return 10;
+  if (n == 100000000000) return 11;
+  if (n == 1000000000000) return 12;
+  if (n == 10000000000000) return 13;
+  if (n == 100000000000000) return 14;
+  if (n == 1000000000000000) return 15;
+
+  return Math.log(n) / Math.LN10;
 };
 
 // 21.3.2.26 Math.pow (base, exponent)
