@@ -1374,7 +1374,9 @@ export const __Porffor_strcat = (a: any, b: any): any => {
 };
 
 
-export const __String_prototype_at = (_this: string, index: number) => {
+export const __String_prototype_at = (_this: string, index: any) => {
+  index = ecma262.ToIntegerOrInfinity(index);
+
   const len: i32 = _this.length;
 
   if (index < 0) index = len + index;
@@ -1391,7 +1393,9 @@ export const __String_prototype_at = (_this: string, index: number) => {
   return out;
 };
 
-export const __ByteString_prototype_at = (_this: bytestring, index: number) => {
+export const __ByteString_prototype_at = (_this: bytestring, index: any) => {
+  index = ecma262.ToIntegerOrInfinity(index);
+
   const len: i32 = _this.length;
 
   if (index < 0) index = len + index;
@@ -1408,7 +1412,9 @@ export const __ByteString_prototype_at = (_this: bytestring, index: number) => {
   return out;
 };
 
-export const __String_prototype_charAt = (_this: string, index: number) => {
+export const __String_prototype_charAt = (_this: string, index: any) => {
+  index = ecma262.ToIntegerOrInfinity(index);
+
   const len: i32 = _this.length;
 
   if (Porffor.fastOr(index < 0, index >= len)) return '';
@@ -1424,7 +1430,9 @@ export const __String_prototype_charAt = (_this: string, index: number) => {
   return out;
 };
 
-export const __ByteString_prototype_charAt = (_this: bytestring, index: number) => {
+export const __ByteString_prototype_charAt = (_this: bytestring, index: any) => {
+  index = ecma262.ToIntegerOrInfinity(index);
+
   const len: i32 = _this.length;
 
   if (Porffor.fastOr(index < 0, index >= len)) return '';
@@ -2018,7 +2026,9 @@ export const __ByteString_prototype_toLocaleUpperCase = (_this: bytestring) => _
 export const __String_prototype_toLocaleLowerCase = (_this: string) => __String_prototype_toLowerCase(_this);
 export const __ByteString_prototype_toLocaleLowerCase = (_this: bytestring) => __ByteString_prototype_toLowerCase(_this);
 
-export const __String_prototype_codePointAt = (_this: string, index: number) => {
+export const __String_prototype_codePointAt = (_this: string, index: any) => {
+  index = ecma262.ToIntegerOrInfinity(index);
+
   const len: i32 = _this.length;
 
   if (Porffor.fastOr(index < 0, index >= len)) return undefined;
@@ -2040,7 +2050,9 @@ export const __String_prototype_codePointAt = (_this: string, index: number) => 
   return c1;
 };
 
-export const __ByteString_prototype_codePointAt = (_this: bytestring, index: number) => {
+export const __ByteString_prototype_codePointAt = (_this: bytestring, index: any) => {
+  index = ecma262.ToIntegerOrInfinity(index);
+
   const len: i32 = _this.length;
 
   if (Porffor.fastOr(index < 0, index >= len)) return undefined;
@@ -2049,11 +2061,12 @@ export const __ByteString_prototype_codePointAt = (_this: bytestring, index: num
   return Porffor.wasm.i32.load8_u(Porffor.wasm`local.get ${_this}` + index, 0, 4);
 };
 
-export const __String_prototype_startsWith = (_this: string, searchString: string, position: number = 0) => {
+export const __String_prototype_startsWith = (_this: string, searchString: string, position: any = 0) => {
   // todo: handle bytestring searchString
 
   // todo/perf: investigate whether for counter vs while ++s are faster
   // todo: handle when searchString is bytestring
+  position = ecma262.ToIntegerOrInfinity(position);
 
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
   const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
@@ -2077,12 +2090,13 @@ export const __String_prototype_startsWith = (_this: string, searchString: strin
   return true;
 };
 
-export const __ByteString_prototype_startsWith = (_this: bytestring, searchString: bytestring, position: number = 0) => {
+export const __ByteString_prototype_startsWith = (_this: bytestring, searchString: bytestring, position: any = 0) => {
   // if searching non-bytestring, bytestring will not start with it
   // todo: change this to just check if = string and ToString others
   if (Porffor.wasm`local.get ${searchString+1}` != Porffor.TYPES.bytestring) return false;
 
   // todo/perf: investigate whether for counter vs while ++s are faster
+  position = ecma262.ToIntegerOrInfinity(position);
 
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
   const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
@@ -2118,8 +2132,9 @@ export const __String_prototype_endsWith = (_this: string, searchString: string,
   // todo/perf: make position oob handling optional (via pref or fast variant?)
   const len: i32 = _this.length;
 
-  // endPosition ??= len;
+  // If endPosition is undefined, let pos be len; else let pos be ? ToIntegerOrInfinity(endPosition).
   if (Porffor.wasm`local.get ${endPosition+1}` == Porffor.TYPES.undefined) endPosition = len;
+  else endPosition = ecma262.ToIntegerOrInfinity(endPosition);
 
   if (endPosition > 0) {
     if (endPosition > len) endPosition = len;
@@ -2158,8 +2173,9 @@ export const __ByteString_prototype_endsWith = (_this: bytestring, searchString:
   // todo/perf: make position oob handling optional (via pref or fast variant?)
   const len: i32 = _this.length;
 
-  // endPosition ??= len;
+  // If endPosition is undefined, let pos be len; else let pos be ? ToIntegerOrInfinity(endPosition).
   if (Porffor.wasm`local.get ${endPosition+1}` == Porffor.TYPES.undefined) endPosition = len;
+  else endPosition = ecma262.ToIntegerOrInfinity(endPosition);
 
   if (endPosition > 0) {
     if (endPosition > len) endPosition = len;
@@ -2352,8 +2368,9 @@ export const __ByteString_prototype_lastIndexOf = (_this: bytestring, searchStri
 };
 
 
-export const __String_prototype_includes = (_this: string, searchString: string, position: number = 0) => {
+export const __String_prototype_includes = (_this: string, searchString: string, position: any = 0) => {
   // todo: handle bytestring searchString
+  position = ecma262.ToIntegerOrInfinity(position);
 
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
   const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
@@ -2390,10 +2407,13 @@ export const __String_prototype_includes = (_this: string, searchString: string,
   return false;
 };
 
-export const __ByteString_prototype_includes = (_this: bytestring, searchString: bytestring, position: number = 0) => {
+export const __ByteString_prototype_includes = (_this: bytestring, searchString: bytestring, position: any = 0) => {
   // if searching non-bytestring, bytestring will not start with it
   // todo: change this to just check if = string and ToString others
   if (Porffor.wasm`local.get ${searchString+1}` != Porffor.TYPES.bytestring) return -1;
+
+  // Let pos be ? ToIntegerOrInfinity(position).
+  position = ecma262.ToIntegerOrInfinity(position);
 
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
   const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
@@ -2597,15 +2617,22 @@ export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: n
 };
 
 
-export const __String_prototype_substring = (_this: string, start: number, end: number) => {
+export const __String_prototype_substring = (_this: string, start: any, end: any) => {
   const len: i32 = _this.length;
+
+  // Let intStart be ? ToIntegerOrInfinity(start).
+  start = ecma262.ToIntegerOrInfinity(start);
+
+  // If end is undefined, let intEnd be len; else let intEnd be ? ToIntegerOrInfinity(end).
   if (Porffor.wasm`local.get ${end+1}` == Porffor.TYPES.undefined) end = len;
-    else if (start > end) {
+  else {
+    end = ecma262.ToIntegerOrInfinity(end);
+    if (start > end) {
       const tmp: i32 = end;
       end = start;
       start = tmp;
     }
-
+  }
 
   if (start < 0) start = 0;
   if (start > len) start = len;
@@ -2633,15 +2660,22 @@ export const __String_prototype_substring = (_this: string, start: number, end: 
   return out;
 };
 
-export const __ByteString_prototype_substring = (_this: bytestring, start: number, end: number) => {
+export const __ByteString_prototype_substring = (_this: bytestring, start: any, end: any) => {
   const len: i32 = _this.length;
+
+  // Let intStart be ? ToIntegerOrInfinity(start).
+  start = ecma262.ToIntegerOrInfinity(start);
+
+  // If end is undefined, let intEnd be len; else let intEnd be ? ToIntegerOrInfinity(end).
   if (Porffor.wasm`local.get ${end+1}` == Porffor.TYPES.undefined) end = len;
-    else if (start > end) {
+  else {
+    end = ecma262.ToIntegerOrInfinity(end);
+    if (start > end) {
       const tmp: i32 = end;
       end = start;
       start = tmp;
     }
-
+  }
 
   if (start < 0) start = 0;
   if (start > len) start = len;
@@ -2735,10 +2769,15 @@ export const __ByteString_prototype_substr = (_this: bytestring, start: number, 
 };
 
 
-export const __String_prototype_slice = (_this: string, start: number, end: number) => {
+export const __String_prototype_slice = (_this: string, start: any, end: any) => {
   const len: i32 = _this.length;
-  if (Porffor.wasm`local.get ${end+1}` == Porffor.TYPES.undefined) end = len;
 
+  // Let intStart be ? ToIntegerOrInfinity(start).
+  start = ecma262.ToIntegerOrInfinity(start);
+
+  // If end is undefined, let intEnd be len; else let intEnd be ? ToIntegerOrInfinity(end).
+  if (Porffor.wasm`local.get ${end+1}` == Porffor.TYPES.undefined) end = len;
+  else end = ecma262.ToIntegerOrInfinity(end);
 
   if (start < 0) {
     start = len + start;
@@ -2774,10 +2813,15 @@ export const __String_prototype_slice = (_this: string, start: number, end: numb
   return out;
 };
 
-export const __ByteString_prototype_slice = (_this: bytestring, start: number, end: number) => {
+export const __ByteString_prototype_slice = (_this: bytestring, start: any, end: any) => {
   const len: i32 = _this.length;
-  if (Porffor.wasm`local.get ${end+1}` == Porffor.TYPES.undefined) end = len;
 
+  // Let intStart be ? ToIntegerOrInfinity(start).
+  start = ecma262.ToIntegerOrInfinity(start);
+
+  // If end is undefined, let intEnd be len; else let intEnd be ? ToIntegerOrInfinity(end).
+  if (Porffor.wasm`local.get ${end+1}` == Porffor.TYPES.undefined) end = len;
+  else end = ecma262.ToIntegerOrInfinity(end);
 
   if (start < 0) {
     start = len + start;
