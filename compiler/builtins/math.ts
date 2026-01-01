@@ -760,3 +760,53 @@ export const __Math_imul = (x: any, y: any): number => {
 
   return product;
 };
+
+// Float16 constants
+const F16_OVERFLOW_THRESHOLD: number = 65520; // Values >= this round to Infinity
+const F16_MIN_NORMAL: number = 6.103515625e-5; // 2^-14, smallest normal f16
+const F16_SUBNORMAL_STEP: number = 5.960464477539063e-8; // 2^-24, subnormal step size
+const F16_UNDERFLOW_THRESHOLD: number = 2.9802322387695312e-8; // Below this underflows to 0
+
+// Round half to even (banker's rounding) helper
+export const __Math_f16_roundHalfToEven = (scaled: number): number => {
+  let rounded: number = Math.floor(scaled);
+  const frac: number = scaled - rounded;
+  if (frac > 0.5) {
+    rounded++;
+  } else if (frac == 0.5) {
+    if ((rounded % 2) != 0) rounded++;
+  }
+  return rounded;
+};
+
+export const __Math_f16round = (x: any): number => {
+  const n: number = ecma262.ToNumber(x);
+
+  if (n != n) return NaN;
+
+  if (!Number.isFinite(n)) return n;
+  if (n == 0) return n;
+
+  const sign: number = n < 0 ? -1 : 1;
+  const absN: number = Math.abs(n);
+
+  if (absN >= F16_OVERFLOW_THRESHOLD) return sign * Infinity;
+
+  if (absN < F16_UNDERFLOW_THRESHOLD) return n < 0 ? -0 : 0;
+
+  // Subnormal range
+  if (absN < F16_MIN_NORMAL) {
+    const rounded: number = __Math_f16_roundHalfToEven(absN / F16_SUBNORMAL_STEP);
+    return sign * rounded * F16_SUBNORMAL_STEP;
+  }
+
+  // Normal range - compute exponent using log2
+  const exp: i32 = Math.floor(Math.log2(absN));
+  const step: number = Math.pow(2, exp - 10);
+  const rounded: number = __Math_f16_roundHalfToEven(absN / step) * step;
+
+  // Check if rounding caused overflow to Infinity
+  if (rounded >= F16_OVERFLOW_THRESHOLD) return sign * Infinity;
+
+  return sign * rounded;
+};
