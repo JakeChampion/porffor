@@ -2061,11 +2061,17 @@ export const __ByteString_prototype_codePointAt = (_this: bytestring, index: any
   return Porffor.wasm.i32.load8_u(Porffor.wasm`local.get ${_this}` + index, 0, 4);
 };
 
-export const __String_prototype_startsWith = (_this: string, searchString: string, position: any = 0) => {
-  // todo: handle bytestring searchString
+export const __String_prototype_startsWith = (_this: string, _searchString: any, position: any = 0) => {
+  // 4. Let isRegExp be IsRegExp(searchString).
+  // 6. If isRegExp is true, throw a TypeError exception.
+  if (Porffor.type(_searchString) == Porffor.TYPES.regexp) {
+    throw new TypeError('First argument to String.prototype.startsWith must not be a regular expression');
+  }
+
+  // Convert to string after RegExp check
+  const searchString: string = ecma262.ToString(_searchString);
 
   // todo/perf: investigate whether for counter vs while ++s are faster
-  // todo: handle when searchString is bytestring
   position = ecma262.ToIntegerOrInfinity(position);
 
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
@@ -2090,10 +2096,18 @@ export const __String_prototype_startsWith = (_this: string, searchString: strin
   return true;
 };
 
-export const __ByteString_prototype_startsWith = (_this: bytestring, searchString: bytestring, position: any = 0) => {
+export const __ByteString_prototype_startsWith = (_this: bytestring, _searchString: any, position: any = 0) => {
+  // 4. Let isRegExp be IsRegExp(searchString).
+  // 6. If isRegExp is true, throw a TypeError exception.
+  if (Porffor.type(_searchString) == Porffor.TYPES.regexp) {
+    throw new TypeError('First argument to String.prototype.startsWith must not be a regular expression');
+  }
+
   // if searching non-bytestring, bytestring will not start with it
   // todo: change this to just check if = string and ToString others
-  if (Porffor.wasm`local.get ${searchString+1}` != Porffor.TYPES.bytestring) return false;
+  if (Porffor.wasm`local.get ${_searchString+1}` != Porffor.TYPES.bytestring) return false;
+
+  const searchString: bytestring = _searchString;
 
   // todo/perf: investigate whether for counter vs while ++s are faster
   position = ecma262.ToIntegerOrInfinity(position);
@@ -2121,8 +2135,15 @@ export const __ByteString_prototype_startsWith = (_this: bytestring, searchStrin
 };
 
 
-export const __String_prototype_endsWith = (_this: string, searchString: string, endPosition: any = undefined) => {
-  // todo: handle bytestring searchString
+export const __String_prototype_endsWith = (_this: string, _searchString: any, endPosition: any = undefined) => {
+  // 4. Let isRegExp be IsRegExp(searchString).
+  // 6. If isRegExp is true, throw a TypeError exception.
+  if (Porffor.type(_searchString) == Porffor.TYPES.regexp) {
+    throw new TypeError('First argument to String.prototype.endsWith must not be a regular expression');
+  }
+
+  // Convert to string after RegExp check
+  const searchString: string = ecma262.ToString(_searchString);
 
   let i: i32 = Porffor.wasm`local.get ${_this}`,
       j: i32 = Porffor.wasm`local.get ${searchString}`;
@@ -2160,10 +2181,18 @@ export const __String_prototype_endsWith = (_this: string, searchString: string,
   return true;
 };
 
-export const __ByteString_prototype_endsWith = (_this: bytestring, searchString: bytestring, endPosition: any = undefined) => {
+export const __ByteString_prototype_endsWith = (_this: bytestring, _searchString: any, endPosition: any = undefined) => {
+  // 4. Let isRegExp be IsRegExp(searchString).
+  // 6. If isRegExp is true, throw a TypeError exception.
+  if (Porffor.type(_searchString) == Porffor.TYPES.regexp) {
+    throw new TypeError('First argument to String.prototype.endsWith must not be a regular expression');
+  }
+
   // if searching non-bytestring, bytestring will not start with it
   // todo: change this to just check if = string and ToString others
-  if (Porffor.wasm`local.get ${searchString+1}` != Porffor.TYPES.bytestring) return false;
+  if (Porffor.wasm`local.get ${_searchString+1}` != Porffor.TYPES.bytestring) return false;
+
+  const searchString: bytestring = _searchString;
 
   let i: i32 = Porffor.wasm`local.get ${_this}`,
       j: i32 = Porffor.wasm`local.get ${searchString}`;
@@ -2378,8 +2407,16 @@ export const __ByteString_prototype_lastIndexOf = (_this: bytestring, searchStri
 };
 
 
-export const __String_prototype_includes = (_this: string, searchString: string, position: any = 0) => {
-  // todo: handle bytestring searchString
+export const __String_prototype_includes = (_this: string, _searchString: any, position: any = 0) => {
+  // 4. Let isRegExp be IsRegExp(searchString).
+  // 6. If isRegExp is true, throw a TypeError exception.
+  if (Porffor.type(_searchString) == Porffor.TYPES.regexp) {
+    throw new TypeError('First argument to String.prototype.includes must not be a regular expression');
+  }
+
+  // Convert to string after RegExp check
+  const searchString: string = ecma262.ToString(_searchString);
+
   position = ecma262.ToIntegerOrInfinity(position);
 
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
@@ -2417,10 +2454,18 @@ export const __String_prototype_includes = (_this: string, searchString: string,
   return false;
 };
 
-export const __ByteString_prototype_includes = (_this: bytestring, searchString: bytestring, position: any = 0) => {
+export const __ByteString_prototype_includes = (_this: bytestring, _searchString: any, position: any = 0) => {
+  // 4. Let isRegExp be IsRegExp(searchString).
+  // 6. If isRegExp is true, throw a TypeError exception.
+  if (Porffor.type(_searchString) == Porffor.TYPES.regexp) {
+    throw new TypeError('First argument to String.prototype.includes must not be a regular expression');
+  }
+
   // if searching non-bytestring, bytestring will not start with it
   // todo: change this to just check if = string and ToString others
-  if (Porffor.wasm`local.get ${searchString+1}` != Porffor.TYPES.bytestring) return -1;
+  if (Porffor.wasm`local.get ${_searchString+1}` != Porffor.TYPES.bytestring) return -1;
+
+  const searchString: bytestring = _searchString;
 
   // Let pos be ? ToIntegerOrInfinity(position).
   position = ecma262.ToIntegerOrInfinity(position);
