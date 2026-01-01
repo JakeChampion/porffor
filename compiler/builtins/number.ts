@@ -292,8 +292,8 @@ export const __Number_prototype_toString = (_this: number, radix: number|any) =>
   return out;
 };
 
-export const __Number_prototype_toFixed = (_this: number, fractionDigits: number) => {
-  fractionDigits |= 0;
+export const __Number_prototype_toFixed = (_this: number, fractionDigits: any) => {
+  fractionDigits = ecma262.ToIntegerOrInfinity(fractionDigits);
   if (fractionDigits < 0 || fractionDigits > 100) {
     throw new RangeError('toFixed() fractionDigits argument must be between 0 and 100');
   }
@@ -388,11 +388,8 @@ export const __Number_prototype_toExponential = (_this: number, fractionDigits: 
     return '-Infinity';
   }
 
-  if (Porffor.type(fractionDigits) != Porffor.TYPES.number) {
-    // todo: string to number
-    fractionDigits = undefined;
-  } else {
-    fractionDigits |= 0;
+  if (Porffor.type(fractionDigits) != Porffor.TYPES.undefined) {
+    fractionDigits = ecma262.ToIntegerOrInfinity(fractionDigits);
     if (fractionDigits < 0 || fractionDigits > 100) {
       throw new RangeError('toExponential() fractionDigits argument must be between 0 and 100');
     }
@@ -712,7 +709,6 @@ export const parseInt = (input: any, radix: any): f64 => {
 export const __Number_parseInt = (input: any, radix: any): f64 => parseInt(input, radix);
 
 export const parseFloat = (input: any): f64 => {
-  // todo: handle exponents
   input = ecma262.ToString(input).trim();
 
   let n: f64 = NaN;
@@ -720,6 +716,10 @@ export const parseFloat = (input: any): f64 => {
   let negative: boolean = false;
 
   let i: i32 = 0;
+  const len: i32 = input.length;
+
+  if (len == 0) return NaN;
+
   const start: i32 = input.charCodeAt(0);
 
   // +, ignore
@@ -733,7 +733,22 @@ export const parseFloat = (input: any): f64 => {
     negative = true;
   }
 
-  const len: i32 = input.length;
+  // Check for "Infinity"
+  if (len - i >= 8) {
+    // Check if remaining string starts with "Infinity"
+    if (input.charCodeAt(i) == 73 &&      // I
+        input.charCodeAt(i + 1) == 110 && // n
+        input.charCodeAt(i + 2) == 102 && // f
+        input.charCodeAt(i + 3) == 105 && // i
+        input.charCodeAt(i + 4) == 110 && // n
+        input.charCodeAt(i + 5) == 105 && // i
+        input.charCodeAt(i + 6) == 116 && // t
+        input.charCodeAt(i + 7) == 121) { // y
+      if (negative) return -Infinity;
+      return Infinity;
+    }
+  }
+
   while (i < len) {
     const chr: i32 = input.charCodeAt(i++);
 
@@ -746,6 +761,43 @@ export const parseFloat = (input: any): f64 => {
     } else if (chr == 46) { // .
       if (dec) break;
       dec = 1;
+    } else if (chr == 101 || chr == 69) { // e or E
+      // Handle exponent
+      if (Number.isNaN(n)) break; // No mantissa before exponent
+
+      let expNegative: boolean = false;
+      let exp: i32 = 0;
+      let hasExpDigit: boolean = false;
+
+      if (i < len) {
+        const expSign: i32 = input.charCodeAt(i);
+        if (expSign == 43) { // +
+          i++;
+        } else if (expSign == 45) { // -
+          i++;
+          expNegative = true;
+        }
+      }
+
+      while (i < len) {
+        const expChr: i32 = input.charCodeAt(i);
+        if (expChr >= 48 && expChr <= 57) { // 0-9
+          hasExpDigit = true;
+          exp = (exp * 10) + expChr - 48;
+          i++;
+        } else {
+          break;
+        }
+      }
+
+      if (hasExpDigit) {
+        if (expNegative) {
+          n = n / (10 ** exp);
+        } else {
+          n = n * (10 ** exp);
+        }
+      }
+      break;
     } else {
       break;
     }
