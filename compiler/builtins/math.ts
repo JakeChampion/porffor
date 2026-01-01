@@ -573,54 +573,69 @@ export const __Math_sumPrecise = (values: any[]): number => {
   const LARGE_MIN: number = -1074;
   const large: Float64Array = new Float64Array(LARGE_SLOTS);
 
-  for (const _ of values) {
+  let sawPositiveZero: boolean = false;
+  let sawNonZero: boolean = false;
+
+  const valuesLen: i32 = values.length;
+  for (let idx: i32 = 0; idx < valuesLen; idx++) {
+    const _: any = values[idx];
     if (Porffor.type(_) != Porffor.TYPES.number) throw new TypeError('Math.sumPrecise must have only numbers in values');
 
     const v: number = _;
-    if (v == 0) continue;
+    if (v == 0) {
+      if (!sawNonZero && 1/v === Infinity) sawPositiveZero = true;
+    } else {
+      sawNonZero = true;
 
-    const exp: number = Porffor.number.getExponent(v);
+      const exp: number = Porffor.number.getExponent(v);
 
-    // check if value fits in small superaccumulator
-    if (exp >= SMALL_MIN && exp < SMALL_MIN + SMALL_SLOTS) {
-      // map the exponent to an array index (-970 -> 0, -969 -> 1, etc)
-      const slot: number = exp - SMALL_MIN;
-      let y: number = v;
+      // check if value fits in small superaccumulator
+      if (exp >= SMALL_MIN && exp < SMALL_MIN + SMALL_SLOTS) {
+        // map the exponent to an array index (-970 -> 0, -969 -> 1, etc)
+        const slot: number = exp - SMALL_MIN;
+        let y: number = v;
 
-      // cascade up through slots, similar to carrying digits in decimal
-      // but operating in binary and handling floating point carefully
-      for (let i: number = slot; i < SMALL_SLOTS - 1; i++) {
-        const sum: number = small[i] + y;
-        y = sum;
+        // cascade up through slots, similar to carrying digits in decimal
+        // but operating in binary and handling floating point carefully
+        for (let i: number = slot; i < SMALL_SLOTS - 1; i++) {
+          const sum: number = small[i] + y;
+          y = sum;
 
-        // a number fits in slot i if its magnitude is less than 2^(i+SMALL_MIN+1)
-        const slotLimit: number = Math.pow(2, i + SMALL_MIN + 1);
-        if (y >= -slotLimit && y < slotLimit) {
-          small[i] = y;
-          y = 0;
-          break;
+          // a number fits in slot i if its magnitude is less than 2^(i+SMALL_MIN+1)
+          const slotLimit: number = Math.pow(2, i + SMALL_MIN + 1);
+          if (y >= -slotLimit && y < slotLimit) {
+            small[i] = y;
+            y = 0;
+            break;
+          }
+
+          // doesn't fit, clear this slot and continue cascading
+          small[i] = 0;
         }
 
-        // doesn't fit, clear this slot and continue cascading
-        small[i] = 0;
+        // if we still have a non-zero value after cascading through small,
+        // it needs to go into the large superaccumulator
+        if (y != 0) {
+          large[Porffor.number.getExponent(y) - LARGE_MIN] += y;
+        }
+      } else {
+        // exponent is outside small superaccumulator range,
+        // put it directly in the large superaccumulator
+        large[Porffor.number.getExponent(v) - LARGE_MIN] += v;
       }
-
-      // if we still have a non-zero value after cascading through small,
-      // it needs to go into the large superaccumulator
-      if (y != 0) {
-        large[Porffor.number.getExponent(y) - LARGE_MIN] += y;
-      }
-    } else {
-      // exponent is outside small superaccumulator range,
-      // put it directly in the large superaccumulator
-      large[Porffor.number.getExponent(v) - LARGE_MIN] += v;
     }
+  }
+
+  // If we only saw zeros (or empty), handle -0 correctly per spec:
+  // - Empty array or all -0s → return -0
+  // - Any +0 present → return +0
+  if (!sawNonZero) {
+    return sawPositiveZero ? 0 : -0;
   }
 
   // combine results from both superaccumulators,
   // process from highest to lowest to maintain precision
-  // todo: handle -0 (see test262 test)
-  let sum: number = -0;
+  let sum: number = 0;
   for (let i: number = LARGE_SLOTS - 1; i >= 0; i--) {
     sum += large[i];
   }
