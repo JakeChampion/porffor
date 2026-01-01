@@ -2461,14 +2461,13 @@ export const __ByteString_prototype_includes = (_this: bytestring, searchString:
 };
 
 
-export const __String_prototype_padStart = (_this: string, targetLength: number, padString: string = undefined) => {
+export const __String_prototype_padStart = (_this: string, targetLength: number, padString: any = undefined) => {
   let out: string = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
 
   const len: i32 = _this.length;
-
 
   const todo: i32 = targetLength - len;
   if (todo > 0) {
@@ -2480,6 +2479,12 @@ export const __String_prototype_padStart = (_this: string, targetLength: number,
 
       out.length = targetLength;
     } else {
+      // Convert padString to string if not already
+      padString = ecma262.ToString(padString);
+      // Convert bytestring to string since we use UTF-16 memory access
+      if (Porffor.wasm`local.get ${padString+1}` == Porffor.TYPES.bytestring) {
+        padString = Porffor.bytestringToString(padString);
+      }
       const padStringLen: i32 = padString.length;
       if (padStringLen > 0) {
         for (let i: i32 = 0; i < todo; i++) {
@@ -2503,16 +2508,13 @@ export const __String_prototype_padStart = (_this: string, targetLength: number,
   return out;
 };
 
-export const __ByteString_prototype_padStart = (_this: bytestring, targetLength: number, padString: bytestring = undefined) => {
-  // todo: handle padString being non-bytestring
-
+export const __ByteString_prototype_padStart = (_this: bytestring, targetLength: number, padString: any = undefined) => {
   let out: bytestring = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
 
   const len: i32 = _this.length;
-
 
   const todo: i32 = targetLength - len;
   if (todo > 0) {
@@ -2523,6 +2525,12 @@ export const __ByteString_prototype_padStart = (_this: bytestring, targetLength:
 
       out.length = targetLength;
     } else {
+      // Convert padString to string if not already
+      padString = ecma262.ToString(padString);
+      // If padString is non-bytestring, delegate to String version
+      if (Porffor.wasm`local.get ${padString+1}` != Porffor.TYPES.bytestring) {
+        return __String_prototype_padStart(Porffor.bytestringToString(_this), targetLength, padString);
+      }
       const padStringLen: i32 = padString.length;
       if (padStringLen > 0) {
         for (let i: i32 = 0; i < todo; i++) {
@@ -2544,7 +2552,7 @@ export const __ByteString_prototype_padStart = (_this: bytestring, targetLength:
 };
 
 
-export const __String_prototype_padEnd = (_this: string, targetLength: number, padString: string = undefined) => {
+export const __String_prototype_padEnd = (_this: string, targetLength: number, padString: any = undefined) => {
   let out: string = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
@@ -2561,7 +2569,6 @@ export const __String_prototype_padEnd = (_this: string, targetLength: number, p
     outPtr += 2;
   }
 
-
   const todo: i32 = targetLength - len;
   if (todo > 0) {
     if (Porffor.wasm`local.get ${padString+1}` == Porffor.TYPES.undefined) {
@@ -2572,6 +2579,12 @@ export const __String_prototype_padEnd = (_this: string, targetLength: number, p
 
       out.length = targetLength;
     } else {
+      // Convert padString to string if not already
+      padString = ecma262.ToString(padString);
+      // Convert bytestring to string since we use UTF-16 memory access
+      if (Porffor.wasm`local.get ${padString+1}` == Porffor.TYPES.bytestring) {
+        padString = Porffor.bytestringToString(padString);
+      }
       const padStringLen: i32 = padString.length;
       if (padStringLen > 0) {
         for (let i: i32 = 0; i < todo; i++) {
@@ -2586,9 +2599,7 @@ export const __String_prototype_padEnd = (_this: string, targetLength: number, p
   return out;
 };
 
-export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: number, padString: bytestring = undefined) => {
-  // todo: handle padString being non-bytestring
-
+export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: number, padString: any = undefined) => {
   let out: bytestring = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
@@ -2602,7 +2613,6 @@ export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: n
     Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(thisPtr++, 0, 4), 0, 4);
   }
 
-
   const todo: i32 = targetLength - len;
   if (todo > 0) {
     if (Porffor.wasm`local.get ${padString+1}` == Porffor.TYPES.undefined) {
@@ -2612,6 +2622,12 @@ export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: n
 
       out.length = targetLength;
     } else {
+      // Convert padString to string if not already
+      padString = ecma262.ToString(padString);
+      // If padString is non-bytestring, delegate to String version
+      if (Porffor.wasm`local.get ${padString+1}` != Porffor.TYPES.bytestring) {
+        return __String_prototype_padEnd(Porffor.bytestringToString(_this), targetLength, padString);
+      }
       const padStringLen: i32 = padString.length;
       if (padStringLen > 0) {
         for (let i: i32 = 0; i < todo; i++) {
