@@ -281,6 +281,156 @@ memory.copy 0 0`;
   return out;
 };
 
+export const __String_prototype_split = (_this: string, separator: any, limit: any) => {
+  const out: any[] = Porffor.malloc();
+
+  // ToUint32(undefined) -> use max, ToUint32(negative) -> large positive
+  if (Porffor.type(limit) == Porffor.TYPES.undefined) limit = Number.MAX_SAFE_INTEGER;
+  if (limit < 0) limit = Number.MAX_SAFE_INTEGER;
+
+  // ToUint32(0) = 0, ToUint32(NaN) = 0, ToUint32(2^32 * n) = 0
+  if (limit == 0 || limit != limit || limit % 4294967296 == 0) {
+    out.length = 0;
+    return out;
+  }
+
+  if (Porffor.type(separator) == Porffor.TYPES.undefined) {
+    out[0] = _this;
+    out.length = 1;
+    return out;
+  }
+
+  separator = ecma262.ToString(separator);
+
+  const thisLen: i32 = _this.length;
+  const sepLen: i32 = separator.length;
+
+  if (sepLen == 0) {
+    for (let i: i32 = 0; i < thisLen && i < limit; i++) {
+      out[i] = _this[i];
+    }
+    out.length = thisLen < limit ? thisLen : limit;
+    return out;
+  }
+
+  let outLen: i32 = 0;
+  let start: i32 = 0;
+
+  if (sepLen == 1) {
+    // fast path: single char separator
+    const sepChar: i32 = separator.charCodeAt(0);
+    for (let i: i32 = 0; i < thisLen; i++) {
+      if (_this.charCodeAt(i) == sepChar) {
+        if (outLen >= limit) {
+          out.length = outLen;
+          return out;
+        }
+        out[outLen++] = _this.substring(start, i);
+        start = i + 1;
+      }
+    }
+  } else {
+    let sepInd: i32 = 0;
+    for (let i: i32 = 0; i < thisLen; i++) {
+      if (_this.charCodeAt(i) == separator.charCodeAt(sepInd)) {
+        if (++sepInd == sepLen) {
+          if (outLen >= limit) {
+            out.length = outLen;
+            return out;
+          }
+          out[outLen++] = _this.substring(start, i - sepLen + 1);
+          start = i + 1;
+          sepInd = 0;
+        }
+      } else {
+        sepInd = 0;
+      }
+    }
+  }
+
+  if (outLen < limit) {
+    out[outLen++] = _this.substring(start);
+  }
+
+  out.length = outLen;
+  return out;
+};
+
+export const __ByteString_prototype_split = (_this: bytestring, separator: any, limit: any) => {
+  const out: any[] = Porffor.malloc();
+
+  // ToUint32(undefined) -> use max, ToUint32(negative) -> large positive
+  if (Porffor.type(limit) == Porffor.TYPES.undefined) limit = Number.MAX_SAFE_INTEGER;
+  if (limit < 0) limit = Number.MAX_SAFE_INTEGER;
+
+  // ToUint32(0) = 0, ToUint32(NaN) = 0, ToUint32(2^32 * n) = 0
+  if (limit == 0 || limit != limit || limit % 4294967296 == 0) {
+    out.length = 0;
+    return out;
+  }
+
+  if (Porffor.type(separator) == Porffor.TYPES.undefined) {
+    out[0] = _this;
+    out.length = 1;
+    return out;
+  }
+
+  separator = ecma262.ToString(separator);
+
+  const thisLen: i32 = _this.length;
+  const sepLen: i32 = separator.length;
+
+  if (sepLen == 0) {
+    for (let i: i32 = 0; i < thisLen && i < limit; i++) {
+      out[i] = _this[i];
+    }
+    out.length = thisLen < limit ? thisLen : limit;
+    return out;
+  }
+
+  let outLen: i32 = 0;
+  let start: i32 = 0;
+
+  if (sepLen == 1) {
+    // fast path: single char separator
+    const sepChar: i32 = separator.charCodeAt(0);
+    for (let i: i32 = 0; i < thisLen; i++) {
+      if (_this.charCodeAt(i) == sepChar) {
+        if (outLen >= limit) {
+          out.length = outLen;
+          return out;
+        }
+        out[outLen++] = _this.substring(start, i);
+        start = i + 1;
+      }
+    }
+  } else {
+    let sepInd: i32 = 0;
+    for (let i: i32 = 0; i < thisLen; i++) {
+      if (_this.charCodeAt(i) == separator.charCodeAt(sepInd)) {
+        if (++sepInd == sepLen) {
+          if (outLen >= limit) {
+            out.length = outLen;
+            return out;
+          }
+          out[outLen++] = _this.substring(start, i - sepLen + 1);
+          start = i + 1;
+          sepInd = 0;
+        }
+      } else {
+        sepInd = 0;
+      }
+    }
+  }
+
+  if (outLen < limit) {
+    out[outLen++] = _this.substring(start);
+  }
+
+  out.length = outLen;
+  return out;
+};
+
 // 22.1.2.4 String.raw ( template, ...substitutions )
 // https://tc39.es/ecma262/#sec-string.raw
 export const __String_raw = (template: any, ...substitutions: any[]): string => {
