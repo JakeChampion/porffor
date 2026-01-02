@@ -161,8 +161,12 @@ const funcRef = func => {
     func.wrapperFunc = wrapperFunc;
 
     const paramCount = countParams(func, name);
+    // For internal prototype functions, _this comes from the wrapper's #1 (thisArg),
+    // not from the caller's args, so we subtract 1 from the effective param count
+    const internalProtoFunc = func.internal && func.name.includes('_prototype_');
+    const argsParamCount = paramCount - (internalProtoFunc ? 1 : 0);
     const args = [];
-    for (let i = 0; i < paramCount - (func.hasRestArgument ? 1 : 0); i++) {
+    for (let i = 0; i < argsParamCount - (func.hasRestArgument ? 1 : 0); i++) {
       args.push({
         type: 'Identifier',
         name: `#${i + 2}`
@@ -183,13 +187,13 @@ const funcRef = func => {
 
         [ Opcodes.local_get, array ],
         [ Opcodes.local_get, 0 ],
-        number(paramCount - 1, Valtype.i32),
+        number(argsParamCount - 1, Valtype.i32),
         [ Opcodes.i32_sub ],
         [ Opcodes.i32_store, 0, 0 ]
       );
 
       let offset = 4;
-      for (let i = paramCount - 1; i < wrapperArgc; i++) {
+      for (let i = argsParamCount - 1; i < wrapperArgc; i++) {
         wasm.push(
           [ Opcodes.local_get, array ],
           [ Opcodes.local_get, 5 + i * 2 ],
