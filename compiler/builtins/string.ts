@@ -3035,6 +3035,11 @@ export const __ByteString_prototype_trim = (_this: bytestring) => {
 
 
 export const __String_prototype_concat = (_this: any, ...vals: any[]) => {
+  const t: i32 = Porffor.type(_this);
+  if (Porffor.fastOr(t == Porffor.TYPES.undefined, t == Porffor.TYPES.object && _this === null)) {
+    throw new TypeError('String.prototype.concat called on null or undefined');
+  }
+
   _this = ecma262.ToString(_this);
 
   let out: any = Porffor.malloc();
