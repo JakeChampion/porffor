@@ -11,7 +11,7 @@ const __dirname = import.meta.dirname;
 
 let resultOnly = process.env.RESULT_ONLY;
 
-const workerDataPath = '/tmp/workerData.json';
+const workerDataPath = join(os.tmpdir(), `porffor-test262-${cluster.isPrimary ? process.pid : process.ppid}.json`);
 if (cluster.isPrimary) {
   const veryStart = performance.now();
 
