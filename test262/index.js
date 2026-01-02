@@ -16,10 +16,11 @@ if (cluster.isPrimary) {
   const veryStart = performance.now();
 
   const test262Path = join(__dirname, 'test262');
-  let whatTests = process.argv.slice(2).find(x => x[0] !== '-') ?? '';
-  if (whatTests.endsWith('/')) whatTests = whatTests.slice(0, -1);
+  let whatTests = process.argv.slice(2).filter(x => x[0] !== '-');
+  whatTests = whatTests.map(t => t.endsWith('/') ? t.slice(0, -1) : t);
+  if (whatTests.length === 0) whatTests = [''];
 
-  if (whatTests.endsWith('.js')) {
+  if (whatTests.length === 1 && whatTests[0].endsWith('.js')) {
     // single test, automatically add debug args
     process.argv.push('--log-errors');
   }
@@ -33,7 +34,7 @@ if (cluster.isPrimary) {
     log.warning('test262', 'please specify via either method to make test262 runs potentially much faster! (ask for tuning advice)');
   }
 
-  if (process.argv.includes('--open')) execSync(`zed ${test262Path}/test/${whatTests}`);
+  if (process.argv.includes('--open')) execSync(`zed ${whatTests.map(t => `${test262Path}/test/${t}`).join(' ')}`);
 
   let minimal = process.argv.includes('--minimal');
   if (minimal) resultOnly = true;
@@ -49,7 +50,13 @@ if (cluster.isPrimary) {
     return acc;
   }, {});
 
-  const tests = await readTest262(test262Path, whatTests, preludes, lastResults.timeouts);
+  let tests = [];
+  for (const filter of whatTests) {
+    const filterTests = await readTest262(test262Path, filter, preludes, lastResults.timeouts);
+    tests = tests.concat(filterTests);
+  }
+  // deduplicate tests by file path
+  tests = [...new Map(tests.map(t => [t.file, t])).values()];
   if (!resultOnly) process.stdout.write(`\r${' '.repeat(60)}\r\u001b[90mcaching tests to tmp...\u001b[0m`);
 
   fs.writeFileSync(workerDataPath, JSON.stringify(tests, undefined, 2));
@@ -115,7 +122,7 @@ if (cluster.isPrimary) {
 
   if (logErrors) threads = 1;
 
-  const allTests = whatTests === '' && threads > 1;
+  const allTests = whatTests.length === 1 && whatTests[0] === '' && threads > 1;
   if (!resultOnly && !allTests) console.log();
 
   let lastPercent = 0;
@@ -283,15 +290,17 @@ if (cluster.isPrimary) {
 
   const togo = next => `${Math.floor((total * next / 100) - passes)} to go until ${next}%`;
 
-  console.log(`\u001b[1m${whatTests || 'test262'}: ${passes}/${total} passed - ${percent.toFixed(2)}%${whatTests === '' && percentChange !== 0 ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''}\u001b[0m \u001b[90m(${togo(nextMinorPercent)}, ${togo(nextMajorPercent)})\u001b[0m`);
-  const tab = table(whatTests === '', total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts);
+  const whatTestsLabel = whatTests.length === 1 && whatTests[0] === '' ? '' : whatTests.join(', ');
+  const isFullRun = whatTests.length === 1 && whatTests[0] === '';
+  console.log(`\u001b[1m${whatTestsLabel || 'test262'}: ${passes}/${total} passed - ${percent.toFixed(2)}%${isFullRun && percentChange !== 0 ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''}\u001b[0m \u001b[90m(${togo(nextMinorPercent)}, ${togo(nextMajorPercent)})\u001b[0m`);
+  const tab = table(isFullRun, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts);
   console.log(bar([...noAnsi(tab)].length + 10, total, passes, fails, runtimeErrors + timeouts, compileErrors + wasmErrors, 0));
   process.stdout.write('  ');
   console.log(tab);
 
   console.log();
 
-  if (whatTests === '') {
+  if (isFullRun) {
     for (const dir of dirs.keys()) {
       const results = dirs.get(dir);
       process.stdout.write(' '.repeat(6) + dir + ' '.repeat(14 - dir.length));
