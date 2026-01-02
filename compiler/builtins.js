@@ -353,6 +353,23 @@ export const BuiltinVars = ({ builtinFuncs }) => {
       props.name = { value: '', configurable: true };
     }
 
+    // special case: Error.prototype.name = 'Error' (and other error types)
+    // Per spec, Error.prototype.name should be a data property, not a getter
+    const errorTypes = ['Error', 'AggregateError', 'TypeError', 'ReferenceError', 'SyntaxError', 'RangeError', 'EvalError', 'URIError', 'Test262Error'];
+    for (const errorType of errorTypes) {
+      if (x === `__${errorType}_prototype`) {
+        props.name = { value: errorType, writable: true, configurable: true };
+        props.message = { value: '', writable: true, configurable: true };
+        break;
+      }
+    }
+
+    // special case: Array.prototype.length = 0
+    // Per spec, Array.prototype is an Array exotic object with length = 0
+    if (x === '__Array_prototype') {
+      props.length = { value: 0, writable: true, configurable: false };
+    }
+
     // add constructor for constructors
     const name = x.slice(2, x.indexOf('_', 2));
     if (builtinFuncs[name]?.constr) {
