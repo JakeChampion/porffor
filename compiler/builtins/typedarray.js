@@ -4,6 +4,14 @@ export default async () => {
   const arrayCode = (await import('node:fs')).readFileSync(globalThis.precompileCompilerPath + '/builtins/array.ts', 'utf8');
   const typedArrayFuncs = [...arrayCode.matchAll(/\/\/ @porf-typed-array[\s\S]+?^};$/gm)].map(x => x[0]);
 
+  // %TypedArray% intrinsic - the abstract constructor that is the prototype of all TypedArray constructors
+  // This is not directly callable/constructable but serves as the [[Prototype]] of TypedArray constructors
+  out += `export const __TypedArray = function (): never {
+  throw new TypeError('Abstract class TypedArray not directly constructable');
+};
+
+`;
+
   // TypedArrays are stored like this in memory:
   // length (i32)
   // bufferPtr (i32) - buffer + byteOffset

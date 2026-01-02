@@ -205,8 +205,8 @@ var NaNs = [
 ];
 
 /// testTypedArray.js
-// hack: we do not actually have an underlying TypedArray so just use Int8Array
-var TypedArray = Int8Array;
+// Get the %TypedArray% intrinsic (shared prototype of all TypedArray constructors)
+var TypedArray = Object.getPrototypeOf(Int8Array);
 
 var floatArrayConstructors = [
   Float64Array,
