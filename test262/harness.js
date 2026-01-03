@@ -625,7 +625,11 @@ function checkSettledPromises(settleds, expected) {
 
 /// detachArrayBuffer.js
 function $DETACHBUFFER(buffer) {
-  Porffor.arraybuffer.detach(buffer)
+  if (typeof $262 !== 'undefined' && typeof $262.detachArrayBuffer === 'function') {
+    $262.detachArrayBuffer(buffer);
+  } else {
+    Porffor.arraybuffer.detach(buffer);
+  }
 }
 
 /// fnGlobalObject.js
