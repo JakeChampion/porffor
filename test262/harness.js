@@ -44,11 +44,17 @@ var __assert_throws = (expectedErrorConstructor, func) => {
 
   try {
     func();
-  } catch {
+  } catch (thrown) {
+    if (thrown === null || typeof thrown !== 'object') {
+      throw new Test262Error('assert.throws failed: thrown value was not an object');
+    }
+    if (thrown.constructor !== expectedErrorConstructor) {
+      throw new Test262Error('assert.throws failed: expected ' + expectedErrorConstructor.name + ' but got ' + thrown.constructor.name);
+    }
     return;
   }
 
-  throw new Test262Error('assert.throws failed');
+  throw new Test262Error('assert.throws failed: no exception was thrown');
 };
 
 var __assert__isSameValue = (a, b) => {
@@ -1528,6 +1534,10 @@ var __assert_deepEqual = (actual, expected) => {
 
 /// asyncHelpers.js
 const asyncTest = testFunc => {
+  if (typeof $DONE !== "function") {
+    throw new Test262Error("asyncTest called without async flag");
+  }
+
   if (typeof testFunc !== "function") {
     $DONE(new Test262Error("asyncTest called with non-function argument"));
     return;
@@ -1565,21 +1575,155 @@ var __assert_throwsAsync = (expectedErrorConstructor, func) => {
       throw new Test262Error('assert.throwsAsync failed: no exception was thrown');
     },
     thrown => {
-      // if (thrown === null || typeof thrown !== 'object') {
-      //   throw new Test262Error('assert.throwsAsync failed: thrown value was not an object');
-      // }
-      // if (thrown.constructor !== expectedErrorConstructor) {
-      //   throw new Test262Error('assert.throwsAsync failed: wrong error constructor');
-      // }
+      if (thrown === null || typeof thrown !== 'object') {
+        throw new Test262Error('assert.throwsAsync failed: thrown value was not an object');
+      }
+      if (thrown.constructor !== expectedErrorConstructor) {
+        throw new Test262Error('assert.throwsAsync failed: expected ' + expectedErrorConstructor.name + ' but got ' + thrown.constructor.name);
+      }
     }
   );
 };
 
 /// nativeFunctionMatcher.js
-// todo: throw and make looser
+// Matches various forms of native function source
 const validateNativeFunctionSource = source => {
-  if (source.startsWith('function ') && source.endsWith('() { [native code] }')) return;
-  throw new Test262Error('validateNativeFunctionSource failed');
+  // Check for "native code" somewhere inside brackets (allows spaces like [ native code ])
+  // Search all bracket pairs from right to left to find the innermost native code marker
+  let foundNativeCode = false;
+  let searchStart = source.length;
+  while (searchStart > 0) {
+    const closeIdx = source.lastIndexOf(']', searchStart - 1);
+    if (closeIdx === -1) break;
+
+    // Find matching open bracket, accounting for nesting
+    let depth = 1;
+    let openIdx = closeIdx - 1;
+    while (openIdx >= 0 && depth > 0) {
+      if (source[openIdx] === ']') depth++;
+      else if (source[openIdx] === '[') depth--;
+      openIdx--;
+    }
+    openIdx++; // adjust to point at the '['
+
+    if (depth === 0) {
+      const inside = source.slice(openIdx + 1, closeIdx);
+      if (inside.includes('native') && inside.includes('code')) {
+        foundNativeCode = true;
+        break;
+      }
+    }
+    searchStart = openIdx;
+  }
+
+  if (!foundNativeCode) {
+    throw new Test262Error('validateNativeFunctionSource failed: no [native code]');
+  }
+  if (!source.includes('function')) {
+    throw new Test262Error('validateNativeFunctionSource failed: no function keyword');
+  }
+
+  // Check if it starts with a line comment (entire string would be a comment)
+  let i = 0;
+  // Skip whitespace at start
+  while (i < source.length && (source[i] === ' ' || source[i] === '\t' || source[i] === '\n' || source[i] === '\r')) {
+    i++;
+  }
+  // Check for line comment at start
+  if (source[i] === '/' && source[i + 1] === '/') {
+    throw new Test262Error('validateNativeFunctionSource failed: starts with line comment');
+  }
+
+  // Check for unclosed block comment in the entire source
+  let commentIdx = 0;
+  while (true) {
+    const openComment = source.indexOf('/*', commentIdx);
+    if (openComment === -1) break;
+    const closeComment = source.indexOf('*/', openComment + 2);
+    if (closeComment === -1) {
+      throw new Test262Error('validateNativeFunctionSource failed: unclosed block comment');
+    }
+    commentIdx = closeComment + 2;
+  }
+
+  // Check for unmatched brackets and parens in the function header
+  // Find "function" keyword position to start our header analysis
+  const funcIdx = source.indexOf('function');
+  if (funcIdx === -1) {
+    throw new Test262Error('validateNativeFunctionSource failed: no function keyword');
+  }
+
+  // Find the opening brace of the outer function body
+  // Track parens and braces to handle nested functions in default params
+  let parenDepth = 0;
+  let braceDepth = 0;
+  let foundFirstParen = false;
+  let outerBraceIdx = -1;
+
+  for (let j = funcIdx; j < source.length; j++) {
+    const c = source[j];
+    if (c === '(') {
+      parenDepth++;
+      foundFirstParen = true;
+    } else if (c === ')') {
+      parenDepth--;
+      if (parenDepth < 0) {
+        throw new Test262Error('validateNativeFunctionSource failed: unmatched )');
+      }
+    } else if (c === '{') {
+      if (foundFirstParen && parenDepth === 0) {
+        outerBraceIdx = j;
+        break;
+      }
+      // Entering a nested block (like a function body in default params)
+      // If we hit { without params being closed, that's an error
+      if (!foundFirstParen) {
+        throw new Test262Error('validateNativeFunctionSource failed: unmatched (');
+      }
+      braceDepth++;
+    } else if (c === '}') {
+      braceDepth--;
+    }
+  }
+
+  // If we never found the outer brace, parens weren't balanced
+  if (outerBraceIdx === -1 && foundFirstParen && parenDepth !== 0) {
+    throw new Test262Error('validateNativeFunctionSource failed: unmatched (');
+  }
+
+  // If we found an outer brace, check bracket matching in the function name area
+  // The function name area is between "function" and the first "(" that's NOT inside brackets
+  if (outerBraceIdx !== -1) {
+    // Find the first ( after funcIdx that's at bracket depth 0
+    let firstOuterParenIdx = -1;
+    let bracketDepth = 0;
+    let inString = false;
+    let stringChar = '';
+    for (let j = funcIdx + 8; j < source.length; j++) {
+      const c = source[j];
+      if (inString) {
+        if (c === stringChar) inString = false;
+      } else if (c === '"' || c === "'") {
+        inString = true;
+        stringChar = c;
+      } else if (c === '[') {
+        bracketDepth++;
+      } else if (c === ']') {
+        bracketDepth--;
+        if (bracketDepth < 0) {
+          throw new Test262Error('validateNativeFunctionSource failed: unmatched ]');
+        }
+      } else if (c === '(' && bracketDepth === 0) {
+        firstOuterParenIdx = j;
+        break;
+      }
+    }
+
+    // If we exited without finding a paren and bracket depth != 0, there's an unmatched [
+    if (firstOuterParenIdx === -1 && bracketDepth !== 0) {
+      throw new Test262Error('validateNativeFunctionSource failed: unmatched [');
+    }
+  }
 };
 
 const assertToStringOrNativeFunction = function(fn, expected) {
