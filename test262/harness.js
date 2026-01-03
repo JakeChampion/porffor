@@ -1,31 +1,14 @@
 /// sta.js
-// define our $262 here too
-// var $262 = {
-//   global: globalThis,
-//   gc() { /* noop */ },
-//   detachArrayBuffer(buffer) {
-//     return Porffor.arraybuffer.detach(buffer);
-//   },
-//   getGlobal(name) {
-//     return globalThis[name];
-//   },
-//   // todo: setGlobal
-//   destroy() { /* noop */ },
-//   agent: {}
-// };
-
-// function Test262Error(message) {
-//   this.message = message;
-//   this.name = 'Test262Error';
-// }
-
-// var __Test262Error_thrower = message => {
-//   throw new Test262Error(message);
-// };
-
 var $DONOTEVALUATE = () => {
   throw 'Test262: This statement should not be evaluated.';
 };
+
+var $262 = {};
+$262.gc = function() {};
+$262.destroy = function() {};
+$262.detachArrayBuffer = function(buffer) { return Porffor.arraybuffer.detach(buffer); };
+$262.createRealm = function() { return { global: {} }; };
+$262.agent = {};
 
 /// assert.js
 var assert = mustBeTrue => {

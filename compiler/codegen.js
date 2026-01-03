@@ -2194,7 +2194,10 @@ const createThisArg = (scope, decl) => {
   const name = decl.callee?.name;
   if (decl._new) {
     // if precompiling or builtin func, just make it null as unused
-    if (!decl._forceCreateThis && (globalThis.precompile || name in builtinFuncs)) return [
+    // check that we're actually calling a builtin, not a user-defined function shadowing it
+    const func = name ? funcByName(name) : null;
+    const isBuiltin = func?.internal || (!func && name in builtinFuncs);
+    if (!decl._forceCreateThis && (globalThis.precompile || isBuiltin)) return [
       number(NULL),
       number(TYPES.object, Valtype.i32)
     ];
