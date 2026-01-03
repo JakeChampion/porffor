@@ -497,8 +497,9 @@ function verifyProperty(obj, name, desc, options) {
 
   if (Object.hasOwn(desc, 'value')) {
     const v = desc.value;
-    if (!isSameValue(originalDesc.value, v)) throw new Test262Error('verifyProperty: descriptor value mismatch');
-    // if (!isSameValue(obj[name], v)) throw new Test262Error('verifyProperty: object value mismatch');
+    if (!isSameValue(originalDesc.value, v)) {
+      throw new Test262Error("obj['" + name + "'] descriptor value should be " + v + "; obj['" + name + "'] value should be " + v);
+    }
   }
 
   if (Object.hasOwn(desc, 'enumerable')) {
