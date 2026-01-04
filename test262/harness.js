@@ -462,6 +462,11 @@ function isWritable(obj, name, verifyProp, value) {
 }
 
 function verifyProperty(obj, name, desc, options) {
+  // Validate required arguments
+  if (arguments.length < 3) {
+    throw new Test262Error('verifyProperty requires at least 3 arguments: obj, name, and descriptor');
+  }
+
   var originalDesc = Object.getOwnPropertyDescriptor(obj, name);
 
   if (desc === undefined) {
