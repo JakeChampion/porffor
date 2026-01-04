@@ -1,5 +1,29 @@
 import type {} from './porffor.d.ts';
 
+// Build arguments object from declared params array, rest array, and actual argc
+export const __Porffor_arguments_build = (declaredParams: any[], rest: any[], argc: number, declaredCount: number): any[] => {
+  const out: any[] = Porffor.malloc();
+
+  // Number of declared params to include (min of argc and declaredCount)
+  let declaredToInclude: i32 = argc < declaredCount ? argc : declaredCount;
+  if (declaredToInclude < 0) declaredToInclude = 0;
+
+  // Copy declared params up to declaredToInclude
+  let i: i32 = 0;
+  for (; i < declaredToInclude; i++) {
+    out[i] = declaredParams[i];
+  }
+
+  // Append rest array elements
+  const restLen: i32 = rest.length;
+  for (let j: i32 = 0; j < restLen; j++) {
+    out[i + j] = rest[j];
+  }
+
+  out.length = declaredToInclude + restLen;
+  return out;
+};
+
 // Like === but NaN === NaN is true, and +0 === -0 is true
 export const __Porffor_array_sameValueZero = (x: any, y: any): boolean => {
   if (x === y) return true;

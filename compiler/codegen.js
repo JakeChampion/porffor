@@ -661,16 +661,8 @@ const lookup = (scope, name, failEarly = false) => {
 
   if (local?.idx === undefined) {
     if (name === 'arguments' && !scope.arrow) {
-      // if function has implicit rest argument for arguments object, use it directly
-      if (scope._usesArgumentsObject && scope.locals['#arguments_rest']) {
-        return [
-          [ Opcodes.local_get, scope.locals['#arguments_rest'].idx ],
-          ...setLastType(scope, TYPES.array)
-        ];
-      }
-
-      // fallback: create object from declared parameters
-      let len = countLength(scope);
+      // Get declared parameter names
+      let len = scope._usesArgumentsObject ? scope._declaredParamCount : countLength(scope);
       const names = new Array(len);
       const off = scope.constr ? 4 : (scope.method ? 2 : 0);
       for (const x in scope.locals) {
@@ -680,6 +672,51 @@ const lookup = (scope, name, failEarly = false) => {
         }
       }
 
+      if (scope._usesArgumentsObject && scope.locals['#arguments_rest']) {
+        // Build arguments array using argc to know how many declared params to include
+        // Cache in #arguments to avoid rebuilding each access
+
+        // For 0 declared params, just use the rest array directly
+        if (len === 0) {
+          return [
+            [ Opcodes.local_get, scope.locals['#arguments_rest'].idx ],
+            ...setLastType(scope, TYPES.array)
+          ];
+        }
+
+        // For declared params, we need to build combined array using argc
+        // Build: declaredParams.slice(0, min(argc, declaredParamCount)) + rest
+        const declaredParamArray = names.filter(x => x !== undefined).map(x => ({ type: 'Identifier', name: x }));
+
+        // Generate code that builds the arguments array based on argc
+        return [
+          [ Opcodes.local_get, localTmp(scope, '#arguments') ],
+          ...Opcodes.eqz,
+          [ Opcodes.if, Blocktype.void ],
+            // Build the arguments array dynamically based on argc
+            ...generate(scope, {
+              type: 'CallExpression',
+              callee: { type: 'Identifier', name: '__Porffor_arguments_build' },
+              arguments: [
+                // Pass the declared params as an array
+                { type: 'ArrayExpression', elements: declaredParamArray },
+                // Pass the rest args
+                { type: 'Identifier', name: '#arguments_rest' },
+                // Pass argc
+                { type: 'Identifier', name: '#arguments_argc' },
+                // Pass declared param count
+                { type: 'Literal', value: len }
+              ]
+            }),
+            [ Opcodes.local_set, localTmp(scope, '#arguments') ],
+          [ Opcodes.end ],
+
+          [ Opcodes.local_get, localTmp(scope, '#arguments') ],
+          ...setLastType(scope, TYPES.array)
+        ];
+      }
+
+      // fallback: create object from declared parameters (no extra args possible)
       return [
         [ Opcodes.local_get, localTmp(scope, '#arguments') ],
         ...Opcodes.eqz,
@@ -2751,25 +2788,41 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
 
   if (func && args.length < paramCount) {
     // too little args, push undefineds
-    const underflow = paramCount - (func.hasRestArgument ? 1 : 0) - args.length;
+    // Subtract 1 for rest param, and 1 more for argc param if using arguments object
+    const extraParams = (func.hasRestArgument ? 1 : 0) + (func._usesArgumentsObject ? 1 : 0);
+    const underflow = paramCount - extraParams - args.length;
     for (let i = 0; i < underflow; i++) args.push(func.defaultParam ? func.defaultParam() : DEFAULT_VALUE());
   }
 
   if (func && func.hasRestArgument) {
+    // For functions using arguments object, we need to track the actual argc
+    const hasArgcParam = func._usesArgumentsObject;
+    const effectiveParamCount = hasArgcParam ? paramCount - 1 : paramCount; // -1 for argc param
+
     // hack: spread + rest special handling
     if (decl.arguments.at(-1)?.type === 'SpreadElement') {
       // just use the array being spread
       args = args.slice(0, args.length - 8);
       args.push(decl.arguments.at(-1).argument);
+      if (hasArgcParam) {
+        // For spread, argc is unknown at compile time - use array length
+        // This is a limitation for now
+        args.push({ type: 'Literal', value: -1 }); // -1 signals "use rest.length + declared"
+      }
     } else {
-      const restArgs = args.slice(paramCount - 1);
-      args = args.slice(0, paramCount - 1);
+      const restArgs = args.slice(effectiveParamCount - 1);
+      args = args.slice(0, effectiveParamCount - 1);
       args.push({
         type: 'ArrayExpression',
         elements: restArgs,
         _doNotMarkTypeUsed: true,
         _staticAlloc: func.internal
       });
+      if (hasArgcParam) {
+        // Pass actual argc (original arg count before underflow padding)
+        const actualArgc = decl.arguments?.length ?? 0;
+        args.push({ type: 'Literal', value: actualArgc });
+      }
     }
   }
 
@@ -6891,8 +6944,15 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
   // check if function uses 'arguments' and doesn't have a rest parameter - add implicit one
   const hasExplicitRest = params.some(p => p.type === 'RestElement');
   const needsArgumentsRest = !arrow && !hasExplicitRest && usesArguments(decl.body);
+  // Count declared params before adding implicit rest (for arguments object)
+  const declaredParamCount = params.filter(p => p.type !== 'RestElement').length;
   if (needsArgumentsRest) {
-    params = [...params, { type: 'RestElement', argument: { type: 'Identifier', name: '#arguments_rest' } }];
+    // Add implicit rest parameter and argc parameter for proper arguments object
+    params = [
+      ...params,
+      { type: 'RestElement', argument: { type: 'Identifier', name: '#arguments_rest' } },
+      { type: 'Identifier', name: '#arguments_argc', _isArgc: true }
+    ];
   }
   const func = {
     start: decl.start,
@@ -6908,6 +6968,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     subclass: decl._subclass, _onlyConstr: decl._onlyConstr, _onlyThisMethod: decl._onlyThisMethod,
     strict: scope.strict || decl.strict,
     _usesArgumentsObject: needsArgumentsRest,
+    _declaredParamCount: needsArgumentsRest ? declaredParamCount : undefined,
 
     generate() {
       if (func.wasm) return func.wasm;
