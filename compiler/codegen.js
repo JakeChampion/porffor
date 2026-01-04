@@ -87,6 +87,26 @@ const cacheAst = (decl, wasm) => {
   return wasm;
 };
 
+// helper to check if a function body uses 'arguments' identifier
+const usesArguments = (node, inArrow = false) => {
+  if (!node) return false;
+  if (Array.isArray(node)) return node.some(n => usesArguments(n, inArrow));
+  if (typeof node !== 'object') return false;
+
+  // arrow functions have their own scope for arguments
+  if (node.type === 'ArrowFunctionExpression') return false;
+  // nested functions have their own arguments
+  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') return false;
+
+  if (node.type === 'Identifier' && node.name === 'arguments') return true;
+
+  for (const key in node) {
+    if (key[0] === '_' || key === 'type' || key === 'loc' || key === 'range') continue;
+    if (usesArguments(node[key], inArrow)) return true;
+  }
+  return false;
+};
+
 let doNotMarkFuncRef = false;
 const funcRef = func => {
   if (!doNotMarkFuncRef) func.referenced = true;
@@ -641,7 +661,15 @@ const lookup = (scope, name, failEarly = false) => {
 
   if (local?.idx === undefined) {
     if (name === 'arguments' && !scope.arrow) {
-      // todo: not compliant
+      // if function has implicit rest argument for arguments object, use it directly
+      if (scope._usesArgumentsObject && scope.locals['#arguments_rest']) {
+        return [
+          [ Opcodes.local_get, scope.locals['#arguments_rest'].idx ],
+          ...setLastType(scope, TYPES.array)
+        ];
+      }
+
+      // fallback: create object from declared parameters
       let len = countLength(scope);
       const names = new Array(len);
       const off = scope.constr ? 4 : (scope.method ? 2 : 0);
@@ -1704,6 +1732,10 @@ const getType = (scope, name, failEarly = false) => {
   }
 
   if (global !== false && name === 'arguments' && !scope.arrow) {
+    // if function has implicit rest argument for arguments object, return array type
+    if (scope._usesArgumentsObject && scope.locals['#arguments_rest']) {
+      return [ number(TYPES.array, Valtype.i32) ];
+    }
     return [ number(TYPES.object, Valtype.i32) ];
   }
 
@@ -6851,10 +6883,17 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     return [ func, out ];
   }
 
-  const params = decl.params ?? [];
+  let params = decl.params ?? [];
 
   // TODO: share scope/locals between !!!
   const arrow = decl.type === 'ArrowFunctionExpression' || decl.type === 'Program';
+
+  // check if function uses 'arguments' and doesn't have a rest parameter - add implicit one
+  const hasExplicitRest = params.some(p => p.type === 'RestElement');
+  const needsArgumentsRest = !arrow && !hasExplicitRest && usesArguments(decl.body);
+  if (needsArgumentsRest) {
+    params = [...params, { type: 'RestElement', argument: { type: 'Identifier', name: '#arguments_rest' } }];
+  }
   const func = {
     start: decl.start,
     locals: Object.create(null),
@@ -6868,6 +6907,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     async: decl.async,
     subclass: decl._subclass, _onlyConstr: decl._onlyConstr, _onlyThisMethod: decl._onlyThisMethod,
     strict: scope.strict || decl.strict,
+    _usesArgumentsObject: needsArgumentsRest,
 
     generate() {
       if (func.wasm) return func.wasm;
