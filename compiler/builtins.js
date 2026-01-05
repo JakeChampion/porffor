@@ -423,13 +423,12 @@ export const BuiltinVars = ({ builtinFuncs }) => {
     }
 
     // Prototypes that should have Symbol.toStringTag per ES spec
+    // Note: TypedArrays are excluded because their Symbol.toStringTag is a getter
+    // that returns the [[TypedArrayName]] internal slot, not a simple string
     const prototypeToStringTags = new Set([
       'Set', 'Map', 'WeakSet', 'WeakMap', 'WeakRef',
       'ArrayBuffer', 'SharedArrayBuffer', 'DataView',
-      'Promise', 'Symbol', 'BigInt',
-      'Uint8Array', 'Int8Array', 'Uint8ClampedArray',
-      'Uint16Array', 'Int16Array', 'Uint32Array', 'Int32Array',
-      'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array'
+      'Promise', 'Symbol', 'BigInt'
     ]);
 
     const toStringTag = prototypeToStringTags.has(name) ? name : null;
