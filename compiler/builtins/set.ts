@@ -96,11 +96,53 @@ export const Set = function (iterable: any): Set {
   return out;
 };
 
-export const __Set_prototype_union = (_this: Set, other: any) => {
-  if (Porffor.type(other) != Porffor.TYPES.set) throw new TypeError('other argument must be a Set');
+// GetSetRecord - get size, has, and keys from a set-like object
+// https://tc39.es/ecma262/#sec-getsetrecord
+export const __Porffor_getSetRecord = (obj: any): any[] => {
+  // 1. If obj is not an Object, throw a TypeError exception.
+  if (!Porffor.object.isObject(obj)) throw new TypeError('other argument must be an object');
 
+  // 2-4. Get size
+  const rawSize: any = obj.size;
+  const numSize: number = +rawSize;
+  if (Number.isNaN(numSize)) throw new TypeError('size must be a number');
+  const intSize: number = ecma262.ToIntegerOrInfinity(numSize);
+  if (intSize < 0) throw new RangeError('size must be non-negative');
+
+  // 5-8. Get has method
+  const has: any = obj.has;
+  if (typeof has !== 'function') throw new TypeError('has must be a function');
+
+  // 9-11. Get keys method
+  const keys: any = obj.keys;
+  if (typeof keys !== 'function') throw new TypeError('keys must be a function');
+
+  // Return record as array: [size, has, keys, obj]
+  const record: any[] = Porffor.malloc();
+  record[0] = intSize;
+  record[1] = has;
+  record[2] = keys;
+  record[3] = obj;
+  return record;
+};
+
+export const __Set_prototype_union = (_this: Set, other: any) => {
   const out: Set = new Set(_this);
-  for (const x of other) {
+
+  // Fast path for Set
+  if (Porffor.type(other) == Porffor.TYPES.set) {
+    for (const x of other) {
+      out.add(x);
+    }
+    return out;
+  }
+
+  // Set-like object path
+  const record: any[] = __Porffor_getSetRecord(other);
+  const keysMethod: any = record[2];
+  const otherObj: any = record[3];
+
+  for (const x of keysMethod.call(otherObj)) {
     out.add(x);
   }
 
@@ -108,21 +150,45 @@ export const __Set_prototype_union = (_this: Set, other: any) => {
 };
 
 export const __Set_prototype_intersection = (_this: Set, other: any) => {
-  if (Porffor.type(other) != Porffor.TYPES.set) throw new TypeError('other argument must be a Set');
-
   const out: Set = new Set();
+
+  // Fast path for Set
+  if (Porffor.type(other) == Porffor.TYPES.set) {
+    for (const x of _this) {
+      if (other.has(x)) out.add(x);
+    }
+    return out;
+  }
+
+  // Set-like object path
+  const record: any[] = __Porffor_getSetRecord(other);
+  const hasMethod: any = record[1];
+  const otherObj: any = record[3];
+
   for (const x of _this) {
-    if (other.has(x)) out.add(x);
+    if (hasMethod.call(otherObj, x)) out.add(x);
   }
 
   return out;
 };
 
 export const __Set_prototype_difference = (_this: Set, other: any) => {
-  if (Porffor.type(other) != Porffor.TYPES.set) throw new TypeError('other argument must be a Set');
-
   const out: Set = new Set(_this);
-  for (const x of other) {
+
+  // Fast path for Set
+  if (Porffor.type(other) == Porffor.TYPES.set) {
+    for (const x of other) {
+      out.delete(x);
+    }
+    return out;
+  }
+
+  // Set-like object path
+  const record: any[] = __Porffor_getSetRecord(other);
+  const keysMethod: any = record[2];
+  const otherObj: any = record[3];
+
+  for (const x of keysMethod.call(otherObj)) {
     out.delete(x);
   }
 
@@ -130,10 +196,23 @@ export const __Set_prototype_difference = (_this: Set, other: any) => {
 };
 
 export const __Set_prototype_symmetricDifference = (_this: Set, other: any) => {
-  if (Porffor.type(other) != Porffor.TYPES.set) throw new TypeError('other argument must be a Set');
-
   const out: Set = new Set(_this);
-  for (const x of other) {
+
+  // Fast path for Set
+  if (Porffor.type(other) == Porffor.TYPES.set) {
+    for (const x of other) {
+      if (_this.has(x)) out.delete(x);
+        else out.add(x);
+    }
+    return out;
+  }
+
+  // Set-like object path
+  const record: any[] = __Porffor_getSetRecord(other);
+  const keysMethod: any = record[2];
+  const otherObj: any = record[3];
+
+  for (const x of keysMethod.call(otherObj)) {
     if (_this.has(x)) out.delete(x);
       else out.add(x);
   }
@@ -142,19 +221,41 @@ export const __Set_prototype_symmetricDifference = (_this: Set, other: any) => {
 };
 
 export const __Set_prototype_isSubsetOf = (_this: Set, other: any) => {
-  if (Porffor.type(other) != Porffor.TYPES.set) throw new TypeError('other argument must be a Set');
+  // Fast path for Set
+  if (Porffor.type(other) == Porffor.TYPES.set) {
+    for (const x of _this) {
+      if (!other.has(x)) return false;
+    }
+    return true;
+  }
+
+  // Set-like object path
+  const record: any[] = __Porffor_getSetRecord(other);
+  const hasMethod: any = record[1];
+  const otherObj: any = record[3];
 
   for (const x of _this) {
-    if (!other.has(x)) return false;
+    if (!hasMethod.call(otherObj, x)) return false;
   }
 
   return true;
 };
 
 export const __Set_prototype_isSupersetOf = (_this: Set, other: any) => {
-  if (Porffor.type(other) != Porffor.TYPES.set) throw new TypeError('other argument must be a Set');
+  // Fast path for Set
+  if (Porffor.type(other) == Porffor.TYPES.set) {
+    for (const x of other) {
+      if (!_this.has(x)) return false;
+    }
+    return true;
+  }
 
-  for (const x of other) {
+  // Set-like object path
+  const record: any[] = __Porffor_getSetRecord(other);
+  const keysMethod: any = record[2];
+  const otherObj: any = record[3];
+
+  for (const x of keysMethod.call(otherObj)) {
     if (!_this.has(x)) return false;
   }
 
@@ -162,10 +263,21 @@ export const __Set_prototype_isSupersetOf = (_this: Set, other: any) => {
 };
 
 export const __Set_prototype_isDisjointFrom = (_this: Set, other: any) => {
-  if (Porffor.type(other) != Porffor.TYPES.set) throw new TypeError('other argument must be a Set');
+  // Fast path for Set
+  if (Porffor.type(other) == Porffor.TYPES.set) {
+    for (const x of _this) {
+      if (other.has(x)) return false;
+    }
+    return true;
+  }
+
+  // Set-like object path
+  const record: any[] = __Porffor_getSetRecord(other);
+  const hasMethod: any = record[1];
+  const otherObj: any = record[3];
 
   for (const x of _this) {
-    if (other.has(x)) return false;
+    if (hasMethod.call(otherObj, x)) return false;
   }
 
   return true;
