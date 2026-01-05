@@ -107,6 +107,27 @@ const usesArguments = (node, inArrow = false) => {
   return false;
 };
 
+// helper to check if arrow functions inside a node use 'arguments' (for outer function context)
+const arrowsUseArguments = (node) => {
+  if (!node) return false;
+  if (Array.isArray(node)) return node.some(n => arrowsUseArguments(n));
+  if (typeof node !== 'object') return false;
+
+  // stop at non-arrow functions (they have their own arguments)
+  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') return false;
+
+  // for arrow functions, check if they use 'arguments'
+  if (node.type === 'ArrowFunctionExpression') {
+    return usesArguments(node.body);
+  }
+
+  for (const key in node) {
+    if (key[0] === '_' || key === 'type' || key === 'loc' || key === 'range') continue;
+    if (arrowsUseArguments(node[key])) return true;
+  }
+  return false;
+};
+
 let doNotMarkFuncRef = false;
 const funcRef = func => {
   if (!doNotMarkFuncRef) func.referenced = true;
@@ -739,6 +760,22 @@ const lookup = (scope, name, failEarly = false) => {
         [ Opcodes.end ],
 
         [ Opcodes.local_get, localTmp(scope, '#arguments') ]
+      ];
+    }
+
+    // Arrow functions accessing 'arguments' - read from the global set by outer function
+    if (name === 'arguments' && scope.arrow) {
+      // Ensure the global exists (may be created before outer function is generated)
+      if (!('#outer_arguments' in globals)) {
+        const idx = globals['#ind']++;
+        globals['#outer_arguments'] = { idx, type: valtypeBinary };
+        const typeIdx = globals['#ind']++;
+        globals['#outer_arguments#type'] = { idx: typeIdx, type: Valtype.i32 };
+      }
+      console.error(`DEBUG: arrow ${scope.name} reading arguments from global idx ${globals['#outer_arguments'].idx}`);
+      return [
+        [ Opcodes.global_get, globals['#outer_arguments'].idx ],
+        ...setLastType(scope, TYPES.array)
       ];
     }
 
@@ -6944,6 +6981,8 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
   // check if function uses 'arguments' and doesn't have a rest parameter - add implicit one
   const hasExplicitRest = params.some(p => p.type === 'RestElement');
   const needsArgumentsRest = !arrow && !hasExplicitRest && usesArguments(decl.body);
+  // Check if any arrow functions inside use 'arguments' (for passing to global)
+  const hasArrowsUsingArguments = !arrow && arrowsUseArguments(decl.body);
   // Count declared params before adding implicit rest (for arguments object)
   const declaredParamCount = params.filter(p => p.type !== 'RestElement').length;
   if (needsArgumentsRest) {
@@ -6969,6 +7008,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     strict: scope.strict || decl.strict,
     _usesArgumentsObject: needsArgumentsRest,
     _declaredParamCount: needsArgumentsRest ? declaredParamCount : undefined,
+    _hasArrowsUsingArguments: hasArrowsUsingArguments,
 
     generate() {
       if (func.wasm) return func.wasm;
@@ -7154,6 +7194,30 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // make out promise local
         allocVar(func, '#async_out_promise', false, false);
         typeUsed(func, TYPES.promise);
+      }
+
+      // If this function has arrow functions that use 'arguments', store arguments in global
+      if (func._hasArrowsUsingArguments) {
+        console.error(`DEBUG: ${func.name} has arrows using arguments, _usesArgumentsObject=${func._usesArgumentsObject}, arrow=${func.arrow}`);
+        // Ensure the global exists
+        if (!('#outer_arguments' in globals)) {
+          const idx = globals['#ind']++;
+          globals['#outer_arguments'] = { idx, type: valtypeBinary };
+          const typeIdx = globals['#ind']++;
+          globals['#outer_arguments#type'] = { idx: typeIdx, type: Valtype.i32 };
+        }
+
+        // Generate code to store arguments object in the global
+        // This must happen after parameters are set up but before body executes
+        console.error(`DEBUG: storing arguments to global idx ${globals['#outer_arguments'].idx}`);
+        const argsWasm = generate(func, { type: 'Identifier', name: 'arguments' });
+        console.error(`DEBUG: argsWasm length: ${argsWasm.length}`);
+        wasm.push(
+          ...argsWasm,
+          [ Opcodes.global_set, globals['#outer_arguments'].idx ],
+          ...getNodeType(func, { type: 'Identifier', name: 'arguments' }),
+          [ Opcodes.global_set, globals['#outer_arguments#type'].idx ]
+        );
       }
 
       const preface = wasm;
