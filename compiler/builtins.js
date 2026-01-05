@@ -422,7 +422,18 @@ export const BuiltinVars = ({ builtinFuncs }) => {
       };
     }
 
-    object(x, props);
+    // Prototypes that should have Symbol.toStringTag per ES spec
+    const prototypeToStringTags = new Set([
+      'Set', 'Map', 'WeakSet', 'WeakMap', 'WeakRef',
+      'ArrayBuffer', 'SharedArrayBuffer', 'DataView',
+      'Promise', 'Symbol', 'BigInt',
+      'Uint8Array', 'Int8Array', 'Uint8ClampedArray',
+      'Uint16Array', 'Int16Array', 'Uint32Array', 'Int32Array',
+      'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array'
+    ]);
+
+    const toStringTag = prototypeToStringTags.has(name) ? name : null;
+    object(x, props, toStringTag);
   }
 
 
