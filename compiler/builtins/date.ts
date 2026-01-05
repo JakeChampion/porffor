@@ -1779,6 +1779,79 @@ export const __Date_prototype_valueOf = (_this: any) => {
   return __Porffor_date_read(_this);
 };
 
+// Annex B.2.4 Date.prototype.getYear ()
+// https://tc39.es/ecma262/#sec-date.prototype.getyear
+export const __Date_prototype_getYear = (_this: any) => {
+  // 1. Let dateObject be the this value.
+  // 2. Perform ? RequireInternalSlot(dateObject, [[DateValue]]).
+  // 3. Let t be dateObject.[[DateValue]].
+  const t: number = __Porffor_date_read(_this);
+
+  // 4. If t is NaN, return NaN.
+  if (Number.isNaN(t)) return NaN;
+
+  // 5. Return YearFromTime(LocalTime(t)) - 1900𝔽.
+  return __ecma262_YearFromTime(__ecma262_LocalTime(t)) - 1900;
+};
+
+// Annex B.2.5 Date.prototype.setYear (year)
+// https://tc39.es/ecma262/#sec-date.prototype.setyear
+export const __Date_prototype_setYear = (_this: any, year: any) => {
+  // 1. Let dateObject be the this value.
+  // 2. Perform ? RequireInternalSlot(dateObject, [[DateValue]]).
+  // 3. Let t be dateObject.[[DateValue]].
+  let t: number = __Porffor_date_read(_this);
+
+  // 4. Let y be ? ToNumber(year).
+  const y: number = ecma262.ToNumber(year);
+
+  // 5. If y is NaN, then
+  if (Number.isNaN(y)) {
+    // a. Set dateObject.[[DateValue]] to NaN.
+    __Porffor_date_write(_this, NaN);
+    // b. Return NaN.
+    return NaN;
+  }
+
+  // 6. Let yi be ! ToIntegerOrInfinity(y).
+  const yi: number = ecma262.ToIntegerOrInfinity(y);
+
+  // 7. If 0 ≤ yi ≤ 99, let yyyy be 1900𝔽 + 𝔽(yi).
+  // 8. Else, let yyyy be y.
+  let yyyy: number;
+  if (yi >= 0 && yi <= 99) {
+    yyyy = 1900 + yi;
+  } else {
+    yyyy = y;
+  }
+
+  // 9. If t is NaN, set t to +0𝔽; otherwise, set t to LocalTime(t).
+  if (Number.isNaN(t)) t = 0;
+    else t = __ecma262_LocalTime(t);
+
+  // 10. Let newDate be MakeDate(MakeDay(yyyy, MonthFromTime(t), DateFromTime(t)), TimeWithinDay(t)).
+  const newDate: number = __ecma262_MakeDate(
+    __ecma262_MakeDay(yyyy, __ecma262_MonthFromTime(t), __ecma262_DateFromTime(t)),
+    __ecma262_TimeWithinDay(t)
+  );
+
+  // 11. Let u be TimeClip(UTC(newDate)).
+  const u: number = __ecma262_TimeClip(__ecma262_UTC(newDate));
+
+  // 12. Set dateObject.[[DateValue]] to u.
+  __Porffor_date_write(_this, u);
+
+  // 13. Return u.
+  return u;
+};
+
+// Annex B.2.6 Date.prototype.toGMTString ()
+// https://tc39.es/ecma262/#sec-date.prototype.togmtstring
+// The initial value of the "toGMTString" property is %Date.prototype.toUTCString%
+export const __Date_prototype_toGMTString = (_this: any) => {
+  return __Date_prototype_toUTCString(_this);
+};
+
 // 21.4.2.1 Date (...values)
 // https://tc39.es/ecma262/multipage/numbers-and-dates.html#sec-date
 export const Date = function (...values: any[]): bytestring|Date {
