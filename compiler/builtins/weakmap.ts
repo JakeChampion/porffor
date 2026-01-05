@@ -42,6 +42,10 @@ export const __WeakMap_prototype_toLocaleString = (_this: WeakMap) => __WeakMap_
 
 // https://github.com/tc39/proposal-upsert
 export const __WeakMap_prototype_getOrInsert = (_this: WeakMap, key: any, value: any) => {
+  // Key must be able to be held weakly (object or symbol)
+  if (!Porffor.object.isObjectOrSymbol(key))
+    throw new TypeError('WeakMap key must be an object or symbol');
+
   if (!__WeakMap_prototype_has(_this, key)) {
     __WeakMap_prototype_set(_this, key, value);
   }
@@ -50,6 +54,14 @@ export const __WeakMap_prototype_getOrInsert = (_this: WeakMap, key: any, value:
 };
 
 export const __WeakMap_prototype_getOrInsertComputed = (_this: WeakMap, key: any, callbackFn: any) => {
+  // Key must be able to be held weakly (object or symbol)
+  if (!Porffor.object.isObjectOrSymbol(key))
+    throw new TypeError('WeakMap key must be an object or symbol');
+
+  // callbackFn must be callable
+  if (typeof callbackFn !== 'function')
+    throw new TypeError('callbackFn must be a function');
+
   if (!__WeakMap_prototype_has(_this, key)) {
     __WeakMap_prototype_set(_this, key, callbackFn(key));
   }
