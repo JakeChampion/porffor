@@ -764,15 +764,7 @@ const lookup = (scope, name, failEarly = false) => {
     }
 
     // Arrow functions accessing 'arguments' - read from the global set by outer function
-    if (name === 'arguments' && scope.arrow) {
-      // Ensure the global exists (may be created before outer function is generated)
-      if (!('#outer_arguments' in globals)) {
-        const idx = globals['#ind']++;
-        globals['#outer_arguments'] = { idx, type: valtypeBinary };
-        const typeIdx = globals['#ind']++;
-        globals['#outer_arguments#type'] = { idx: typeIdx, type: Valtype.i32 };
-      }
-      console.error(`DEBUG: arrow ${scope.name} reading arguments from global idx ${globals['#outer_arguments'].idx}`);
+    if (name === 'arguments' && scope.arrow && '#outer_arguments' in globals) {
       return [
         [ Opcodes.global_get, globals['#outer_arguments'].idx ],
         ...setLastType(scope, TYPES.array)
@@ -1811,6 +1803,11 @@ const getType = (scope, name, failEarly = false) => {
       return [ number(TYPES.array, Valtype.i32) ];
     }
     return [ number(TYPES.object, Valtype.i32) ];
+  }
+
+  // Arrow functions accessing 'arguments' - get type from the #outer_arguments global
+  if (name === 'arguments' && scope.arrow && '#outer_arguments' in globals) {
+    return [ number(TYPES.array, Valtype.i32) ];
   }
 
   if (metadata?.type != null) {
@@ -6981,7 +6978,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
   // check if function uses 'arguments' and doesn't have a rest parameter - add implicit one
   const hasExplicitRest = params.some(p => p.type === 'RestElement');
   const needsArgumentsRest = !arrow && !hasExplicitRest && usesArguments(decl.body);
-  // Check if any arrow functions inside use 'arguments' (for passing to global)
+  // Check if any arrow functions inside use 'arguments' (for passing via global)
   const hasArrowsUsingArguments = !arrow && arrowsUseArguments(decl.body);
   // Count declared params before adding implicit rest (for arguments object)
   const declaredParamCount = params.filter(p => p.type !== 'RestElement').length;
@@ -6993,6 +6990,8 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       { type: 'Identifier', name: '#arguments_argc', _isArgc: true }
     ];
   }
+  // For arrow functions, store parent scope so they can access outer 'arguments'
+  const parentScope = arrow ? scope : null;
   const func = {
     start: decl.start,
     locals: Object.create(null),
@@ -7001,6 +7000,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     name,
     index: currentFuncIndex++,
     arrow,
+    parentScope, // reference to enclosing function scope (for closures)
     constr: !arrow && !decl.generator && !decl.async && !decl._method, // constructable
     method: !arrow && (decl._method || decl.generator || decl.async), // has this but not constructable
     async: decl.async,
@@ -7196,22 +7196,17 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         typeUsed(func, TYPES.promise);
       }
 
-      // If this function has arrow functions that use 'arguments', store arguments in global
+      // If this function has arrow functions that use 'arguments', store arguments in a global
+      // so arrow functions can access it (since they can't access outer scope locals directly)
       if (func._hasArrowsUsingArguments) {
-        console.error(`DEBUG: ${func.name} has arrows using arguments, _usesArgumentsObject=${func._usesArgumentsObject}, arrow=${func.arrow}`);
-        // Ensure the global exists
+        // Ensure the global exists - use allocVar like user-defined globals do
         if (!('#outer_arguments' in globals)) {
-          const idx = globals['#ind']++;
-          globals['#outer_arguments'] = { idx, type: valtypeBinary };
-          const typeIdx = globals['#ind']++;
-          globals['#outer_arguments#type'] = { idx: typeIdx, type: Valtype.i32 };
+          allocVar(func, '#outer_arguments', true, true, false, false);
         }
 
-        // Generate code to store arguments object in the global
-        // This must happen after parameters are set up but before body executes
-        console.error(`DEBUG: storing arguments to global idx ${globals['#outer_arguments'].idx}`);
+        // Generate code to get the full arguments object and store in the global
+        // Use generate() to build the proper arguments array (handles declared params + rest)
         const argsWasm = generate(func, { type: 'Identifier', name: 'arguments' });
-        console.error(`DEBUG: argsWasm length: ${argsWasm.length}`);
         wasm.push(
           ...argsWasm,
           [ Opcodes.global_set, globals['#outer_arguments'].idx ],
