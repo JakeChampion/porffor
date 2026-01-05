@@ -137,6 +137,14 @@ export const __Set_prototype_union = (_this: Set, other: any) => {
     return out;
   }
 
+  // Fast path for Map
+  if (Porffor.type(other) == Porffor.TYPES.map) {
+    for (const x of (other as Map).keys()) {
+      out.add(x);
+    }
+    return out;
+  }
+
   // Set-like object path
   const record: any[] = __Porffor_getSetRecord(other);
   const keysMethod: any = record[2];
@@ -160,6 +168,14 @@ export const __Set_prototype_intersection = (_this: Set, other: any) => {
     return out;
   }
 
+  // Fast path for Map
+  if (Porffor.type(other) == Porffor.TYPES.map) {
+    for (const x of _this) {
+      if ((other as Map).has(x)) out.add(x);
+    }
+    return out;
+  }
+
   // Set-like object path
   const record: any[] = __Porffor_getSetRecord(other);
   const hasMethod: any = record[1];
@@ -178,6 +194,14 @@ export const __Set_prototype_difference = (_this: Set, other: any) => {
   // Fast path for Set
   if (Porffor.type(other) == Porffor.TYPES.set) {
     for (const x of other) {
+      out.delete(x);
+    }
+    return out;
+  }
+
+  // Fast path for Map
+  if (Porffor.type(other) == Porffor.TYPES.map) {
+    for (const x of (other as Map).keys()) {
       out.delete(x);
     }
     return out;
@@ -207,6 +231,15 @@ export const __Set_prototype_symmetricDifference = (_this: Set, other: any) => {
     return out;
   }
 
+  // Fast path for Map
+  if (Porffor.type(other) == Porffor.TYPES.map) {
+    for (const x of (other as Map).keys()) {
+      if (_this.has(x)) out.delete(x);
+        else out.add(x);
+    }
+    return out;
+  }
+
   // Set-like object path
   const record: any[] = __Porffor_getSetRecord(other);
   const keysMethod: any = record[2];
@@ -225,6 +258,14 @@ export const __Set_prototype_isSubsetOf = (_this: Set, other: any) => {
   if (Porffor.type(other) == Porffor.TYPES.set) {
     for (const x of _this) {
       if (!other.has(x)) return false;
+    }
+    return true;
+  }
+
+  // Fast path for Map
+  if (Porffor.type(other) == Porffor.TYPES.map) {
+    for (const x of _this) {
+      if (!(other as Map).has(x)) return false;
     }
     return true;
   }
@@ -250,6 +291,14 @@ export const __Set_prototype_isSupersetOf = (_this: Set, other: any) => {
     return true;
   }
 
+  // Fast path for Map
+  if (Porffor.type(other) == Porffor.TYPES.map) {
+    for (const x of (other as Map).keys()) {
+      if (!_this.has(x)) return false;
+    }
+    return true;
+  }
+
   // Set-like object path
   const record: any[] = __Porffor_getSetRecord(other);
   const keysMethod: any = record[2];
@@ -267,6 +316,14 @@ export const __Set_prototype_isDisjointFrom = (_this: Set, other: any) => {
   if (Porffor.type(other) == Porffor.TYPES.set) {
     for (const x of _this) {
       if (other.has(x)) return false;
+    }
+    return true;
+  }
+
+  // Fast path for Map
+  if (Porffor.type(other) == Porffor.TYPES.map) {
+    for (const x of _this) {
+      if ((other as Map).has(x)) return false;
     }
     return true;
   }
