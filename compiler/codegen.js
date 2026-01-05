@@ -2730,19 +2730,17 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
   }
 
   let idx;
+  // Check if this function uses captured variables (is a closure)
+  // If so, we must skip direct call lookup and fall through to indirect call handling
+  // Note: func._usesCaptured is an Array (converted from Set at line 7200)
+  const targetFunc = name ? funcByName(name) : null;
+  const isClosure = targetFunc && targetFunc._usesCaptured && targetFunc._usesCaptured.length > 0;
+
   if (decl._funcIdx) {
     idx = decl._funcIdx;
-  } else if (name in funcIndex) {
-    // Check if this function uses captured variables (is a closure)
-    // If so, we must NOT use a direct call because the closure env needs to be set up
-    // Note: func._usesCaptured is an Array (converted from Set at line 7200)
-    const targetFunc = funcByName(name);
-    if (targetFunc && targetFunc._usesCaptured && targetFunc._usesCaptured.length > 0) {
-      // This is a closure - fall through to indirect call handling
-      idx = undefined;
-    } else {
-      idx = funcIndex[name];
-    }
+  } else if (!isClosure && name in funcIndex) {
+    // Direct call - not a closure
+    idx = funcIndex[name];
   } else if (scope.name === name) {
     // fallback for own func but with a different var/id name
     idx = scope.index;
