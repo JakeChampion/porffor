@@ -652,6 +652,10 @@ export const __Object_create = (proto: any, props: any): object => {
 
 
 export const __Object_groupBy = (items: any, callbackFn: any): object => {
+  // callbackFn must be callable
+  if (typeof callbackFn !== 'function')
+    throw new TypeError('callbackFn must be a function');
+
   const out: object = {};
 
   let i: i32 = 0;
