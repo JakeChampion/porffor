@@ -93,10 +93,10 @@ const usesArguments = (node, inArrow = false) => {
   if (Array.isArray(node)) return node.some(n => usesArguments(n, inArrow));
   if (typeof node !== 'object') return false;
 
-  // arrow functions have their own scope for arguments
-  if (node.type === 'ArrowFunctionExpression') return false;
-  // nested functions have their own arguments
+  // nested functions have their own arguments, stop traversing
   if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') return false;
+  // arrow functions do NOT have their own arguments - they inherit from enclosing function
+  // so we continue traversing into arrow functions
 
   if (node.type === 'Identifier' && node.name === 'arguments') return true;
 
