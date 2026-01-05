@@ -116,7 +116,7 @@ if (cluster.isPrimary) {
 
   const start = performance.now();
 
-  const passFiles = [], wasmErrorFiles = [], compileErrorFiles = [], timeoutFiles = [], failFiles = [];
+  const passFiles = [], wasmErrorFiles = [], compileErrorFiles = [], timeoutFiles = [], failFiles = [], runtimeErrorFiles = [];
   let dirs = new Map(), features = new Map(), errors = new Map(), pagesUsed = new Map();
   let total = 0, passes = 0, fails = 0, compileErrors = 0, wasmErrors = 0, runtimeErrors = 0, timeouts = 0;
 
@@ -229,6 +229,7 @@ if (cluster.isPrimary) {
         if (!resultOnly) timeoutFiles.push(file);
       } else {
         runtimeErrors++;
+        if (!resultOnly) runtimeErrorFiles.push(file);
       }
 
       if (!resultOnly && !logErrors) {
@@ -324,6 +325,7 @@ if (cluster.isPrimary) {
       failFiles.sort(alphabetically);
       compileErrorFiles.sort(alphabetically);
       wasmErrorFiles.sort(alphabetically);
+      runtimeErrorFiles.sort(alphabetically);
       timeoutFiles.sort(alphabetically);
 
       fs.writeFileSync(
@@ -334,6 +336,7 @@ if (cluster.isPrimary) {
             fails: failFiles,
             compileErrors: compileErrorFiles,
             wasmErrors: wasmErrorFiles,
+            runtimeErrors: runtimeErrorFiles,
             timeouts: timeoutFiles,
             total
           },
