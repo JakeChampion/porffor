@@ -14,8 +14,14 @@ export const Boolean = function (value: any): boolean|BooleanObject {
 
 // 20.3.3.2 Boolean.prototype.toString ()
 // https://tc39.es/ecma262/#sec-boolean.prototype.tostring
-export const __Boolean_prototype_toString = (_this: boolean) => {
+export const __Boolean_prototype_toString = (_this: any) => {
   // 1. Let b be ? ThisBooleanValue(this value).
+  if (!Porffor.fastOr(
+    Porffor.type(_this) == Porffor.TYPES.boolean,
+    Porffor.type(_this) == Porffor.TYPES.booleanobject)) {
+    throw new TypeError('Boolean.prototype.toString requires this to be a Boolean');
+  }
+
   // 2. If b is true, return "true"; else return "false".
   if (_this) return 'true';
   return 'false';
@@ -25,5 +31,6 @@ export const __Boolean_prototype_toString = (_this: boolean) => {
 // https://tc39.es/ecma262/#sec-boolean.prototype.valueof
 export const __Boolean_prototype_valueOf = (_this: boolean) => {
   // 1. Return ? ThisBooleanValue(this value).
+  // Note: Type annotation enforces this is a Boolean type
   return _this;
 };
