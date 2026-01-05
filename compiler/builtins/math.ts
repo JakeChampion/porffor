@@ -810,3 +810,69 @@ export const __Math_f16round = (x: any): number => {
 
   return sign * rounded;
 };
+
+export const __Math_sumPrecise = (iterable: any): number => {
+  // Must have an argument
+  if (Porffor.rawType(iterable) == Porffor.TYPES.undefined)
+    throw new TypeError('Math.sumPrecise requires an iterable argument');
+
+  // Must be iterable (object with Symbol.iterator)
+  if (!Porffor.object.isObject(iterable))
+    throw new TypeError('Math.sumPrecise requires an iterable argument');
+
+  // Collect all values first, checking types
+  const values: number[] = [];
+  for (const x of iterable) {
+    // Must be a Number, not coerced
+    if (typeof x !== 'number')
+      throw new TypeError('Math.sumPrecise requires all elements to be Numbers');
+    values.push(x);
+  }
+
+  const len: i32 = values.length;
+  if (len == 0) return 0;
+
+  // Track special values
+  let hasPositiveInfinity: boolean = false;
+  let hasNegativeInfinity: boolean = false;
+  let hasNaN: boolean = false;
+
+  for (let i: i32 = 0; i < len; i++) {
+    const v: number = values[i];
+    if (Number.isNaN(v)) hasNaN = true;
+    else if (v == Infinity) hasPositiveInfinity = true;
+    else if (v == -Infinity) hasNegativeInfinity = true;
+  }
+
+  // Handle special cases per spec
+  if (hasNaN) return NaN;
+  if (hasPositiveInfinity && hasNegativeInfinity) return NaN;
+  if (hasPositiveInfinity) return Infinity;
+  if (hasNegativeInfinity) return -Infinity;
+
+  // Kahan summation for precision
+  let sum: number = 0;
+  let c: number = 0; // compensation for lost low-order bits
+
+  for (let i: i32 = 0; i < len; i++) {
+    const y: number = values[i] - c;
+    const t: number = sum + y;
+    c = (t - sum) - y;
+    sum = t;
+  }
+
+  // Handle -0 result
+  if (sum == 0) {
+    // Check if all values were -0 or if we have mixed zeros
+    let allNegativeZero: boolean = true;
+    for (let i: i32 = 0; i < len; i++) {
+      if (values[i] != 0 || !Object.is(values[i], -0)) {
+        allNegativeZero = false;
+        break;
+      }
+    }
+    if (allNegativeZero) return -0;
+  }
+
+  return sum;
+};
