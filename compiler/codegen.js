@@ -129,7 +129,7 @@ const arrowsUseArguments = (node) => {
 };
 
 let doNotMarkFuncRef = false;
-const funcRef = func => {
+const funcRef = (func, scope = null) => {
   if (!doNotMarkFuncRef) func.referenced = true;
 
   if (globalThis.precompile) return [
@@ -314,8 +314,83 @@ const funcRef = func => {
     }
   }
 
+  const indirectIndex = func.wrapperFunc.indirectIndex;
+
+  // Check if this function uses captured variables from an outer scope
+  // If so, we need to allocate a closure environment and pack the pointer
+  // Note: func._usesCaptured is an Array (converted from Set at line 7200)
+  const shouldAllocClosure = scope && func._usesCaptured && func._usesCaptured.length > 0;
+  if (Prefs.d) console.log(`funcRef: ${func.name} - shouldAllocClosure=${shouldAllocClosure}, scope=${scope?.name}, _usesCaptured=${JSON.stringify(func._usesCaptured)}`);
+  if (shouldAllocClosure) {
+    // Closure environment layout:
+    // Each captured var takes 9 bytes: 8 bytes for f64 value + 1 byte for type
+    // We round up to 16-byte boundaries so that (addr >> 4) gives unique values for packing
+    const capturedVars = func._usesCaptured;
+    const rawEnvSize = capturedVars.length * 9;
+    const envSize = Math.ceil(rawEnvSize / 16) * 16;
+    if (Prefs.d) console.log(`funcRef: closure allocation for ${func.name}, envSize=${envSize}, indirectIndex=${indirectIndex}`);
+
+    // Build wasm to:
+    // 1. Allocate environment memory
+    // 2. Copy captured variables from current closure globals into environment
+    // 3. Pack env pointer into high 16 bits of function value
+
+    const out = [];
+    const envPtrLocal = localTmp(scope, '#env_ptr', Valtype.i32);
+
+    // Allocate memory for closure environment
+    out.push(
+      number(envSize, Valtype.i32),
+      [ Opcodes.call, includeBuiltin(scope, '__Porffor_malloc').index ],
+      [ Opcodes.local_set, envPtrLocal ]  // Use set, not tee - don't leave value on stack
+    );
+
+    // Copy each captured variable into the environment
+    for (let i = 0; i < capturedVars.length; i++) {
+      const varName = capturedVars[i];
+      const closureGlobal = '#closure_' + varName;
+      const offset = i * 9;
+
+      if (closureGlobal in globals) {
+        out.push(
+          // Store value (f64)
+          [ Opcodes.local_get, envPtrLocal ],
+          [ Opcodes.global_get, globals[closureGlobal].idx ],
+          [ Opcodes.f64_store, 0, offset ],
+
+          // Store type (i32 as i8)
+          [ Opcodes.local_get, envPtrLocal ],
+          [ Opcodes.global_get, globals[closureGlobal + '#type'].idx ],
+          [ Opcodes.i32_store8, 0, offset + 8 ]
+        );
+      }
+    }
+
+    // Pack: (envPtr / 16) << 16 | indirectIndex
+    // We divide by 16 because malloc returns 16-byte aligned pointers
+    // This lets us fit the pointer in 16 bits (supporting up to 1MB of closure envs)
+    out.push(
+      [ Opcodes.local_get, envPtrLocal ],
+      number(4, Valtype.i32),  // divide by 16 = shift right by 4
+      [ Opcodes.i32_shr_u ],
+      number(16, Valtype.i32), // shift left by 16 to put in high bits
+      [ Opcodes.i32_shl ],
+      number(indirectIndex, Valtype.i32),
+      [ Opcodes.i32_or ],
+      Opcodes.i32_from_u  // convert to f64 for the function value
+    );
+
+    if (Prefs.d) {
+      console.log(`funcRef: closure ${func.name} returning ${out.length} instructions:`);
+      for (let i = 0; i < out.length; i++) {
+        console.log(`  [${i}]: ${JSON.stringify(out[i])}`);
+      }
+    }
+    return out;
+  }
+
   return [
-    [ Opcodes.const, func.wrapperFunc.indirectIndex ]
+    [ Opcodes.const, indirectIndex ]
   ];
 };
 
@@ -335,7 +410,12 @@ const forceDuoValtype = (scope, wasm, forceValtype) => [
 
 const generate = (scope, decl, global = false, name = undefined, valueUnused = false) => {
   if (valueUnused && !Prefs.optUnused) valueUnused = false;
-  if (astCache.has(decl)) return astCache.get(decl);
+  // Don't use cache for closures - each call creates a new environment
+  // Note: On AST nodes, _usesCaptured is a Set. On func objects, it's an Array.
+  const usesCaptured = decl._usesCaptured;
+  const usesCapturedSize = usesCaptured instanceof Set ? usesCaptured.size : (Array.isArray(usesCaptured) ? usesCaptured.length : 0);
+  const isClosure = usesCapturedSize > 0;
+  if (!isClosure && astCache.has(decl)) return astCache.get(decl);
 
   switch (decl.type) {
     case 'Wasm':
@@ -355,12 +435,20 @@ const generate = (scope, decl, global = false, name = undefined, valueUnused = f
 
     case 'ArrowFunctionExpression':
     case 'FunctionDeclaration':
-    case 'FunctionExpression':
+    case 'FunctionExpression': {
       // ignore body-less function definitions, likely ts overload signatures
       if (!decl.body) {
         return cacheAst(decl, [ number(UNDEFINED) ]);
       }
-      return cacheAst(decl, generateFunc(scope, decl)[1]);
+      const funcOut = generateFunc(scope, decl)[1];
+      // Don't cache closures - each invocation creates a new closure environment
+      // _usesCaptured is a Set from semantic analysis
+      const usesCapturedSize = decl._usesCaptured?.size ?? 0;
+      if (usesCapturedSize > 0) {
+        return funcOut;
+      }
+      return cacheAst(decl, funcOut);
+    }
 
     case 'BlockStatement':
       return cacheAst(decl, generateBlock(scope, decl));
@@ -772,11 +860,16 @@ const lookup = (scope, name, failEarly = false) => {
     }
 
     // Closure support: check if this is a captured variable from outer scope
+    // Read from heap-allocated closure environment
     if (scope._usesCaptured?.includes(name)) {
-      const globalName = '#closure_' + name;
-      if (globalName in globals) {
+      const varIndex = scope._usesCaptured.indexOf(name);
+      if (varIndex !== -1) {
+        // Each captured var takes 9 bytes: 8 bytes for f64 value + 1 byte for type
+        const offset = varIndex * 9;
         return [
-          [ Opcodes.global_get, globals[globalName].idx ],
+          // Load value from closure environment
+          [ Opcodes.global_get, globals['#closure_env'].idx ],
+          [ Opcodes.f64_load, 0, offset ],
           ...setLastType(scope, getType(scope, name))
         ];
       }
@@ -784,7 +877,7 @@ const lookup = (scope, name, failEarly = false) => {
 
     // no local var with name
     if (name in globals) return [ [ Opcodes.global_get, globals[name].idx ] ];
-    if (name in funcIndex) return funcRef(funcByName(name));
+    if (name in funcIndex) return funcRef(funcByName(name), scope);
     if (name in importedFuncs) return [ number(importedFuncs[name] - importedFuncs.length) ];
 
     if (name.startsWith('__')) {
@@ -803,7 +896,7 @@ const lookup = (scope, name, failEarly = false) => {
 
     if (scope.name === name) {
       // fallback for own func but with a different var/id name
-      return funcRef(funcByIndex(scope.index));
+      return funcRef(funcByIndex(scope.index), scope);
     }
 
     if (failEarly) return null;
@@ -1821,12 +1914,16 @@ const getType = (scope, name, failEarly = false) => {
     return [ number(TYPES.array, Valtype.i32) ];
   }
 
-  // Closure support: get type from closure global
+  // Closure support: get type from closure environment
   if (scope._usesCaptured?.includes(name)) {
-    const globalName = '#closure_' + name;
-    const typeGlobalName = globalName + '#type';
-    if (typeGlobalName in globals) {
-      return [ [ Opcodes.global_get, globals[typeGlobalName].idx ] ];
+    const varIndex = scope._usesCaptured.indexOf(name);
+    if (varIndex !== -1) {
+      // Each captured var takes 9 bytes: 8 bytes for f64 value + 1 byte for type
+      const offset = varIndex * 9 + 8;  // +8 to get to the type byte
+      return [
+        [ Opcodes.global_get, globals['#closure_env'].idx ],
+        [ Opcodes.i32_load8_u, 0, offset ]
+      ];
     }
   }
 
@@ -2636,7 +2733,16 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
   if (decl._funcIdx) {
     idx = decl._funcIdx;
   } else if (name in funcIndex) {
-    idx = funcIndex[name];
+    // Check if this function uses captured variables (is a closure)
+    // If so, we must NOT use a direct call because the closure env needs to be set up
+    // Note: func._usesCaptured is an Array (converted from Set at line 7200)
+    const targetFunc = funcByName(name);
+    if (targetFunc && targetFunc._usesCaptured && targetFunc._usesCaptured.length > 0) {
+      // This is a closure - fall through to indirect call handling
+      idx = undefined;
+    } else {
+      idx = funcIndex[name];
+    }
   } else if (scope.name === name) {
     // fallback for own func but with a different var/id name
     idx = scope.index;
@@ -2783,17 +2889,35 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       [ Opcodes.local_set, calleeLocal ],
 
       ...typeSwitch(scope, getNodeType(scope, callee), {
-        [TYPES.function]: () => [
-          number(wrapperArgc - underflow, Valtype.i32),
-          ...forceDuoValtype(scope, newTargetWasm, Valtype.f64),
-          ...forceDuoValtype(scope, thisWasm, Valtype.f64),
-          ...out,
+        [TYPES.function]: () => {
+          // Closure support: extract environment pointer from high bits before call
+          const calleeI32Tmp = localTmp(scope, '#callee_i32', Valtype.i32);
+          return [
+            number(wrapperArgc - underflow, Valtype.i32),
+            ...forceDuoValtype(scope, newTargetWasm, Valtype.f64),
+            ...forceDuoValtype(scope, thisWasm, Valtype.f64),
+            ...out,
 
-          [ Opcodes.local_get, calleeLocal ],
-          Opcodes.i32_to_u,
-          [ Opcodes.call_indirect, args.length + 2, 0 ],
-          ...setLastType(scope)
-        ],
+            // Convert callee to i32 and store
+            [ Opcodes.local_get, calleeLocal ],
+            Opcodes.i32_to_u,
+            [ Opcodes.local_tee, calleeI32Tmp ],
+
+            // Extract environment pointer from high 16 bits, multiply by 16 for alignment
+            number(16, Valtype.i32),
+            [ Opcodes.i32_shr_u ],
+            number(16, Valtype.i32),
+            [ Opcodes.i32_mul ],
+            [ Opcodes.global_set, globals['#closure_env'].idx ],
+
+            // Use low 16 bits as function index
+            [ Opcodes.local_get, calleeI32Tmp ],
+            number(0xffff, Valtype.i32),
+            [ Opcodes.i32_and ],
+            [ Opcodes.call_indirect, args.length + 2, 0 ],
+            ...setLastType(scope)
+          ];
+        },
 
         default: () => decl.optional ? withType(scope, [ number(UNDEFINED, Valtype.f64) ], TYPES.undefined)
           : internalThrow(scope, 'TypeError', `${unhackName(name)} is not a function`, Valtype.f64)
@@ -4400,29 +4524,58 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
 
   if (local === undefined) {
     // Closure support: check if this is a captured variable from outer scope
+    // Write to heap-allocated closure environment
     if (scope._usesCaptured?.includes(name)) {
-      const globalName = '#closure_' + name;
-      if (globalName in globals) {
+      const varIndex = scope._usesCaptured.indexOf(name);
+      if (varIndex !== -1) {
+        const offset = varIndex * 9;  // Each var takes 9 bytes
         const out = [];
+        const envLocal = localTmp(scope, '#closure_env_tmp', Valtype.i32);
+        const valLocal = localTmp(scope, '#closure_val_tmp', valtypeBinary);
+
+        // Get closure env pointer
+        out.push(
+          [ Opcodes.global_get, globals['#closure_env'].idx ],
+          [ Opcodes.local_set, envLocal ]
+        );
+
         if (op === '=') {
           out.push(
             ...generate(scope, decl.right),
-            [ Opcodes.global_set, globals[globalName].idx ],
+            [ Opcodes.local_set, valLocal ],
+
+            // Store value
+            [ Opcodes.local_get, envLocal ],
+            [ Opcodes.local_get, valLocal ],
+            [ Opcodes.f64_store, 0, offset ],
+
+            // Store type
+            [ Opcodes.local_get, envLocal ],
             ...getNodeType(scope, decl.right),
-            [ Opcodes.global_set, globals[globalName + '#type'].idx ]
+            [ Opcodes.i32_store8, 0, offset + 8 ]
           );
         } else {
           out.push(
             ...performOp(scope, op, [
-              [ Opcodes.global_get, globals[globalName].idx ]
+              [ Opcodes.local_get, envLocal ],
+              [ Opcodes.f64_load, 0, offset ]
             ], generate(scope, decl.right), getType(scope, name), getNodeType(scope, decl.right)),
-            [ Opcodes.global_set, globals[globalName].idx ],
+            [ Opcodes.local_set, valLocal ],
+
+            // Store value
+            [ Opcodes.local_get, envLocal ],
+            [ Opcodes.local_get, valLocal ],
+            [ Opcodes.f64_store, 0, offset ],
+
+            // Store type
+            [ Opcodes.local_get, envLocal ],
             ...getLastType(scope),
-            [ Opcodes.global_set, globals[globalName + '#type'].idx ]
+            [ Opcodes.i32_store8, 0, offset + 8 ]
           );
         }
+
         if (!valueUnused) {
-          out.push([ Opcodes.global_get, globals[globalName].idx ]);
+          out.push([ Opcodes.local_get, valLocal ]);
         } else {
           out.push(number(UNDEFINED));
         }
@@ -7751,7 +7904,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
   if (globalThis.precompile) func.generate();
 
   if (decl._doNotMarkFuncRef) doNotMarkFuncRef = true;
-  const out = decl.type.endsWith('Expression') && !forceNoExpr ? funcRef(func) : [ number(UNDEFINED) ];
+  const out = decl.type.endsWith('Expression') && !forceNoExpr ? funcRef(func, scope) : [ number(UNDEFINED) ];
   doNotMarkFuncRef = false;
 
   astCache.set(decl, out);
@@ -7782,6 +7935,10 @@ let globals, tags, exceptions, funcs, indirectFuncs, funcIndex, currentFuncIndex
 export default program => {
   globals = Object.create(null);
   globals['#ind'] = 0;
+
+  // Closure support: global to store current closure environment pointer
+  // This is set before each indirect call and read by functions that use captured vars
+  globals['#closure_env'] = { idx: globals['#ind']++, type: Valtype.i32, init: 0 };
   tags = [];
   exceptions = [];
   funcs = []; indirectFuncs = [];

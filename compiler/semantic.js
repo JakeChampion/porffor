@@ -177,8 +177,13 @@ const annotate = node => {
           // If variable is declared in an outer function's scope, mark it as captured
           // The declaring function needs to know which vars are captured by nested functions
           // The current function needs to know which vars it uses from outer scopes
+          // IMPORTANT: Skip Program scope - variables declared at module level are globals,
+          // not closure-captured variables. Only local function variables need capture.
           if (declFuncIdx !== -1 && declFuncIdx < currentFuncIdx) {
             const declFunc = scopes[declFuncIdx];
+            // Skip if the declaring scope is Program (module-level/global scope)
+            // Global variables are accessed via WebAssembly globals, not closures
+            if (declFunc.type === 'Program') break;
             // Mark on the declaring function that this var is captured
             declFunc._capturedVars ??= new Set();
             declFunc._capturedVars.add(node.name);
