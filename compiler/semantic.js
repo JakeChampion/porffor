@@ -134,7 +134,16 @@ const annotate = node => {
   if (!node) return;
 
   let openedScope = false;
-  if (node._variables) {
+  let openedFunc = false;
+
+  // Functions always open a scope (for closure tracking), even if they have no local variables
+  const isFunc = node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+                 node.type === 'ArrowFunctionExpression' || node.type === 'Program';
+  if (isFunc || node._variables) {
+    if (isFunc) {
+      scopes.lastFuncs.push(scopes.length);
+      openedFunc = true;
+    }
     scopes.push(node);
     openedScope = true;
   }
@@ -145,6 +154,41 @@ const annotate = node => {
         if (scopes[i]._variables?.[node.name]) {
           const variable = scopes[i]._variables[node.name];
           if (variable.id > 0) node.name = node.name + '#' + variable.id;
+
+          // Track captured variables: if the variable is declared in a scope
+          // belonging to an outer function, it's a captured variable
+          const currentFuncIdx = scopes.lastFuncs.at(-1);
+          const currentFunc = scopes[currentFuncIdx];
+
+          // Find which function's scope chain contains the declaring scope
+          // The scope at index i has the variable - find which function owns it
+          let declFuncIdx = -1;
+          for (let j = 0; j < scopes.lastFuncs.length; j++) {
+            const funcIdx = scopes.lastFuncs[j];
+            // The next function starts at scopes.lastFuncs[j+1] or end of array
+            const nextFuncIdx = scopes.lastFuncs[j + 1] ?? scopes.length;
+            // If the declaring scope is within this function's range
+            if (i >= funcIdx && i < nextFuncIdx) {
+              declFuncIdx = funcIdx;
+              break;
+            }
+          }
+
+          // If variable is declared in an outer function's scope, mark it as captured
+          // The declaring function needs to know which vars are captured by nested functions
+          // The current function needs to know which vars it uses from outer scopes
+          if (declFuncIdx !== -1 && declFuncIdx < currentFuncIdx) {
+            const declFunc = scopes[declFuncIdx];
+            // Mark on the declaring function that this var is captured
+            declFunc._capturedVars ??= new Set();
+            declFunc._capturedVars.add(node.name);
+            // Mark on the current function that it uses this captured var
+            currentFunc._usesCaptured ??= new Set();
+            currentFunc._usesCaptured.add(node.name);
+            // Also store where this var comes from (which function declared it)
+            currentFunc._capturedFrom ??= Object.create(null);
+            currentFunc._capturedFrom[node.name] = declFunc;
+          }
           break;
         }
       }
@@ -185,6 +229,9 @@ const annotate = node => {
 
   for (const x in node) {
     if (node[x] != null && typeof node[x] === 'object' && x[0] !== '_') {
+      // Skip function/class declaration ids - they're not usages inside the function
+      if (x === 'id' && (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+                         node.type === 'ClassDeclaration' || node.type === 'ClassExpression')) continue;
       if (node[x].type) annotate(node[x]);
       if (Array.isArray(node[x])) {
         for (const y of node[x]) annotate(y);
@@ -194,6 +241,9 @@ const annotate = node => {
 
   if (openedScope) {
     scopes.pop();
+  }
+  if (openedFunc) {
+    scopes.lastFuncs.pop();
   }
 };
 

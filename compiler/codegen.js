@@ -771,6 +771,17 @@ const lookup = (scope, name, failEarly = false) => {
       ];
     }
 
+    // Closure support: check if this is a captured variable from outer scope
+    if (scope._usesCaptured?.includes(name)) {
+      const globalName = '#closure_' + name;
+      if (globalName in globals) {
+        return [
+          [ Opcodes.global_get, globals[globalName].idx ],
+          ...setLastType(scope, getType(scope, name))
+        ];
+      }
+    }
+
     // no local var with name
     if (name in globals) return [ [ Opcodes.global_get, globals[name].idx ] ];
     if (name in funcIndex) return funcRef(funcByName(name));
@@ -1808,6 +1819,15 @@ const getType = (scope, name, failEarly = false) => {
   // Arrow functions accessing 'arguments' - get type from the #outer_arguments global
   if (name === 'arguments' && scope.arrow && '#outer_arguments' in globals) {
     return [ number(TYPES.array, Valtype.i32) ];
+  }
+
+  // Closure support: get type from closure global
+  if (scope._usesCaptured?.includes(name)) {
+    const globalName = '#closure_' + name;
+    const typeGlobalName = globalName + '#type';
+    if (typeGlobalName in globals) {
+      return [ [ Opcodes.global_get, globals[typeGlobalName].idx ] ];
+    }
   }
 
   if (metadata?.type != null) {
@@ -3413,6 +3433,19 @@ const setLocalWithType = (scope, name, isGlobal, decl, tee = false, overrideType
     );
   }
 
+  // Closure support: also write to closure global if this var is captured by inner functions
+  if (scope._capturedVars?.includes(name)) {
+    const closureGlobal = '#closure_' + name;
+    if (closureGlobal in globals) {
+      out.push(
+        [ Opcodes.local_get, local.idx ],
+        [ Opcodes.global_set, globals[closureGlobal].idx ],
+        ...getType(scope, name),
+        [ Opcodes.global_set, globals[closureGlobal + '#type'].idx ]
+      );
+    }
+  }
+
   return out;
 };
 
@@ -4366,6 +4399,37 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
   }
 
   if (local === undefined) {
+    // Closure support: check if this is a captured variable from outer scope
+    if (scope._usesCaptured?.includes(name)) {
+      const globalName = '#closure_' + name;
+      if (globalName in globals) {
+        const out = [];
+        if (op === '=') {
+          out.push(
+            ...generate(scope, decl.right),
+            [ Opcodes.global_set, globals[globalName].idx ],
+            ...getNodeType(scope, decl.right),
+            [ Opcodes.global_set, globals[globalName + '#type'].idx ]
+          );
+        } else {
+          out.push(
+            ...performOp(scope, op, [
+              [ Opcodes.global_get, globals[globalName].idx ]
+            ], generate(scope, decl.right), getType(scope, name), getNodeType(scope, decl.right)),
+            [ Opcodes.global_set, globals[globalName].idx ],
+            ...getLastType(scope),
+            [ Opcodes.global_set, globals[globalName + '#type'].idx ]
+          );
+        }
+        if (!valueUnused) {
+          out.push([ Opcodes.global_get, globals[globalName].idx ]);
+        } else {
+          out.push(number(UNDEFINED));
+        }
+        return out;
+      }
+    }
+
     // only allow = for this, or if in strict mode always throw
     if (!isIdentAssignable(scope, name, op)) return internalThrow(scope, 'ReferenceError', `${unhackName(name)} is not defined`, true);
 
@@ -6992,6 +7056,9 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
   }
   // For arrow functions, store parent scope so they can access outer 'arguments'
   const parentScope = arrow ? scope : null;
+  // Closure support: track captured and used variables from semantic analysis
+  const capturedVars = decl._capturedVars ? [...decl._capturedVars] : [];
+  const usesCaptured = decl._usesCaptured ? [...decl._usesCaptured] : [];
   const func = {
     start: decl.start,
     locals: Object.create(null),
@@ -7009,6 +7076,8 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     _usesArgumentsObject: needsArgumentsRest,
     _declaredParamCount: needsArgumentsRest ? declaredParamCount : undefined,
     _hasArrowsUsingArguments: hasArrowsUsingArguments,
+    _capturedVars: capturedVars,       // vars declared here that inner functions use
+    _usesCaptured: usesCaptured,       // vars this function uses from outer scopes
 
     generate() {
       if (func.wasm) return func.wasm;
@@ -7213,6 +7282,26 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           ...getNodeType(func, { type: 'Identifier', name: 'arguments' }),
           [ Opcodes.global_set, globals['#outer_arguments#type'].idx ]
         );
+      }
+
+      // Closure support: allocate globals for captured variables
+      // These globals will be used by nested functions to access outer variables
+      if (func._capturedVars?.length > 0) {
+        for (const varName of func._capturedVars) {
+          const closureGlobal = '#closure_' + varName;
+          if (!(closureGlobal in globals)) {
+            allocVar(func, closureGlobal, true, true, false, false);
+          }
+          // If this is a parameter, copy it to the closure global at function entry
+          if (func.locals[varName]) {
+            wasm.push(
+              [ Opcodes.local_get, func.locals[varName].idx ],
+              [ Opcodes.global_set, globals[closureGlobal].idx ],
+              ...getType(func, varName),
+              [ Opcodes.global_set, globals[closureGlobal + '#type'].idx ]
+            );
+          }
+        }
       }
 
       const preface = wasm;
