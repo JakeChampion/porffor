@@ -111,6 +111,27 @@ export const Map = function (iterable: any): Map {
   return out;
 };
 
+// Map.groupBy ( items, callbackfn )
+// https://tc39.es/ecma262/#sec-map.groupby
+export const __Map_groupBy = (items: any, callbackFn: any): Map => {
+  if (Porffor.type(callbackFn) != Porffor.TYPES.function) throw new TypeError('callbackFn is not a function');
+
+  const out: Map = new Map();
+
+  let i: i32 = 0;
+  for (const x of items) {
+    const key: any = callbackFn(x, i++);
+    if (!__Map_prototype_has(out, key)) {
+      const arr: any[] = Porffor.malloc();
+      __Map_prototype_set(out, key, arr);
+    }
+
+    Porffor.array.fastPush(__Map_prototype_get(out, key), x);
+  }
+
+  return out;
+};
+
 export const __Map_prototype_keys = (_this: Map) => {
   const keys: any[] = Porffor.wasm.i32.load(_this, 0, 0);
   const out: any[] = Porffor.malloc();
