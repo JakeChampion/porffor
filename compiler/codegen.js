@@ -2384,7 +2384,13 @@ const setObjProp = (obj, prop, value) => {
 
 const aliasPrimObjsBC = bc => {
   const add = (x, y) => {
+    // add wrapper type to usedTypes if primitive type is used
+    if (usedTypes.has(x)) usedTypes.add(y);
+
     if (bc[x] == null) return;
+
+    // don't overwrite if wrapper type already has its own implementation
+    if (bc[y] != null) return;
 
     // intentionally duplicate to avoid extra bc for prim objs as rarely used
     bc[y] = bc[x];

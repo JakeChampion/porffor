@@ -29,7 +29,8 @@ i32.store8 0 8`;
   return symbol;
 };
 
-export const __Symbol_prototype_description$get = (_this: Symbol) => {
+export const __Symbol_prototype_description$get = (_this: any) => {
+  // Works for both Symbol and SymbolObject since they share memory layout
   Porffor.wasm`local.get ${_this}
 i32.to_u
 f64.load 0 0
@@ -39,7 +40,8 @@ i32.load8_u 0 8
 return`;
 };
 
-export const __Symbol_prototype_toString = (_this: Symbol) => {
+export const __Symbol_prototype_toString = (_this: any) => {
+  // Works for both Symbol and SymbolObject since they share memory layout
   let out: bytestring = Porffor.malloc();
 
   // Symbol(
@@ -72,10 +74,14 @@ export const __Symbol_prototype_toString = (_this: Symbol) => {
   return out;
 };
 
-export const __Symbol_prototype_toLocaleString = (_this: Symbol) => __Symbol_prototype_toString(_this);
+export const __Symbol_prototype_toLocaleString = (_this: any) => __Symbol_prototype_toString(_this);
 
-export const __Symbol_prototype_valueOf = (_this: Symbol) => {
-  return _this;
+export const __Symbol_prototype_valueOf = (_this: any) => {
+  // Accept both Symbol and SymbolObject - they share the same memory layout
+  // Return value with Symbol type (5)
+  Porffor.wasm`local.get ${_this}
+i32.const 5
+return`;
 };
 
 const forStore: Map = new Map();
@@ -100,4 +106,24 @@ export const __Symbol_keyFor = (arg: any): any => {
   if (sym == stored) return desc;
 
   return undefined;
+};
+
+// SymbolObject prototype methods - delegate to Symbol prototype since they share memory
+export const __SymbolObject_prototype_description$get = (_this: any) => {
+  return __Symbol_prototype_description$get(_this);
+};
+
+export const __SymbolObject_prototype_toString = (_this: any) => {
+  return __Symbol_prototype_toString(_this);
+};
+
+export const __SymbolObject_prototype_toLocaleString = (_this: any) => {
+  return __Symbol_prototype_toLocaleString(_this);
+};
+
+export const __SymbolObject_prototype_valueOf = (_this: any) => {
+  // Return value with Symbol type (5), not SymbolObject
+  Porffor.wasm`local.get ${_this}
+i32.const 5
+return`;
 };
