@@ -3424,3 +3424,257 @@ export const __ByteString_prototype_valueOf = (_this: bytestring) => {
   // 1. Return ? ThisStringValue(this value).
   return _this;
 };
+
+
+// 22.1.3.19 String.prototype.replaceAll ( searchValue, replaceValue )
+// https://tc39.es/ecma262/#sec-string.prototype.replaceall
+export const __String_prototype_replaceAll = (_this: string, searchValue: any, replaceValue: any) => {
+  // 1. Let O be ? RequireObjectCoercible(this value).
+  const t: i32 = Porffor.type(_this);
+  if (Porffor.fastOr(t == Porffor.TYPES.undefined, t == Porffor.TYPES.object && _this === null)) {
+    throw new TypeError('String.prototype.replaceAll called on null or undefined');
+  }
+
+  // 2. If searchValue is neither undefined nor null, then
+  if (Porffor.type(searchValue) == Porffor.TYPES.regexp) {
+    // a. Let isRegExp be ? IsRegExp(searchValue).
+    // b. If isRegExp is true, then
+    //    i. Let flags be ? Get(searchValue, "flags").
+    //    ii. If flags does not contain "g", throw a TypeError exception.
+    // For now, just throw - regex replaceAll is complex
+    throw new TypeError('String.prototype.replaceAll with RegExp is not yet supported');
+  }
+
+  // 3. Let string be ? ToString(O).
+  // _this is already a string
+
+  // 4. Let searchString be ? ToString(searchValue).
+  let searchString: any = ecma262.ToString(searchValue);
+
+  // 5. Let replaceString be ? ToString(replaceValue).
+  // Note: ES spec also supports function replaceValue, but we'll do string only for now
+  let replaceString: any = ecma262.ToString(replaceValue);
+
+  // Convert to same string type for comparison
+  if (Porffor.wasm`local.get ${searchString+1}` == Porffor.TYPES.bytestring) {
+    searchString = Porffor.bytestringToString(searchString);
+  }
+  if (Porffor.wasm`local.get ${replaceString+1}` == Porffor.TYPES.bytestring) {
+    replaceString = Porffor.bytestringToString(replaceString);
+  }
+
+  const thisLen: i32 = _this.length;
+  const searchLen: i32 = searchString.length;
+  const replaceLen: i32 = replaceString.length;
+
+  // Empty search string: insert replacement between every character
+  if (searchLen == 0) {
+    let out: string = Porffor.malloc();
+    let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+    let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+    const replacePtr: i32 = Porffor.wasm`local.get ${replaceString}`;
+
+    // Insert replacement at start
+    for (let r: i32 = 0; r < replaceLen; r++) {
+      Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(replacePtr + r * 2, 0, 4), 0, 4);
+      outPtr += 2;
+    }
+
+    for (let i: i32 = 0; i < thisLen; i++) {
+      // Copy character
+      Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr, 0, 4), 0, 4);
+      outPtr += 2;
+      thisPtr += 2;
+
+      // Insert replacement after each character
+      for (let r: i32 = 0; r < replaceLen; r++) {
+        Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(replacePtr + r * 2, 0, 4), 0, 4);
+        outPtr += 2;
+      }
+    }
+
+    out.length = thisLen + (thisLen + 1) * replaceLen;
+    return out;
+  }
+
+  // Count occurrences first to allocate correct size
+  let count: i32 = 0;
+  let pos: i32 = 0;
+  while (pos <= thisLen - searchLen) {
+    let match: boolean = true;
+    for (let j: i32 = 0; j < searchLen; j++) {
+      if (_this.charCodeAt(pos + j) != searchString.charCodeAt(j)) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      count++;
+      pos += searchLen;
+    } else {
+      pos++;
+    }
+  }
+
+  // If no matches, return original string
+  if (count == 0) return _this;
+
+  // Allocate output string
+  const outLen: i32 = thisLen + count * (replaceLen - searchLen);
+  let out: string = Porffor.malloc();
+
+  let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+  const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
+  const replacePtr: i32 = Porffor.wasm`local.get ${replaceString}`;
+
+  pos = 0;
+  while (pos < thisLen) {
+    // Check for match at current position
+    let match: boolean = true;
+    if (pos <= thisLen - searchLen) {
+      for (let j: i32 = 0; j < searchLen; j++) {
+        if (Porffor.wasm.i32.load16_u(thisPtr + pos * 2 + j * 2, 0, 4) != Porffor.wasm.i32.load16_u(searchPtr + j * 2, 0, 4)) {
+          match = false;
+          break;
+        }
+      }
+    } else {
+      match = false;
+    }
+
+    if (match) {
+      // Copy replacement string
+      for (let r: i32 = 0; r < replaceLen; r++) {
+        Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(replacePtr + r * 2, 0, 4), 0, 4);
+        outPtr += 2;
+      }
+      pos += searchLen;
+    } else {
+      // Copy original character
+      Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr + pos * 2, 0, 4), 0, 4);
+      outPtr += 2;
+      pos++;
+    }
+  }
+
+  out.length = outLen;
+  return out;
+};
+
+export const __ByteString_prototype_replaceAll = (_this: bytestring, searchValue: any, replaceValue: any) => {
+  // 1. Let O be ? RequireObjectCoercible(this value).
+  const t: i32 = Porffor.type(_this);
+  if (Porffor.fastOr(t == Porffor.TYPES.undefined, t == Porffor.TYPES.object && _this === null)) {
+    throw new TypeError('String.prototype.replaceAll called on null or undefined');
+  }
+
+  // 2. If searchValue is a RegExp, throw for now
+  if (Porffor.type(searchValue) == Porffor.TYPES.regexp) {
+    throw new TypeError('String.prototype.replaceAll with RegExp is not yet supported');
+  }
+
+  // Convert to strings
+  let searchString: any = ecma262.ToString(searchValue);
+  let replaceString: any = ecma262.ToString(replaceValue);
+
+  // If search or replace is not bytestring, convert everything to String
+  if (Porffor.fastOr(
+    Porffor.wasm`local.get ${searchString+1}` != Porffor.TYPES.bytestring,
+    Porffor.wasm`local.get ${replaceString+1}` != Porffor.TYPES.bytestring
+  )) {
+    return __String_prototype_replaceAll(Porffor.bytestringToString(_this), searchString, replaceString);
+  }
+
+  const thisLen: i32 = _this.length;
+  const searchLen: i32 = searchString.length;
+  const replaceLen: i32 = replaceString.length;
+
+  // Empty search string: insert replacement between every character
+  if (searchLen == 0) {
+    let out: bytestring = Porffor.malloc();
+    let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+    let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+    const replacePtr: i32 = Porffor.wasm`local.get ${replaceString}`;
+
+    // Insert replacement at start
+    for (let r: i32 = 0; r < replaceLen; r++) {
+      Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(replacePtr + r, 0, 4), 0, 4);
+    }
+
+    for (let i: i32 = 0; i < thisLen; i++) {
+      // Copy character
+      Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(thisPtr++, 0, 4), 0, 4);
+
+      // Insert replacement after each character
+      for (let r: i32 = 0; r < replaceLen; r++) {
+        Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(replacePtr + r, 0, 4), 0, 4);
+      }
+    }
+
+    out.length = thisLen + (thisLen + 1) * replaceLen;
+    return out;
+  }
+
+  // Count occurrences first
+  let count: i32 = 0;
+  let pos: i32 = 0;
+  while (pos <= thisLen - searchLen) {
+    let match: boolean = true;
+    for (let j: i32 = 0; j < searchLen; j++) {
+      if (_this.charCodeAt(pos + j) != searchString.charCodeAt(j)) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      count++;
+      pos += searchLen;
+    } else {
+      pos++;
+    }
+  }
+
+  // If no matches, return original string
+  if (count == 0) return _this;
+
+  // Allocate output string
+  const outLen: i32 = thisLen + count * (replaceLen - searchLen);
+  let out: bytestring = Porffor.malloc();
+
+  let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+  const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
+  const replacePtr: i32 = Porffor.wasm`local.get ${replaceString}`;
+
+  pos = 0;
+  while (pos < thisLen) {
+    // Check for match at current position
+    let match: boolean = true;
+    if (pos <= thisLen - searchLen) {
+      for (let j: i32 = 0; j < searchLen; j++) {
+        if (Porffor.wasm.i32.load8_u(thisPtr + pos + j, 0, 4) != Porffor.wasm.i32.load8_u(searchPtr + j, 0, 4)) {
+          match = false;
+          break;
+        }
+      }
+    } else {
+      match = false;
+    }
+
+    if (match) {
+      // Copy replacement string
+      for (let r: i32 = 0; r < replaceLen; r++) {
+        Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(replacePtr + r, 0, 4), 0, 4);
+      }
+      pos += searchLen;
+    } else {
+      // Copy original character
+      Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(thisPtr + pos, 0, 4), 0, 4);
+      pos++;
+    }
+  }
+
+  out.length = outLen;
+  return out;
+};

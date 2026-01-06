@@ -1595,10 +1595,17 @@ export const __ByteString_prototype_match = (_this: bytestring, regexp: any) => 
 
 // todo: use actual iterator not array
 export const __Porffor_regex_matchAll = (regexp: any, input: any) => {
-  if (Porffor.type(regexp) !== Porffor.TYPES.regexp) regexp = new RegExp(regexp);
   if (Porffor.type(input) !== Porffor.TYPES.bytestring) input = ecma262.ToString(input);
 
-  if (!__RegExp_prototype_global$get(regexp)) throw new TypeError('matchAll used with non-global RegExp');
+  // If regexp is not a RegExp, convert to string and create a global RegExp
+  if (Porffor.type(regexp) !== Porffor.TYPES.regexp) {
+    // Convert null/undefined/other to string pattern and create global regex
+    const pattern: any = ecma262.ToString(regexp);
+    regexp = new RegExp(pattern, 'g');
+  } else {
+    // If it's a RegExp but not global, throw
+    if (!__RegExp_prototype_global$get(regexp)) throw new TypeError('matchAll used with non-global RegExp');
+  }
 
   const result: any[] = Porffor.malloc(4096);
   let match: any;
