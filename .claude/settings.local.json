@@ -12,7 +12,14 @@
       "Bash(RESULT_ONLY=1 node:*)",
       "Bash(node test262/index.js:*)",
       "Bash(git stash:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(wasm-objdump:*)",
+      "Bash(wasm2wat:*)",
+      "Bash(wabt2wat:*)",
+      "Bash(node /tmp/find_func.js:*)",
+      "Bash(node find_func.js:*)",
+      "Bash(node index.js:*)",
+      "Bash(grep:*)"
     ]
   }
 }
