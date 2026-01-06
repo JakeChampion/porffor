@@ -19,7 +19,13 @@
       "Bash(node /tmp/find_func.js:*)",
       "Bash(node find_func.js:*)",
       "Bash(node index.js:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(node /tmp/filter_errors.js:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm view:*)",
+      "Bash(timeout 10 ./porf:*)",
+      "Bash(timeout 5 ./porf:*)",
+      "Bash(tee:*)"
     ]
   }
 }
