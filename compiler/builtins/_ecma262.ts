@@ -8,17 +8,16 @@ export const __ecma262_ToPrimitive_Number = (input: any): any => {
   // todo: %Symbol.toPrimitive%
 
   // Try valueOf first for number hint
-  const valueOfMethod = input.valueOf;
-  if (typeof valueOfMethod === 'function') {
-    const value = valueOfMethod.call(input);
+  // Note: Call directly on input to preserve correct method binding
+  if (typeof input.valueOf === 'function') {
+    const value = input.valueOf();
     // If result is not an Object (primitives including undefined/null), return it
     if (!Porffor.object.isObject(value)) return value;
   }
 
   // Try toString
-  const toStringMethod = input.toString;
-  if (typeof toStringMethod === 'function') {
-    const value = toStringMethod.call(input);
+  if (typeof input.toString === 'function') {
+    const value = input.toString();
     if (!Porffor.object.isObject(value)) return value;
   }
 
@@ -32,17 +31,16 @@ export const __ecma262_ToPrimitive_String = (input: any): any => {
   // todo: %Symbol.toPrimitive%
 
   // Try toString first for string hint
-  const toStringMethod = input.toString;
-  if (typeof toStringMethod === 'function') {
-    const value = toStringMethod.call(input);
+  // Note: Call directly on input to preserve correct method binding
+  if (typeof input.toString === 'function') {
+    const value = input.toString();
     // If result is not an Object (primitives including undefined/null), return it
     if (!Porffor.object.isObject(value)) return value;
   }
 
   // Try valueOf
-  const valueOfMethod = input.valueOf;
-  if (typeof valueOfMethod === 'function') {
-    const value = valueOfMethod.call(input);
+  if (typeof input.valueOf === 'function') {
+    const value = input.valueOf();
     if (!Porffor.object.isObject(value)) return value;
   }
 
