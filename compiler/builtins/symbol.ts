@@ -41,7 +41,12 @@ return`;
 };
 
 export const __Symbol_prototype_toString = (_this: any) => {
-  // Works for both Symbol and SymbolObject since they share memory layout
+  // Type check: must be Symbol or SymbolObject
+  const t: i32 = Porffor.type(_this);
+  if (t != Porffor.TYPES.symbol && t != Porffor.TYPES.symbolobject) {
+    throw new TypeError('Symbol.prototype.toString requires that \'this\' be a Symbol');
+  }
+
   let out: bytestring = Porffor.malloc();
 
   // Symbol(
@@ -53,7 +58,8 @@ export const __Symbol_prototype_toString = (_this: any) => {
   Porffor.wasm.i32.store8(out, 108, 0, 9);
   Porffor.wasm.i32.store8(out, 40, 0, 10);
 
-  const description: any = _this.description;
+  // Get description directly using the getter (works for both Symbol and SymbolObject)
+  const description: any = __Symbol_prototype_description$get(_this);
   let descLen: i32 = 0;
   if (description !== undefined) {
     descLen = description.length;
@@ -77,7 +83,12 @@ export const __Symbol_prototype_toString = (_this: any) => {
 export const __Symbol_prototype_toLocaleString = (_this: any) => __Symbol_prototype_toString(_this);
 
 export const __Symbol_prototype_valueOf = (_this: any) => {
-  // Accept both Symbol and SymbolObject - they share the same memory layout
+  // Type check: must be Symbol or SymbolObject
+  const t: i32 = Porffor.type(_this);
+  if (t != Porffor.TYPES.symbol && t != Porffor.TYPES.symbolobject) {
+    throw new TypeError('Symbol.prototype.valueOf requires that \'this\' be a Symbol');
+  }
+
   // Return value with Symbol type (5)
   Porffor.wasm`local.get ${_this}
 i32.const 5

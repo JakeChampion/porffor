@@ -6376,6 +6376,9 @@ const generateMember = (scope, decl, _global, _name) => {
           _protoInternalCall: true
         });
       }
+
+      // alias primitive prototype with primitive object types
+      aliasPrimObjsBC(bc);
     }
 
     if (known == null) extraBC = bc;
