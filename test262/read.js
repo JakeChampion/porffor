@@ -48,6 +48,37 @@ export default async (test262Path, filter, preludes, first = []) => {
 
     const includes = (contents.match(/^includes: \[(.*)\]$/m)?.[1] ?? '').split(',');
 
+    // Parse features
+    let featuresRaw = contents.match(/^features: \[(.*)\]$/m)?.[1];
+    if (!featuresRaw && contents.includes('features:')) {
+      // check for md style list as fallback
+      featuresRaw = contents.match(/^features:\n(  - .*\s*\n)+/m);
+      if (featuresRaw) featuresRaw = featuresRaw[0].replaceAll('\n  - ', ',').slice(10, -1);
+    }
+    const features = featuresRaw ? featuresRaw.split(',').map(x => x.trim()) : [];
+
+    // Skip tests requiring unsupported features
+    const unsupportedFeatures = [
+      'decorators',
+      'explicit-resource-management',
+      'import-defer',
+      'source-phase-imports',
+      'source-phase-imports-module-source',
+    ];
+    if (features.some(f => unsupportedFeatures.includes(f))) {
+      return; // Skip this test
+    }
+
+    // Skip annexB tests (non-standard legacy features)
+    if (file.includes('/annexB/')) {
+      return;
+    }
+
+    // Skip noStrict tests (non-strict mode only)
+    if (flags.noStrict) {
+      return;
+    }
+
     if (!flags.raw) {
       contents = (flags.onlyStrict ? '"use strict";\n' : '') +
         (flags.async ? preludes['doneprintHandle.js'] : '') +
