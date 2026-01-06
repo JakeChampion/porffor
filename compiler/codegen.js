@@ -87,6 +87,10 @@ const cacheAst = (decl, wasm) => {
   return wasm;
 };
 
+// Separate cache for closure func objects - maps AST node to func object
+// This ensures only one func is created per closure, even if AST is processed multiple times
+const closureFuncCache = new WeakMap();
+
 // helper to check if a function body uses 'arguments' identifier
 const usesArguments = (node, inArrow = false) => {
   if (!node) return false;
@@ -474,13 +478,22 @@ const generate = (scope, decl, global = false, name = undefined, valueUnused = f
       if (!decl.body) {
         return cacheAst(decl, [ number(UNDEFINED) ]);
       }
-      const funcOut = generateFunc(scope, decl)[1];
-      // Don't cache closures - each invocation creates a new closure environment
-      // _usesCaptured is a Set from semantic analysis
+      // For closures, we cache the func object but NOT the funcRef output.
+      // Each invocation needs a new closure environment (from funcRef),
+      // but the underlying func object should only be created once.
       const usesCapturedSize = decl._usesCaptured?.size ?? 0;
       if (usesCapturedSize > 0) {
-        return funcOut;
+        // Check if we already have a func for this closure AST
+        let func = closureFuncCache.get(decl);
+        if (!func) {
+          // First time seeing this closure - create the func object
+          [ func ] = generateFunc(scope, decl);
+          closureFuncCache.set(decl, func);
+        }
+        // Always generate fresh funcRef output (allocates new closure env)
+        return funcRef(func, scope);
       }
+      const funcOut = generateFunc(scope, decl)[1];
       return cacheAst(decl, funcOut);
     }
 
