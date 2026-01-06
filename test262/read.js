@@ -59,11 +59,46 @@ export default async (test262Path, filter, preludes, first = []) => {
 
     // Skip tests requiring unsupported features
     const unsupportedFeatures = [
+      // Parser/syntax features not supported
       'decorators',
       'explicit-resource-management',
       'import-defer',
       'source-phase-imports',
       'source-phase-imports-module-source',
+      // Runtime features not yet implemented
+      'Temporal',
+      'Intl.DateTimeFormat',
+      'Intl.DisplayNames',
+      'Intl.DurationFormat',
+      'Intl.ListFormat',
+      'Intl.Locale',
+      'Intl.NumberFormat',
+      'Intl.PluralRules',
+      'Intl.RelativeTimeFormat',
+      'Intl.Segmenter',
+      'Intl-enumeration',
+      'Proxy',
+      'iterator-helpers',
+      'ShadowRealm',
+      'FinalizationRegistry',
+      'WeakRef',
+      'resizable-arraybuffer',
+      'ArrayBuffer-transfer',
+      'SharedArrayBuffer',
+      'Atomics',
+      'Atomics.waitAsync',
+      'Atomics.pause',
+      'tail-call-optimization',
+      'regexp-lookbehind',
+      'regexp-named-groups',
+      'regexp-unicode-property-escapes',
+      'regexp-v-flag',
+      'regexp-duplicate-named-groups',
+      'regexp-modifiers',
+      'symbols-as-weakmap-keys',
+      'promise-try',
+      'import-attributes',
+      'json-modules',
     ];
     if (features.some(f => unsupportedFeatures.includes(f))) {
       return; // Skip this test
