@@ -34,9 +34,16 @@ Status: getOrInsert is complete. getOrInsertComputed has 2 remaining failures:
 
 These tests expect exceptions that aren't being thrown.
 
-#### Constructor validation
-- WeakSet/WeakMap constructors not validating iterable items
-- Set/Map constructors not handling edge cases
+#### Constructor validation (PARTIALLY BLOCKED)
+Some constructor validation requires runtime prototype lookup (e.g., `Get(set, "add")`) which
+Porffor resolves at precompile time. Tests that override `WeakSet.prototype.add = null` won't work.
+
+**Fixed**:
+- WeakSet.prototype.add: registered symbol check ✅ (77/85 tests passing)
+- WeakMap getOrInsert: registered symbol check ✅ (17/17 tests passing)
+
+**Blocked** (requires compiler changes for runtime prototype lookup):
+- WeakSet/WeakMap constructors: `add`/`set` method validation when overridden
 
 #### Method argument validation
 - Missing `IsCallable` checks on callbacks
