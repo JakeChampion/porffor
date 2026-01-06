@@ -6104,9 +6104,9 @@ locals:[127],localNames:["_this","_this#type","value","value#type","#last_type"]
 usesTag:1
 }
 x.__WeakSet_prototype_add={
-wasm:(_,{builtin,internalThrow})=>eval("[[32,1],[65,28],[71],[4,64],...internalThrow(_,'TypeError',`WeakSet.prototype.add expects 'this' to be a WeakSet`),[11],[32,2],[252,2],[32,3],[16,builtin('__Porffor_object_isObjectOrSymbol')],[183],[68,0],[97],[4,64],...internalThrow(_,'TypeError',`Value in WeakSet needs to be an object or symbol`),[26],[11],[32,0],[65,11],[32,2],[32,3],[16,builtin('__Set_prototype_add')],[26],[26],[32,0],[65,28],[15]]"),
+wasm:(_,{builtin,internalThrow})=>eval("[[32,1],[65,28],[71],[4,64],...internalThrow(_,'TypeError',`WeakSet.prototype.add expects 'this' to be a WeakSet`),[11],[32,2],[252,2],[32,3],[16,builtin('__Porffor_object_isObjectOrSymbol')],[183],[68,0],[97],[4,64],...internalThrow(_,'TypeError',`Value in WeakSet needs to be an object or symbol`),[26],[11],[32,3],[184],[68,5],[97],[34,5],[4,127],[32,2],[32,3],[16,builtin('__Symbol_keyFor')],[33,4],[68,0],[98],[32,4],[65,128],[114],[65,0],[65,128],[114],[71],[114],[65,2],[33,4],[5],[32,5],[65,2],[33,4],[11],[4,64],...internalThrow(_,'TypeError',`WeakSet value must not be a registered symbol`),[26],[11],[32,0],[65,11],[32,2],[32,3],[16,builtin('__Set_prototype_add')],[33,4],[26],[32,0],[65,28],[15]]"),
 params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
-locals:[127],localNames:["_this","_this#type","value","value#type","#last_type"],
+locals:[127,127],localNames:["_this","_this#type","value","value#type","#last_type","logictmpi"],
 usesTag:1
 }
 x.__WeakSet_prototype_delete={
