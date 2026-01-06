@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Skill(ralph-wiggum:ralph-loop)",
+      "Skill(ralph-wiggum:ralph-loop:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm run:*)",
+      "Bash(xargs cat:*)"
+    ]
+  }
+}
