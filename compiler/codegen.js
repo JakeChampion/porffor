@@ -2742,12 +2742,18 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
   }
 
   let args = decl.arguments.slice();
+  let hadSpread = false;
+  let nonSpreadArgCount = 0;
+  let spreadSetupWasm = []; // wasm to setup spread array (store to #spread local)
   if (args.at(-1)?.type === 'SpreadElement') {
     // hack: support spread element if last by doing essentially:
     // const foo = () => ...;
     // foo(a, b, ...c) -> _ = c; foo(a, b, _[0], _[1], ...)
+    hadSpread = true;
+    nonSpreadArgCount = args.length - 1; // count of args before the spread
     const arg = args.at(-1).argument;
-    out.push(
+    // Store spread setup separately for indirect calls where argc needs to read spread.length first
+    spreadSetupWasm = [
       ...generate(scope, arg),
       [ Opcodes.local_set, localTmp(scope, '#spread') ],
       ...getNodeType(scope, arg),
@@ -2757,7 +2763,10 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       [ Opcodes.if, Blocktype.void ],
         ...internalThrow(scope, 'TypeError', 'Cannot spread a non-iterable'),
       [ Opcodes.end ]
-    );
+    ];
+    // For direct calls, add to out immediately. For indirect calls, spreadSetupWasm
+    // will be inserted separately before argcWasm to ensure proper ordering.
+    out.push(...spreadSetupWasm);
 
     args.pop();
     for (let i = 0; i < 8; i++) {
@@ -2932,8 +2941,20 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
         [TYPES.function]: () => {
           // Closure support: extract environment pointer from high bits before call
           const calleeI32Tmp = localTmp(scope, '#callee_i32', Valtype.i32);
+          // Compute argc: for spreads, use nonSpreadArgCount + spread.length at runtime
+          // Note: spreadSetupWasm must run before argcWasm since argcWasm reads #spread.length
+          const argcWasm = hadSpread ? [
+            [ Opcodes.local_get, localTmp(scope, '#spread') ],
+            Opcodes.i32_to_u,
+            [ Opcodes.i32_load, 0, 0 ], // load length from array
+            number(nonSpreadArgCount, Valtype.i32),
+            [ Opcodes.i32_add ]
+          ] : [
+            number(wrapperArgc - underflow, Valtype.i32)
+          ];
           return [
-            number(wrapperArgc - underflow, Valtype.i32),
+            ...spreadSetupWasm, // Must run before argcWasm to set #spread
+            ...argcWasm,
             ...forceDuoValtype(scope, newTargetWasm, Valtype.f64),
             ...forceDuoValtype(scope, thisWasm, Valtype.f64),
             ...out,
@@ -6126,8 +6147,8 @@ const generateArray = (scope, decl, global = false, name = '$undeclared', static
     );
   }
 
-  // store direct length
-  if (i !== 0) out.push(
+  // store direct length (also needed when i=0 but spread elements follow, so push reads correct initial length)
+  if (i !== 0 || i < length) out.push(
     pointer,
     number(i, Valtype.i32),
     [ Opcodes.i32_store, Math.log2(ValtypeSize.i32) - 1, 0 ]
