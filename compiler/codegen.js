@@ -2393,6 +2393,7 @@ const aliasPrimObjsBC = bc => {
   add(TYPES.boolean, TYPES.booleanobject);
   add(TYPES.number, TYPES.numberobject);
   add(TYPES.string, TYPES.stringobject);
+  add(TYPES.symbol, TYPES.symbolobject);
 };
 
 const typeIsIterable = wasm => [

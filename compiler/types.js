@@ -65,6 +65,7 @@ registerInternalType('Promise');
 registerInternalType('BooleanObject');
 registerInternalType('NumberObject');
 registerInternalType('StringObject');
+registerInternalType('SymbolObject');
 
 registerInternalType('__Porffor_Generator');
 registerInternalType('__Porffor_AsyncGenerator');

@@ -6,6 +6,7 @@ export type bytestring = string;
 export type BooleanObject = Boolean;
 export type NumberObject = Number;
 export type StringObject = String;
+export type SymbolObject = Symbol;
 
 type PorfforGlobal = {
   wasm: {
@@ -157,4 +158,5 @@ declare global {
   type BooleanObject = Boolean;
   type NumberObject = Number;
   type StringObject = String;
+  type SymbolObject = Symbol;
 }

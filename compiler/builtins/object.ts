@@ -10,6 +10,7 @@ export const Object = function (value: any): any {
   if ((Porffor.type(value) | 0b10000000) == Porffor.TYPES.bytestring) return new String(value);
   if (Porffor.type(value) == Porffor.TYPES.number) return new Number(value);
   if (Porffor.type(value) == Porffor.TYPES.boolean) return new Boolean(value);
+  if (Porffor.type(value) == Porffor.TYPES.symbol) return value as SymbolObject;
 
   // return input
   return value;
