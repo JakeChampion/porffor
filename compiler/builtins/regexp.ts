@@ -48,6 +48,10 @@ import type {} from './porffor.d.ts';
 //   fork - 0x21:
 //     branch 1 (u16)
 //     branch 2 (u16)
+//   loop_start - 0x23:
+//     (saves sp to loop position stack for nullable quantifier check)
+//   loop_check_jump - 0x24:
+//     target (u16) - jump target if progress made; backtrack if no progress
 //   ----------------------------
 //   start capture - 0x30:
 //     index (u8)
@@ -516,36 +520,59 @@ export const __Porffor_regex_compile = (patternStr: bytestring, flagsStr: bytest
         // Calculate atom size and move it forward to make space for quantifier logic
         const atomSize: i32 = bcPtr - lastAtomStart;
         if (char == 42) { // * (zero or more)
-          // Move atom forward to make space for fork BEFORE it
-          Porffor.wasm.memory.copy(lastAtomStart + 5, lastAtomStart, atomSize, 0, 0);
+          // Move atom forward to make space for loop_start + fork BEFORE it
+          // Layout: [loop_start 1b][fork 5b][atom][loop_check_jump 3b]
+          Porffor.wasm.memory.copy(lastAtomStart + 6, lastAtomStart, atomSize, 0, 0);
 
-          // Insert fork at atom start position
-          Porffor.wasm.i32.store8(lastAtomStart, 0x21, 0, 0); // fork
+          // Insert loop_start at atom start position (for nullable quantifier check)
+          Porffor.wasm.i32.store8(lastAtomStart, 0x23, 0, 0); // loop_start
+
+          // Insert fork after loop_start (fork is at lastAtomStart+1)
+          Porffor.wasm.i32.store8(lastAtomStart, 0x21, 0, 1); // fork
+          // branch offsets are relative to fork position (lastAtomStart+1)
+          // atom is at lastAtomStart+6, so atom offset from fork = 6-1 = 5
+          // end is at lastAtomStart+6+atomSize+3 = lastAtomStart+atomSize+9, so end offset from fork = atomSize+9-1 = atomSize+8
           if (lazy) {
-            Porffor.wasm.i32.store16(lastAtomStart, atomSize + 8, 0, 1); // branch1: skip atom entirely
-            Porffor.wasm.i32.store16(lastAtomStart, 5, 0, 3); // branch2: execute atom
+            Porffor.wasm.i32.store16(lastAtomStart, atomSize + 8, 0, 2); // branch1: skip to end
+            Porffor.wasm.i32.store16(lastAtomStart, 5, 0, 4); // branch2: execute atom
           } else {
-            Porffor.wasm.i32.store16(lastAtomStart, 5, 0, 1); // branch1: execute atom
-            Porffor.wasm.i32.store16(lastAtomStart, atomSize + 8, 0, 3); // branch2: skip atom entirely
+            Porffor.wasm.i32.store16(lastAtomStart, 5, 0, 2); // branch1: execute atom
+            Porffor.wasm.i32.store16(lastAtomStart, atomSize + 8, 0, 4); // branch2: skip to end
           }
 
-          // insert jump to loop
-          Porffor.wasm.i32.store8(bcPtr, 0x20, 0, 5);
-          Porffor.wasm.i32.store16(bcPtr, -atomSize - 5, 0, 6);
+          // insert loop_check_jump to loop back (checks progress, backtracks if none)
+          // loop_check_jump is at bcPtr+6, jumps back to fork at lastAtomStart+1
+          // offset = (lastAtomStart+1) - (bcPtr+6) = lastAtomStart+1 - lastAtomStart - atomSize - 6 = -atomSize-5
+          Porffor.wasm.i32.store8(bcPtr, 0x24, 0, 6); // loop_check_jump
+          Porffor.wasm.i32.store16(bcPtr, -atomSize - 5, 0, 7); // jump back to fork
 
           // Update bcPtr to point after the moved atom
-          bcPtr += 8;
+          bcPtr += 9;
         } else if (char == 43) { // + (one or more)
-          // For +, atom executes once, then add fork for additional matches
-          Porffor.wasm.i32.store8(bcPtr, 0x21, 0, 0); // fork
+          // For +, atom executes once, then loop with progress check
+          // Structure: [loop_start][atom][fork][loop_check_jump]
+          // Shift atom forward to make room for loop_start
+          Porffor.wasm.memory.copy(lastAtomStart + 1, lastAtomStart, atomSize, 0, 0);
+
+          // Insert loop_start before atom
+          Porffor.wasm.i32.store8(lastAtomStart, 0x23, 0, 0); // loop_start
+
+          // Add fork after atom (now at bcPtr+1)
+          const forkPos: i32 = bcPtr + 1;
+          Porffor.wasm.i32.store8(forkPos, 0x21, 0, 0); // fork
           if (lazy) {
-            Porffor.wasm.i32.store16(bcPtr, 5, 0, 1); // branch1: continue (done)
-            Porffor.wasm.i32.store16(bcPtr, -(bcPtr - lastAtomStart), 0, 3); // branch2: back to atom
+            Porffor.wasm.i32.store16(forkPos, 8, 0, 1); // branch1: exit (skip loop_check_jump)
+            Porffor.wasm.i32.store16(forkPos, 5, 0, 3); // branch2: try loop_check_jump
           } else {
-            Porffor.wasm.i32.store16(bcPtr, -(bcPtr - lastAtomStart), 0, 1); // branch1: back to atom
-            Porffor.wasm.i32.store16(bcPtr, 5, 0, 3); // branch2: continue (done)
+            Porffor.wasm.i32.store16(forkPos, 5, 0, 1); // branch1: try loop_check_jump
+            Porffor.wasm.i32.store16(forkPos, 8, 0, 3); // branch2: exit
           }
-          bcPtr += 5;
+
+          // Add loop_check_jump that goes back to atom (lastAtomStart+1)
+          Porffor.wasm.i32.store8(forkPos, 0x24, 0, 5); // loop_check_jump
+          Porffor.wasm.i32.store16(forkPos, -(forkPos + 5 - (lastAtomStart + 1)), 0, 6); // back to atom
+
+          bcPtr = forkPos + 8;
         } else { // ? (zero or one)
           // Move atom forward to make space for fork
           Porffor.wasm.memory.copy(lastAtomStart + 5, lastAtomStart, atomSize, 0, 0);
@@ -904,6 +931,7 @@ export const __Porffor_regex_interpret = (regexp: RegExp, input: i32, isTest: bo
 
   const backtrackStack: i32[] = [];
   const captures: i32[] = [];
+  const loopPosStack: i32[] = []; // for nullable quantifier progress tracking
 
   // check if first op is char for fast scan
   let fastChar: i32 = -1;
@@ -924,6 +952,7 @@ export const __Porffor_regex_interpret = (regexp: RegExp, input: i32, isTest: bo
 
     backtrackStack.length = 0;
     captures.length = 0;
+    loopPosStack.length = 0;
 
     let pc: i32 = bcBase;
     let sp: i32 = i;
@@ -1213,6 +1242,24 @@ export const __Porffor_regex_interpret = (regexp: RegExp, input: i32, isTest: bo
           pc += Porffor.wasm.i32.load16_s(pc, 0, 1);
           break;
 
+        case 0x23: // loop_start - save position for nullable quantifier progress check
+          Porffor.array.fastPushI32(loopPosStack, sp);
+          pc += 1;
+          break;
+
+        case 0x24: { // loop_check_jump - check progress, loop if made, backtrack if not
+          const savedSp = loopPosStack[loopPosStack.length - 1];
+          if (sp > savedSp) {
+            // Progress made - update saved position and jump back
+            loopPosStack[loopPosStack.length - 1] = sp;
+            pc += Porffor.wasm.i32.load16_s(pc, 0, 1);
+          } else {
+            // No progress - trigger backtrack (will pop from backtrack stack to exit loop)
+            backtrack = true;
+          }
+          break;
+        }
+
         case 0x21: { // fork
           const branch1Offset = Porffor.wasm.i32.load16_s(pc, 0, 1);
           const branch2Offset = Porffor.wasm.i32.load16_s(pc, 0, 3);
@@ -1220,6 +1267,7 @@ export const __Porffor_regex_interpret = (regexp: RegExp, input: i32, isTest: bo
           Porffor.array.fastPushI32(backtrackStack, pc + branch2Offset);
           Porffor.array.fastPushI32(backtrackStack, sp);
           Porffor.array.fastPushI32(backtrackStack, captures.length);
+          Porffor.array.fastPushI32(backtrackStack, loopPosStack.length);
 
           pc += branch1Offset;
           break;
@@ -1278,6 +1326,7 @@ export const __Porffor_regex_interpret = (regexp: RegExp, input: i32, isTest: bo
         }
 
         // Normal backtracking
+        loopPosStack.length = Porffor.array.fastPopI32(backtrackStack);
         captures.length = Porffor.array.fastPopI32(backtrackStack);
         sp = Porffor.array.fastPopI32(backtrackStack);
         pc = Porffor.array.fastPopI32(backtrackStack);
