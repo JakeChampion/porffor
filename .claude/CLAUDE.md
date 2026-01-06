@@ -92,3 +92,6 @@ When implementing methods that accept "set-like" objects:
 - 🏗️ wasm compile error
 - 💥 compile error
 - ⏰ timeout
+
+## Important: File Writing
+NEVER use `cat` with heredocs or redirects to write files. Always use the Write tool instead.
