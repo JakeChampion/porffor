@@ -1443,7 +1443,12 @@ export const RegExp = function (pattern: any, flags: any): RegExp {
 };
 
 
-export const __RegExp_prototype_exec = (_this: RegExp, input: any) => {
+export const __RegExp_prototype_exec = (_this: any, input: any) => {
+  // Type check: this must be a RegExp
+  if (Porffor.type(_this) != Porffor.TYPES.regexp) {
+    throw new TypeError('RegExp.prototype.exec requires that this be a RegExp');
+  }
+
   const t: i32 = Porffor.type(input);
   if (t != Porffor.TYPES.bytestring && t != Porffor.TYPES.string) {
     input = ecma262.ToString(input);
@@ -1463,7 +1468,12 @@ export const __RegExp_prototype_exec = (_this: RegExp, input: any) => {
   return __Porffor_regex_interpret(_this, input, false);
 };
 
-export const __RegExp_prototype_test = (_this: RegExp, input: any) => {
+export const __RegExp_prototype_test = (_this: any, input: any) => {
+  // Type check: this must be a RegExp
+  if (Porffor.type(_this) != Porffor.TYPES.regexp) {
+    throw new TypeError('RegExp.prototype.test requires that this be a RegExp');
+  }
+
   const t: i32 = Porffor.type(input);
   if (t != Porffor.TYPES.bytestring && t != Porffor.TYPES.string) {
     input = ecma262.ToString(input);

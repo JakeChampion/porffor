@@ -2103,8 +2103,10 @@ export const __ByteString_prototype_startsWith = (_this: bytestring, _searchStri
     throw new TypeError('First argument to String.prototype.startsWith must not be a regular expression');
   }
 
+  // Convert to string (this will throw for Symbols)
+  _searchString = ecma262.ToString(_searchString);
+
   // if searching non-bytestring, bytestring will not start with it
-  // todo: change this to just check if = string and ToString others
   if (Porffor.wasm`local.get ${_searchString+1}` != Porffor.TYPES.bytestring) return false;
 
   const searchString: bytestring = _searchString;
@@ -2188,8 +2190,10 @@ export const __ByteString_prototype_endsWith = (_this: bytestring, _searchString
     throw new TypeError('First argument to String.prototype.endsWith must not be a regular expression');
   }
 
-  // if searching non-bytestring, bytestring will not start with it
-  // todo: change this to just check if = string and ToString others
+  // Convert to string (this will throw for Symbols)
+  _searchString = ecma262.ToString(_searchString);
+
+  // if searching non-bytestring, bytestring will not end with it
   if (Porffor.wasm`local.get ${_searchString+1}` != Porffor.TYPES.bytestring) return false;
 
   const searchString: bytestring = _searchString;
@@ -2461,9 +2465,11 @@ export const __ByteString_prototype_includes = (_this: bytestring, _searchString
     throw new TypeError('First argument to String.prototype.includes must not be a regular expression');
   }
 
-  // if searching non-bytestring, bytestring will not start with it
-  // todo: change this to just check if = string and ToString others
-  if (Porffor.wasm`local.get ${_searchString+1}` != Porffor.TYPES.bytestring) return -1;
+  // Convert to string (this will throw for Symbols)
+  _searchString = ecma262.ToString(_searchString);
+
+  // if searching non-bytestring, bytestring will not include it
+  if (Porffor.wasm`local.get ${_searchString+1}` != Porffor.TYPES.bytestring) return false;
 
   const searchString: bytestring = _searchString;
 
