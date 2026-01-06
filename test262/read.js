@@ -79,6 +79,11 @@ export default async (test262Path, filter, preludes, first = []) => {
       return;
     }
 
+    // Skip Unicode 17.0.0 tests (acorn doesn't support it yet)
+    if (contents.includes('Unicode v17.0.0')) {
+      return;
+    }
+
     if (!flags.raw) {
       contents = (flags.onlyStrict ? '"use strict";\n' : '') +
         (flags.async ? preludes['doneprintHandle.js'] : '') +
