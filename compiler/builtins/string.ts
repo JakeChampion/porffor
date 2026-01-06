@@ -2513,6 +2513,9 @@ export const __ByteString_prototype_includes = (_this: bytestring, _searchString
 
 
 export const __String_prototype_padStart = (_this: string, targetLength: number, padString: any = undefined) => {
+  // 3. Let intMaxLength be ToLength(maxLength).
+  targetLength = __ecma262_ToLength(targetLength);
+
   let out: string = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
@@ -2560,6 +2563,9 @@ export const __String_prototype_padStart = (_this: string, targetLength: number,
 };
 
 export const __ByteString_prototype_padStart = (_this: bytestring, targetLength: number, padString: any = undefined) => {
+  // 3. Let intMaxLength be ToLength(maxLength).
+  targetLength = __ecma262_ToLength(targetLength);
+
   let out: bytestring = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
@@ -2604,6 +2610,9 @@ export const __ByteString_prototype_padStart = (_this: bytestring, targetLength:
 
 
 export const __String_prototype_padEnd = (_this: string, targetLength: number, padString: any = undefined) => {
+  // 3. Let intMaxLength be ToLength(maxLength).
+  targetLength = __ecma262_ToLength(targetLength);
+
   let out: string = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
@@ -2651,6 +2660,9 @@ export const __String_prototype_padEnd = (_this: string, targetLength: number, p
 };
 
 export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: number, padString: any = undefined) => {
+  // 3. Let intMaxLength be ToLength(maxLength).
+  targetLength = __ecma262_ToLength(targetLength);
+
   let out: bytestring = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;

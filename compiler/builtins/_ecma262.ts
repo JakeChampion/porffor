@@ -101,6 +101,20 @@ export const __ecma262_ToIntegerOrInfinity = (argument: unknown): number => {
   return number;
 };
 
+// 7.1.20 ToLength (argument)
+// https://tc39.es/ecma262/#sec-tolength
+export const __ecma262_ToLength = (argument: unknown): number => {
+  // 1. Let len be ? ToIntegerOrInfinity(argument).
+  const len: number = __ecma262_ToIntegerOrInfinity(argument);
+
+  // 2. If len <= 0, return +0.
+  if (len <= 0) return 0;
+
+  // 3. Return min(len, 2^53 - 1).
+  if (len > 9007199254740991) return 9007199254740991;
+  return len;
+};
+
 // 7.1.22 ToIndex (value)
 export const __ecma262_ToIndex = (value: unknown): number => {
   // 1. Let integer be ? ToIntegerOrInfinity(value).

@@ -139,6 +139,7 @@ declare global {
 
   const ecma262: {
     ToIntegerOrInfinity(argument: unknown): number;
+    ToLength(argument: unknown): number;
     ToIndex(value: unknown): number;
     ToString(argument: unknown): bytestring;
     ToNumber(argument: unknown): number;
