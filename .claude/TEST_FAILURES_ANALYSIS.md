@@ -1,6 +1,6 @@
 # Test262 Failure Analysis
 
-**Current Status**: 30,508 / 51,946 passing (58.73%)
+**Current Status**: 30,553 / 51,946 passing (58.82%)
 
 ## Failure Categories by Complexity
 
@@ -8,27 +8,20 @@
 
 These are methods that don't exist yet but have straightforward implementations.
 
-#### Math.sumPrecise (3 tests)
+#### Math.sumPrecise (3 tests remaining)
 ```
-built-ins/Math/sumPrecise/sum.js
-built-ins/Math/sumPrecise/throws-on-non-number.js
-built-ins/Math/sumPrecise/takes-iterable.js
+built-ins/Math/sumPrecise/* - 7/10 passing (70%)
 ```
-Implementation: Sum numbers from an iterable with high precision.
+Status: Partially implemented. Remaining failures likely edge cases.
 
-#### Symbol.toStringTag missing on some prototypes (~10 tests)
-```
-built-ins/WeakSet/prototype/Symbol.toStringTag.js
-built-ins/WeakMap/prototype/Symbol.toStringTag.js
-```
-Implementation: Add `[Symbol.toStringTag]` getter to prototypes.
+#### ~~Symbol.toStringTag missing on some prototypes~~ ✅ DONE
+~~WeakSet/WeakMap prototype Symbol.toStringTag~~ - 100% passing
 
-#### WeakMap.prototype.getOrInsert / getOrInsertComputed (4 tests)
+#### WeakMap.prototype.getOrInsert / getOrInsertComputed (4 tests remaining)
 ```
-built-ins/WeakMap/prototype/getOrInsert/*
-built-ins/WeakMap/prototype/getOrInsertComputed/*
+built-ins/WeakMap/prototype/getOrInsert/* - 35/39 passing (89.74%)
 ```
-Implementation: New ES2024 methods for WeakMap.
+Status: Mostly implemented. Remaining failures likely edge cases.
 
 ---
 
@@ -132,8 +125,9 @@ if (!(_this instanceof Set)) throw ...
 #### Temporal API (5,492 tests - 4,286 + 1,206 intl)
 Entire API not implemented. Would be a major project.
 
-#### Iterator Helpers (500 tests)
+#### Iterator Helpers (373 tests - 1.88% passing)
 `Iterator.prototype.map`, `.filter`, `.take`, etc.
+Status: Only 7/373 passing. Most tests crash (326 💀).
 
 #### Proxy (311 tests)
 Proxy implementation is incomplete.
@@ -146,9 +140,9 @@ NumberFormat, DateTimeFormat, Locale, etc.
 ## Recommended Priority Order
 
 ### Phase 1: Quick Wins (Est. +200-300 tests)
-1. Add `Math.sumPrecise`
-2. Add `Symbol.toStringTag` to WeakMap/WeakSet prototypes
-3. Add `WeakMap.prototype.getOrInsert` and `getOrInsertComputed`
+1. ~~Add `Math.sumPrecise`~~ - Partially done (70%), fix remaining edge cases
+2. ~~Add `Symbol.toStringTag` to WeakMap/WeakSet prototypes~~ ✅ DONE
+3. ~~Add `WeakMap.prototype.getOrInsert` and `getOrInsertComputed`~~ - Mostly done (89.74%), fix remaining edge cases
 4. Add missing error throwing in constructors
 
 ### Phase 2: Medium Effort (Est. +100-200 tests)
@@ -170,10 +164,10 @@ NumberFormat, DateTimeFormat, Locale, etc.
 
 ## Specific Test Files by Category
 
-### Missing Methods (Trivial)
+### Missing Methods (Trivial) - Mostly Done
 ```
-built-ins/Math/sumPrecise/*.js
-built-ins/WeakMap/prototype/getOrInsert/*.js
+built-ins/Math/sumPrecise/*.js - 70% passing, 3 remaining
+built-ins/WeakMap/prototype/getOrInsert/*.js - 89.74% passing, 4 remaining
 built-ins/WeakMap/prototype/getOrInsertComputed/*.js
 ```
 
