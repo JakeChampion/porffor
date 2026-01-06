@@ -178,11 +178,24 @@ export const __Set_prototype_intersection = (_this: Set, other: any) => {
 
   // Set-like object path
   const record: any[] = __Porffor_getSetRecord(other);
+  const otherSize: number = record[0];
   const hasMethod: any = record[1];
+  const keysMethod: any = record[2];
   const otherObj: any = record[3];
 
-  for (const x of _this) {
-    if (hasMethod.call(otherObj, x)) out.add(x);
+  const thisSize: number = _this.size;
+
+  // Spec optimization: choose smaller set to iterate
+  if (thisSize <= otherSize) {
+    // this is smaller or equal, iterate this and call has on other
+    for (const x of _this) {
+      if (hasMethod.call(otherObj, x)) out.add(x);
+    }
+  } else {
+    // other is smaller, iterate other's keys and check has on this
+    for (const x of keysMethod.call(otherObj)) {
+      if (_this.has(x)) out.add(x);
+    }
   }
 
   return out;
