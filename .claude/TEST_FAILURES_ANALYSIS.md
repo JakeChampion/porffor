@@ -17,11 +17,14 @@ Status: Partially implemented. Remaining failures likely edge cases.
 #### ~~Symbol.toStringTag missing on some prototypes~~ ✅ DONE
 ~~WeakSet/WeakMap prototype Symbol.toStringTag~~ - 100% passing
 
-#### WeakMap.prototype.getOrInsert / getOrInsertComputed (4 tests remaining)
+#### ~~WeakMap.prototype.getOrInsert / getOrInsertComputed~~ ✅ MOSTLY DONE
 ```
-built-ins/WeakMap/prototype/getOrInsert/* - 35/39 passing (89.74%)
+built-ins/WeakMap/prototype/getOrInsert/* - 17/17 passing (100%)
+built-ins/WeakMap/prototype/getOrInsertComputed/* - 20/22 passing (90.91%)
 ```
-Status: Mostly implemented. Remaining failures likely edge cases.
+Status: getOrInsert is complete. getOrInsertComputed has 2 remaining failures:
+- `check-callback-fn-args.js` - Compiler bug: `arguments` object doesn't work correctly in callbacks from precompiled builtins (rest params work fine)
+- `getOrInsertComputed.js` - Property descriptor test
 
 ---
 
@@ -166,9 +169,9 @@ NumberFormat, DateTimeFormat, Locale, etc.
 
 ### Missing Methods (Trivial) - Mostly Done
 ```
-built-ins/Math/sumPrecise/*.js - 70% passing, 3 remaining
-built-ins/WeakMap/prototype/getOrInsert/*.js - 89.74% passing, 4 remaining
-built-ins/WeakMap/prototype/getOrInsertComputed/*.js
+built-ins/Math/sumPrecise/*.js - 70% passing, 3 remaining (complex algorithm issues)
+built-ins/WeakMap/prototype/getOrInsert/*.js - 100% passing ✅
+built-ins/WeakMap/prototype/getOrInsertComputed/*.js - 90.91% passing (2 remaining: compiler bug + property descriptors)
 ```
 
 ### Missing Error Handling (Easy)
