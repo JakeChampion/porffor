@@ -5,13 +5,17 @@ export const __ecma262_ToPrimitive_Number = (input: any): any => {
   // If input is not an Object, return it directly (already primitive)
   if (!Porffor.object.isObject(input)) return input;
 
-  // todo: %Symbol.toPrimitive%
+  // Check for Symbol.toPrimitive method
+  const exoticToPrim: any = Porffor.object.get(input, Symbol.toPrimitive);
+  if (typeof exoticToPrim === 'function') {
+    const result: any = exoticToPrim.call(input, 'number');
+    if (!Porffor.object.isObject(result)) return result;
+    throw new TypeError('Cannot convert object to primitive value');
+  }
 
   // Try valueOf first for number hint
-  // Note: Call directly on input to preserve correct method binding
   if (typeof input.valueOf === 'function') {
     const value = input.valueOf();
-    // If result is not an Object (primitives including undefined/null), return it
     if (!Porffor.object.isObject(value)) return value;
   }
 
@@ -28,13 +32,17 @@ export const __ecma262_ToPrimitive_String = (input: any): any => {
   // If input is not an Object, return it directly (already primitive)
   if (!Porffor.object.isObject(input)) return input;
 
-  // todo: %Symbol.toPrimitive%
+  // Check for Symbol.toPrimitive method
+  const exoticToPrim: any = Porffor.object.get(input, Symbol.toPrimitive);
+  if (typeof exoticToPrim === 'function') {
+    const result: any = exoticToPrim.call(input, 'string');
+    if (!Porffor.object.isObject(result)) return result;
+    throw new TypeError('Cannot convert object to primitive value');
+  }
 
   // Try toString first for string hint
-  // Note: Call directly on input to preserve correct method binding
   if (typeof input.toString === 'function') {
     const value = input.toString();
-    // If result is not an Object (primitives including undefined/null), return it
     if (!Porffor.object.isObject(value)) return value;
   }
 

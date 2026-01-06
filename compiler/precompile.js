@@ -256,7 +256,11 @@ ${funcs.map(x => {
       return v;
     })
       .replace(/\["alloc","(.*?)",(.*?)\]/g, (_, reason, valtype) => `[${+valtype === Valtype.i32 ? Opcodes.i32_const : Opcodes.f64_const},allocPage(_,'${reason}')]`)
-      .replace(/\["global",(.*?),"(.*?)",(.*?)\]/g, (_, opcode, name, valtype) => `...glbl(${opcode},'${name}',${valtype})`)
+      .replace(/\["global",(.*?),"(.*?)",(.*?)\]/g, (_, opcode, name, valtype) => {
+        // Strip #porf# prefix since glbl() will add it back
+        if (name.startsWith('#porf#')) name = name.slice(6);
+        return `...glbl(${opcode},'${name}',${valtype})`;
+      })
       .replace(/\"local","(.*?)",(.*?)\]/g, (_, name, valtype) => `loc('${name}',${valtype})]`)
       .replace(/\[16,"(.*?)"]/g, (_, name) => `[16,builtin('${name}')]`)
       .replace(/\["funcref",(.*?),"(.*?)"]/g, (_1, op, name) => op === '65' ? `...i32ify(funcRef('${name}'))` : `...funcRef('${name}')`)
