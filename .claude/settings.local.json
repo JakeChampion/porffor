@@ -7,7 +7,11 @@
       "Skill(ralph-wiggum:ralph-loop:*)",
       "Bash(git checkout:*)",
       "Bash(npm run:*)",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "Bash(./porf:*)",
+      "Bash(RESULT_ONLY=1 node:*)",
+      "Bash(node test262/index.js:*)",
+      "Bash(git stash:*)"
     ]
   }
 }
