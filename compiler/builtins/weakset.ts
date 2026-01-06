@@ -7,6 +7,10 @@ export const __WeakSet_prototype_has = (_this: WeakSet, value: any) => {
 export const __WeakSet_prototype_add = (_this: WeakSet, value: any) => {
   if (!Porffor.object.isObjectOrSymbol(value)) throw new TypeError('Value in WeakSet needs to be an object or symbol');
 
+  // Check if it's a registered symbol (Symbol.keyFor returns a string for registered symbols)
+  if (Porffor.type(value) == Porffor.TYPES.symbol && Symbol.keyFor(value) !== undefined)
+    throw new TypeError('WeakSet value must not be a registered symbol');
+
   __Set_prototype_add(_this as Set, value);
   return _this;
 };
