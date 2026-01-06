@@ -1838,7 +1838,73 @@ export const __Porffor_lowercase = (chr: i32): i32 => {
   return chr;
 };
 
-export const __String_prototype_toUpperCase = (_this: string) => {
+export const __String_prototype_toUpperCase = (_this: any) => {
+  // 1. Let O be ? RequireObjectCoercible(this value).
+  const t: i32 = Porffor.type(_this);
+  if (Porffor.fastOr(t == Porffor.TYPES.undefined, t == Porffor.TYPES.object && _this === null)) {
+    throw new TypeError('String.prototype.toUpperCase requires that this not be null or undefined');
+  }
+
+  // 2. Let S be ? ToString(O).
+  if (Porffor.fastAnd(t != Porffor.TYPES.string, t != Porffor.TYPES.bytestring)) {
+    _this = ecma262.ToString(_this);
+  }
+
+  // Handle ByteString (1-byte chars) - may need wide string output
+  if (Porffor.type(_this) == Porffor.TYPES.bytestring) {
+    const len: i32 = _this.length;
+
+    // First pass: count ß characters and check if we need wide string
+    let extraChars: i32 = 0;
+    let needWide: boolean = false;
+    let i: i32 = Porffor.wasm`local.get ${_this}`;
+    const endPtr: i32 = i + len;
+
+    while (i < endPtr) {
+      const chr: i32 = Porffor.wasm.i32.load8_u(i++, 0, 4);
+      if (chr == 0xDF) extraChars++;
+      const upper: i32 = __Porffor_uppercase(chr);
+      if (upper > 0xFF) needWide = true;
+    }
+
+    if (needWide) {
+      let out: string = Porffor.malloc();
+      Porffor.wasm.i32.store(out, len + extraChars, 0, 0);
+
+      i = Porffor.wasm`local.get ${_this}`;
+      let j: i32 = Porffor.wasm`local.get ${out}`;
+
+      while (i < endPtr) {
+        const chr: i32 = Porffor.wasm.i32.load8_u(i++, 0, 4);
+        const upper: i32 = __Porffor_uppercase(chr);
+        Porffor.wasm.i32.store16(j, upper, 0, 4);
+        j += 2;
+        if (chr == 0xDF) {
+          Porffor.wasm.i32.store16(j, 0x53, 0, 4);
+          j += 2;
+        }
+      }
+      return out;
+    }
+
+    // Can stay as ByteString
+    let out: bytestring = Porffor.malloc();
+    Porffor.wasm.i32.store(out, len + extraChars, 0, 0);
+
+    i = Porffor.wasm`local.get ${_this}`;
+    let j: i32 = Porffor.wasm`local.get ${out}`;
+
+    while (i < endPtr) {
+      const chr: i32 = Porffor.wasm.i32.load8_u(i++, 0, 4);
+      const upper: i32 = __Porffor_uppercase(chr);
+      Porffor.wasm.i32.store8(j++, upper, 0, 4);
+      if (chr == 0xDF) {
+        Porffor.wasm.i32.store8(j++, 0x53, 0, 4);
+      }
+    }
+    return out;
+  }
+
   const len: i32 = _this.length;
 
   // First pass: calculate output length
@@ -1959,7 +2025,37 @@ export const __ByteString_prototype_toUpperCase = (_this: bytestring) => {
   return out;
 };
 
-export const __String_prototype_toLowerCase = (_this: string) => {
+export const __String_prototype_toLowerCase = (_this: any) => {
+  // 1. Let O be ? RequireObjectCoercible(this value).
+  const t: i32 = Porffor.type(_this);
+  if (Porffor.fastOr(t == Porffor.TYPES.undefined, t == Porffor.TYPES.object && _this === null)) {
+    throw new TypeError('String.prototype.toLowerCase requires that this not be null or undefined');
+  }
+
+  // 2. Let S be ? ToString(O).
+  if (Porffor.fastAnd(t != Porffor.TYPES.string, t != Porffor.TYPES.bytestring)) {
+    _this = ecma262.ToString(_this);
+  }
+
+  // Handle ByteString (1-byte chars)
+  if (Porffor.type(_this) == Porffor.TYPES.bytestring) {
+    const len: i32 = _this.length;
+    let out: bytestring = Porffor.malloc();
+    Porffor.wasm.i32.store(out, len, 0, 0);
+
+    let i: i32 = Porffor.wasm`local.get ${_this}`,
+        j: i32 = Porffor.wasm`local.get ${out}`;
+
+    const endPtr: i32 = i + len;
+    while (i < endPtr) {
+      let chr: i32 = Porffor.wasm.i32.load8_u(i++, 0, 4);
+      chr = __Porffor_lowercase(chr);
+      Porffor.wasm.i32.store8(j++, chr, 0, 4);
+    }
+
+    return out;
+  }
+
   const len: i32 = _this.length;
 
   // First pass: calculate output length (only U+0130 has multi-char lowercase)
