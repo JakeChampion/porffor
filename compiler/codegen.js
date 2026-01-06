@@ -206,8 +206,10 @@ const funcRef = (func, scope = null) => {
     // not from the caller's args, so we subtract 1 from the effective param count
     const internalProtoFunc = func.internal && func.name.includes('_prototype_');
     const argsParamCount = paramCount - (internalProtoFunc ? 1 : 0);
+    // Extra params are rest array and argc (if using arguments object) - not user-visible args
+    const extraParams = (func.hasRestArgument ? 1 : 0) + (func._usesArgumentsObject ? 1 : 0);
     const args = [];
-    for (let i = 0; i < argsParamCount - (func.hasRestArgument ? 1 : 0); i++) {
+    for (let i = 0; i < argsParamCount - extraParams; i++) {
       args.push({
         type: 'Identifier',
         name: `#${i + 2}`
@@ -219,6 +221,13 @@ const funcRef = (func, scope = null) => {
       locals['#array#i32'] = { idx: array, type: Valtype.i32 };
       locals['#array'] = { idx: array + 1, type: valtypeBinary };
 
+      // declaredParamCount is the number of user-visible declared params (excluding rest and argc)
+      const declaredParamCount = argsParamCount - extraParams;
+
+      // Need a temp local for clamping rest size
+      const restSizeTmp = (wrapperFunc.localInd += 1) - 1;
+      locals['#restSizeTmp'] = { idx: restSizeTmp, type: Valtype.i32 };
+
       wasm.push(
         number(pageSize, Valtype.i32),
         [ Opcodes.call, includeBuiltin(wrapperFunc, '__Porffor_malloc').index ],
@@ -226,15 +235,27 @@ const funcRef = (func, scope = null) => {
         Opcodes.i32_from_u,
         [ Opcodes.local_set, array + 1 ],
 
+        // Calculate rest size = max(0, argc - declaredParamCount)
         [ Opcodes.local_get, array ],
-        [ Opcodes.local_get, 0 ],
-        number(argsParamCount - 1, Valtype.i32),
-        [ Opcodes.i32_sub ],
+        // Compute argc - declaredParamCount
+        [ Opcodes.local_get, 0 ],                     // argc
+        number(declaredParamCount, Valtype.i32),
+        [ Opcodes.i32_sub ],                          // argc - declaredParamCount
+        [ Opcodes.local_set, restSizeTmp ],           // save to local
+        // select(val1, val2, cond): returns val1 if cond != 0, else val2
+        // We want: if negative return 0, else return computed
+        // So: select(0, computed, isNegative)
+        number(0, Valtype.i32),                       // val1: 0
+        [ Opcodes.local_get, restSizeTmp ],           // val2: computed
+        [ Opcodes.local_get, restSizeTmp ],
+        number(0, Valtype.i32),
+        [ Opcodes.i32_lt_s ],                         // condition: is negative?
+        [ Opcodes.select ],                           // select 0 if negative, else computed
         [ Opcodes.i32_store, 0, 0 ]
       );
 
       let offset = 4;
-      for (let i = argsParamCount - 1; i < wrapperArgc; i++) {
+      for (let i = declaredParamCount; i < wrapperArgc; i++) {
         wasm.push(
           [ Opcodes.local_get, array ],
           [ Opcodes.local_get, 5 + i * 2 ],
@@ -247,14 +268,26 @@ const funcRef = (func, scope = null) => {
         offset += 9;
       }
 
+      // Pass rest array directly (not as SpreadElement since _skipRestHandling is true)
       args.push({
-        type: 'SpreadElement',
-        argument: {
-          type: 'Identifier',
-          name: '#array',
-          _type: TYPES.array
-        }
+        type: 'Identifier',
+        name: '#array',
+        _type: TYPES.array
       });
+
+      // If the function uses the arguments object, pass the argc parameter
+      // #length is stored as i32, so we need to convert it to f64 for typed params
+      if (func._usesArgumentsObject) {
+        args.push({
+          type: 'Wasm',
+          wasm: () => [
+            [ Opcodes.local_get, 0 ], // get #length (i32)
+            [ Opcodes.f64_convert_i32_s ]
+          ],
+          _type: TYPES.number,
+          _callType: [ number(TYPES.number, Valtype.i32) ]
+        });
+      }
     }
 
     wasm.push(...generate(wrapperFunc, {
@@ -266,6 +299,7 @@ const funcRef = (func, scope = null) => {
       _funcIdx: func.index,
       arguments: args,
       _insideIndirect: true,
+      _skipRestHandling: true, // wrapper already built rest array and argc
       _newTargetWasm: [
         [ Opcodes.local_get, 1 ],
         [ Opcodes.local_get, 2 ]
@@ -780,6 +814,7 @@ const lookup = (scope, name, failEarly = false) => {
           names[i / 2] = x;
         }
       }
+
 
       if (scope._usesArgumentsObject && scope.locals['#arguments_rest']) {
         // Build arguments array using argc to know how many declared params to include
@@ -2977,7 +3012,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
     for (let i = 0; i < underflow; i++) args.push(func.defaultParam ? func.defaultParam() : DEFAULT_VALUE());
   }
 
-  if (func && func.hasRestArgument) {
+  if (func && func.hasRestArgument && !decl._skipRestHandling) {
     // For functions using arguments object, we need to track the actual argc
     const hasArgcParam = func._usesArgumentsObject;
     const effectiveParamCount = hasArgcParam ? paramCount - 1 : paramCount; // -1 for argc param
