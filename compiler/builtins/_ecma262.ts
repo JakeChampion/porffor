@@ -2,6 +2,9 @@
 import type {} from './porffor.d.ts';
 
 export const __ecma262_ToPrimitive_Number = (input: any): any => {
+  // If input is not an Object, return it directly (already primitive)
+  if (!Porffor.object.isObject(input)) return input;
+
   // todo: %Symbol.toPrimitive%
 
   // Try valueOf first for number hint
@@ -23,6 +26,9 @@ export const __ecma262_ToPrimitive_Number = (input: any): any => {
 };
 
 export const __ecma262_ToPrimitive_String = (input: any): any => {
+  // If input is not an Object, return it directly (already primitive)
+  if (!Porffor.object.isObject(input)) return input;
+
   // todo: %Symbol.toPrimitive%
 
   // Try toString first for string hint
