@@ -363,6 +363,7 @@ export default (funcs, globals, tags, pages, data, noTreeshake = false) => {
   unsigned(funcs.length);
   for (let i = 0; i < funcs.length; i++) {
     const funcSizeOffset = offset, setFuncSize = unsignedPost();
+    const funcIndex = i + importFuncs.length;
 
     const x = funcs[i];
     const locals = Object.values(x.locals).sort((a, b) => a.idx - b.idx);

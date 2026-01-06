@@ -394,12 +394,12 @@ const funcRef = (func, scope = null) => {
           // Store value (f64)
           [ Opcodes.local_get, envPtrLocal ],
           [ Opcodes.global_get, globals[closureGlobal].idx ],
-          [ Opcodes.f64_store, 0, offset ],
+          [ Opcodes.f64_store, 0, ...unsignedLEB128(offset) ],
 
           // Store type (i32 as i8)
           [ Opcodes.local_get, envPtrLocal ],
           [ Opcodes.global_get, globals[closureGlobal + '#type'].idx ],
-          [ Opcodes.i32_store8, 0, offset + 8 ]
+          [ Opcodes.i32_store8, 0, ...unsignedLEB128(offset + 8) ]
         );
       }
     }
@@ -917,7 +917,7 @@ const lookup = (scope, name, failEarly = false) => {
         return [
           // Load value from closure environment
           [ Opcodes.global_get, globals['#closure_env'].idx ],
-          [ Opcodes.f64_load, 0, offset ],
+          [ Opcodes.f64_load, 0, ...unsignedLEB128(offset) ],
           ...setLastType(scope, getType(scope, name))
         ];
       }
@@ -1970,7 +1970,7 @@ const getType = (scope, name, failEarly = false) => {
       const offset = varIndex * 9 + 8;  // +8 to get to the type byte
       return [
         [ Opcodes.global_get, globals['#closure_env'].idx ],
-        [ Opcodes.i32_load8_u, 0, offset ]
+        [ Opcodes.i32_load8_u, 0, ...unsignedLEB128(offset) ]
       ];
     }
   }
@@ -3053,8 +3053,11 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
 
     // hack: spread + rest special handling
     if (decl.arguments.at(-1)?.type === 'SpreadElement') {
-      // just use the array being spread
-      args = args.slice(0, args.length - 8);
+      // Keep any declared params before the rest, then use spread array as rest
+      // effectiveParamCount - 1 = number of declared params before rest
+      const declaredParamsBefore = effectiveParamCount - 1;
+      // Keep the first declaredParamsBefore expanded spread elements for declared params
+      args = args.slice(0, declaredParamsBefore);
       args.push(decl.arguments.at(-1).argument);
       if (hasArgcParam) {
         // For spread, argc is unknown at compile time - use array length
@@ -4621,30 +4624,30 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
             // Store value
             [ Opcodes.local_get, envLocal ],
             [ Opcodes.local_get, valLocal ],
-            [ Opcodes.f64_store, 0, offset ],
+            [ Opcodes.f64_store, 0, ...unsignedLEB128(offset) ],
 
             // Store type
             [ Opcodes.local_get, envLocal ],
             ...getNodeType(scope, decl.right),
-            [ Opcodes.i32_store8, 0, offset + 8 ]
+            [ Opcodes.i32_store8, 0, ...unsignedLEB128(offset + 8) ]
           );
         } else {
           out.push(
             ...performOp(scope, op, [
               [ Opcodes.local_get, envLocal ],
-              [ Opcodes.f64_load, 0, offset ]
+              [ Opcodes.f64_load, 0, ...unsignedLEB128(offset) ]
             ], generate(scope, decl.right), getType(scope, name), getNodeType(scope, decl.right)),
             [ Opcodes.local_set, valLocal ],
 
             // Store value
             [ Opcodes.local_get, envLocal ],
             [ Opcodes.local_get, valLocal ],
-            [ Opcodes.f64_store, 0, offset ],
+            [ Opcodes.f64_store, 0, ...unsignedLEB128(offset) ],
 
             // Store type
             [ Opcodes.local_get, envLocal ],
             ...getLastType(scope),
-            [ Opcodes.i32_store8, 0, offset + 8 ]
+            [ Opcodes.i32_store8, 0, ...unsignedLEB128(offset + 8) ]
           );
         }
 
