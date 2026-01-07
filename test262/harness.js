@@ -618,6 +618,7 @@ function verifyCallableProperty(obj, name, functionName, functionLength, desc, o
 }
 
 var verifyPrimordialCallableProperty = verifyCallableProperty;
+var verifyPrimordialProperty = verifyProperty;
 
 /// promiseHelper.js
 function checkSequence(arr) {
