@@ -1548,34 +1548,62 @@ const asyncTest = testFunc => {
 };
 
 var __assert_throwsAsync = (expectedErrorConstructor, func) => {
-  if (typeof func !== 'function') {
-    throw new Test262Error('assert.throwsAsync invoked with a non-function value');
-  }
-
-  let res;
-  try {
-    res = func();
-  } catch {
-    throw new Test262Error('assert.throwsAsync failed: function threw synchronously');
-  }
-
-  if (res === null || typeof res !== 'object' || typeof res.then !== 'function') {
-    throw new Test262Error('assert.throwsAsync failed: result was not a thenable');
-  }
-
-  return res.then(
-    () => {
-      throw new Test262Error('assert.throwsAsync failed: no exception was thrown');
-    },
-    thrown => {
-      if (thrown === null || typeof thrown !== 'object') {
-        throw new Test262Error('assert.throwsAsync failed: thrown value was not an object');
-      }
-      if (thrown.constructor !== expectedErrorConstructor) {
-        throw new Test262Error('assert.throwsAsync failed: expected ' + expectedErrorConstructor.name + ' but got ' + thrown.constructor.name);
-      }
+  // Wrap in Promise so validation errors become rejections (matching original behavior)
+  return new Promise(resolve => {
+    if (typeof expectedErrorConstructor !== 'function') {
+      throw new Test262Error('assert.throwsAsync called with an argument that is not an error constructor');
     }
-  );
+    if (typeof func !== 'function') {
+      throw new Test262Error('assert.throwsAsync called with an argument that is not a function');
+    }
+
+    var expectedName = expectedErrorConstructor.name;
+    var expectation = 'Expected a ' + expectedName + ' to be thrown asynchronously';
+
+    var res;
+    try {
+      res = func();
+    } catch {
+      throw new Test262Error(expectation + ' but the function threw synchronously');
+    }
+
+    // Note: We don't check typeof res.then !== 'function' because in Porffor
+    // typeof for builtin object methods returns 'undefined' even though calling works.
+    // The try-catch around res.then() below will catch non-thenables.
+    if (res === null || typeof res !== 'object') {
+      throw new Test262Error(expectation + ' but result was not a thenable');
+    }
+
+    var onResFulfilled, onResRejected;
+    var resSettlementP = new Promise((onFulfilled, onRejected) => {
+      onResFulfilled = onFulfilled;
+      onResRejected = onRejected;
+    });
+
+    try {
+      res.then(onResFulfilled, onResRejected);
+    } catch {
+      throw new Test262Error(expectation + ' but .then threw synchronously');
+    }
+
+    resolve(resSettlementP.then(
+      () => {
+        throw new Test262Error(expectation + ' but no exception was thrown at all');
+      },
+      thrown => {
+        if (thrown === null || typeof thrown !== 'object') {
+          throw new Test262Error(expectation + ' but thrown value was not an object');
+        }
+        if (thrown.constructor !== expectedErrorConstructor) {
+          var actualName = thrown.constructor.name;
+          if (expectedName === actualName) {
+            throw new Test262Error(expectation + ' but got a different error constructor with the same name');
+          }
+          throw new Test262Error(expectation + ' but got a ' + actualName);
+        }
+      }
+    ));
+  });
 };
 
 /// nativeFunctionMatcher.js

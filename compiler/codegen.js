@@ -389,8 +389,9 @@ const funcRef = (func, scope = null) => {
       const closureGlobal = '#closure_' + varName;
       const offset = i * 9;
 
+      if (Prefs.d) console.log(`funcRef: copying ${closureGlobal} to env, exists=${closureGlobal in globals}, idx=${globals[closureGlobal]?.idx}, typeIdx=${globals[closureGlobal + '#type']?.idx}`);
       if (closureGlobal in globals) {
-        out.push(
+        const copyToEnvWasm = [
           // Store value (f64)
           [ Opcodes.local_get, envPtrLocal ],
           [ Opcodes.global_get, globals[closureGlobal].idx ],
@@ -400,7 +401,9 @@ const funcRef = (func, scope = null) => {
           [ Opcodes.local_get, envPtrLocal ],
           [ Opcodes.global_get, globals[closureGlobal + '#type'].idx ],
           [ Opcodes.i32_store8, 0, ...unsignedLEB128(offset + 8) ]
-        );
+        ];
+        if (Prefs.d) console.log(`funcRef: copy wasm:`, JSON.stringify(copyToEnvWasm));
+        out.push(...copyToEnvWasm);
       }
     }
 
@@ -909,17 +912,21 @@ const lookup = (scope, name, failEarly = false) => {
 
     // Closure support: check if this is a captured variable from outer scope
     // Read from heap-allocated closure environment
+    if (Prefs.d) console.log(`lookup: ${scope.name} checking if ${name} is captured, _usesCaptured=${JSON.stringify(scope._usesCaptured)}`);
     if (scope._usesCaptured?.includes(name)) {
       const varIndex = scope._usesCaptured.indexOf(name);
+      if (Prefs.d) console.log(`lookup: ${name} is captured at index ${varIndex}, #closure_env idx=${globals['#closure_env']?.idx}`);
       if (varIndex !== -1) {
         // Each captured var takes 9 bytes: 8 bytes for f64 value + 1 byte for type
         const offset = varIndex * 9;
-        return [
+        const readWasm = [
           // Load value from closure environment
           [ Opcodes.global_get, globals['#closure_env'].idx ],
           [ Opcodes.f64_load, 0, ...unsignedLEB128(offset) ],
           ...setLastType(scope, getType(scope, name))
         ];
+        if (Prefs.d) console.log(`lookup: ${name} reading from closure env at offset ${offset}, wasm:`, JSON.stringify(readWasm.slice(0, 2)));
+        return readWasm;
       }
     }
 
@@ -1764,7 +1771,8 @@ const asmFuncToAsm = (scope, func, extra) => func(scope, {
     return funcRef(func);
   },
   glbl: (opcode, name, type) => {
-    const globalName = '#porf#' + name; // avoid potential name clashing with user js
+    // #closure_env is shared between precompiled and user code, so don't prefix it
+    const globalName = name === '#closure_env' ? name : '#porf#' + name; // avoid potential name clashing with user js
     if (!(globalName in globals)) {
       const idx = globals['#ind']++;
       globals[globalName] = { idx, type };
@@ -7556,20 +7564,25 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
 
       // Closure support: allocate globals for captured variables
       // These globals will be used by nested functions to access outer variables
+      if (Prefs.d) console.log(`generateFunc: ${name} _capturedVars=${JSON.stringify(func._capturedVars)}`);
       if (func._capturedVars?.length > 0) {
         for (const varName of func._capturedVars) {
           const closureGlobal = '#closure_' + varName;
+          if (Prefs.d) console.log(`generateFunc: creating closure global ${closureGlobal} for ${name}`);
           if (!(closureGlobal in globals)) {
             allocVar(func, closureGlobal, true, true, false, false);
           }
           // If this is a parameter, copy it to the closure global at function entry
+          if (Prefs.d) console.log(`generateFunc: ${name} locals[${varName}]=${func.locals[varName]?.idx}, closureGlobal idx=${globals[closureGlobal]?.idx}`);
           if (func.locals[varName]) {
-            wasm.push(
+            const copyWasm = [
               [ Opcodes.local_get, func.locals[varName].idx ],
               [ Opcodes.global_set, globals[closureGlobal].idx ],
               ...getType(func, varName),
               [ Opcodes.global_set, globals[closureGlobal + '#type'].idx ]
-            );
+            ];
+            if (Prefs.d) console.log(`generateFunc: ${name} copying ${varName} to closure, wasm:`, JSON.stringify(copyWasm));
+            wasm.push(...copyWasm);
           }
         }
       }
