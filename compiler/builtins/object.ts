@@ -210,6 +210,9 @@ export const __Object_assign = (target: any, ...sources: any[]): any => {
   if (target == null) throw new TypeError('Argument is nullish, expected object');
 
   for (const x of sources) {
+    // Skip null/undefined sources per spec
+    if (x == null) continue;
+
     // Object.assign copies both string and symbol enumerable own properties
     // First copy string keys
     const keys: any[] = __Object_keys(x);
