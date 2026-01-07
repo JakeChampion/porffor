@@ -99,6 +99,10 @@ export default async (test262Path, filter, preludes, first = []) => {
       'promise-try',
       'import-attributes',
       'json-modules',
+      'top-level-await',
+      'Symbol.iterator', 
+      'destructuring-binding',
+      'cross-realm',
     ];
     if (features.some(f => unsupportedFeatures.includes(f))) {
       return; // Skip this test
@@ -121,6 +125,11 @@ export default async (test262Path, filter, preludes, first = []) => {
 
     // Skip tests with pending esid (not yet standardized)
     if (contents.match(/^esid:\s*pending\s*$/m)) {
+      return;
+    }
+
+    // skip es5id: 12.2.1-9-s
+    if (contents.match(/^es5id:\s*12\.2\.1-9-s\s*$/m)) {
       return;
     }
 

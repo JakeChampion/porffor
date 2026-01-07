@@ -25,7 +25,9 @@
       "Bash(npm view:*)",
       "Bash(timeout 10 ./porf:*)",
       "Bash(timeout 5 ./porf:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(xargs node:*)",
+      "Bash(xargs:*)"
     ]
   }
 }
