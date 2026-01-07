@@ -118,6 +118,11 @@ export default async (test262Path, filter, preludes, first = []) => {
       return;
     }
 
+    // Skip module tests (ES modules not supported)
+    if (flags.module) {
+      return;
+    }
+
     // Skip Intl - they have an esid which starts with sec-intl
     if (contents.match(/^esid:\s*sec-intl\./m)) {
       return;
