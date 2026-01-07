@@ -139,10 +139,24 @@ local.set ${key}`;
 
 
 export const __Reflect_apply = (target: any, thisArgument: any, argumentsList: any) => {
-  return Porffor.call(target, argumentsList, thisArgument, null);
+  // Convert array-like to array using CreateListFromArrayLike logic
+  // This handles objects with length property that aren't iterable
+  // Use push instead of index assignment because assigning undefined doesn't grow array
+  const args: any[] = [];
+  const len: i32 = argumentsList.length ?? 0;
+  for (let i: i32 = 0; i < len; i++) {
+    args.push(argumentsList[i]);
+  }
+  return Porffor.call(target, args, thisArgument, null);
 };
 
 export const __Reflect_construct = (target: any, argumentsList: any, newTarget: any = target) => {
   // todo: giving undefined/null to newTarget should not default
-  return Porffor.call(target, argumentsList, null, newTarget);
+  // Convert array-like to array using CreateListFromArrayLike logic
+  const args: any[] = [];
+  const len: i32 = argumentsList.length ?? 0;
+  for (let i: i32 = 0; i < len; i++) {
+    args.push(argumentsList[i]);
+  }
+  return Porffor.call(target, args, null, newTarget);
 };
