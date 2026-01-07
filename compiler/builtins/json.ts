@@ -47,7 +47,7 @@ export const __Porffor_json_canSerialize = (value: any): boolean => {
   return false;
 };
 
-export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestring, depth: i32, space: bytestring|undefined, replacer: any): i32 => {
+export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestring, depth: i32, space: bytestring|undefined, replacer: any, stack: any[]): i32 => {
   // Apply replacer if provided
   if (typeof replacer === 'function') {
     value = replacer(key, value);
@@ -139,6 +139,12 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
   }
 
   if (Porffor.type(value) == Porffor.TYPES.array) {
+    // Check for circular reference
+    for (const item of stack) {
+      if (item === value) throw new TypeError('Converting circular structure to JSON');
+    }
+    Porffor.array.fastPush(stack, value);
+
     buffer = __Porffor_bytestring_bufferChar(buffer, 91); // [
 
     const hasSpace: boolean = space !== undefined;
@@ -153,7 +159,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
 
       const keyStr: bytestring = '' + idx;
       idx++;
-      const result: i32 = __Porffor_json_serialize(buffer, x, keyStr, depth, space, replacer);
+      const result: i32 = __Porffor_json_serialize(buffer, x, keyStr, depth, space, replacer, stack);
       if (result != -1) {
         buffer = result;
       } else {
@@ -165,6 +171,9 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     }
 
     depth -= 1;
+
+    // Pop from stack after processing array
+    stack.length--;
 
     // swap trailing , with ] (or \n or append if empty)
     if ((buffer - _buffer) > 1) {
@@ -183,6 +192,12 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
 
   if (Porffor.type(value) > 0x06) {
     // non-function object
+    // Check for circular reference
+    for (const item of stack) {
+      if (item === value) throw new TypeError('Converting circular structure to JSON');
+    }
+    Porffor.array.fastPush(stack, value);
+
     buffer = __Porffor_bytestring_bufferChar(buffer, 123); // {
 
     const hasSpace: boolean = space !== undefined;
@@ -207,7 +222,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
       buffer = __Porffor_bytestring_bufferChar(buffer, 58); // :
       if (hasSpace) buffer = __Porffor_bytestring_bufferChar(buffer, 32); // space
 
-      const result: i32 = __Porffor_json_serialize(buffer, val, objKey, depth, space, replacer);
+      const result: i32 = __Porffor_json_serialize(buffer, val, objKey, depth, space, replacer, stack);
       if (result == -1) {
         // non-serializable value, roll back everything we wrote
         buffer = startPos;
@@ -218,6 +233,9 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     }
 
     depth -= 1;
+
+    // Pop from stack after processing object
+    stack.length--;
 
     // swap trailing , with } (or \n or append if empty)
     if ((buffer - _buffer) > 1) {
@@ -241,7 +259,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
       // Call toJSON with bigint as this
       const converted: any = toJSON.call(value, key);
       // Re-serialize the converted value (without replacer to avoid double-apply)
-      return __Porffor_json_serialize(buffer, converted, key, depth, space, undefined);
+      return __Porffor_json_serialize(buffer, converted, key, depth, space, undefined, stack);
     }
     throw new TypeError('Cannot serialize BigInts');
   }
@@ -283,7 +301,8 @@ export const __JSON_stringify = (value: any, replacer: any, space: any) => {
   }
 
   const buffer: bytestring = Porffor.malloc(4096);
-  const out: i32 = __Porffor_json_serialize(buffer, value, '', 0, space, replacer);
+  const stack: any[] = Porffor.malloc();
+  const out: i32 = __Porffor_json_serialize(buffer, value, '', 0, space, replacer, stack);
   if (out == -1) return undefined;
 
   buffer.length = out - (buffer as i32);
