@@ -119,6 +119,11 @@ export default async (test262Path, filter, preludes, first = []) => {
       return;
     }
 
+    // Skip tests with pending esid (not yet standardized)
+    if (contents.match(/^esid:\s*pending\s*$/m)) {
+      return;
+    }
+
     if (!flags.raw) {
       contents = (flags.onlyStrict ? '"use strict";\n' : '') +
         (flags.async ? preludes['doneprintHandle.js'] : '') +
