@@ -1945,3 +1945,95 @@ function assertThrowsInstanceOfWithMessage(f, ctor) {
 function assertThrowsInstanceOfWithMessageContains(f, ctor) {
   assertThrowsInstanceOfWithMessageCheck(f, ctor);
 }
+
+/// wellKnownIntrinsicObjects.js
+// Static implementation since Porffor can't use new Function()
+var WellKnownIntrinsicObjects = [];
+
+// Helper to safely add intrinsics
+function __addIntrinsic(name, getter) {
+  var value;
+  try { value = getter(); } catch {}
+  WellKnownIntrinsicObjects.push({ name: name, value: value });
+}
+
+// Basic constructors and objects
+__addIntrinsic('%AggregateError%', () => AggregateError);
+__addIntrinsic('%Array%', () => Array);
+__addIntrinsic('%ArrayBuffer%', () => ArrayBuffer);
+__addIntrinsic('%ArrayIteratorPrototype%', () => Object.getPrototypeOf([][Symbol.iterator]()));
+__addIntrinsic('%AsyncFromSyncIteratorPrototype%', () => undefined);
+__addIntrinsic('%AsyncFunction%', () => (async function() {}).constructor);
+__addIntrinsic('%AsyncGeneratorFunction%', () => (async function* () {}).constructor);
+__addIntrinsic('%AsyncGeneratorPrototype%', () => Object.getPrototypeOf(async function* () {}).prototype);
+__addIntrinsic('%AsyncIteratorPrototype%', () => Object.getPrototypeOf(Object.getPrototypeOf(async function* () {}).prototype));
+__addIntrinsic('%Atomics%', () => Atomics);
+__addIntrinsic('%BigInt%', () => BigInt);
+__addIntrinsic('%BigInt64Array%', () => BigInt64Array);
+__addIntrinsic('%BigUint64Array%', () => BigUint64Array);
+__addIntrinsic('%Boolean%', () => Boolean);
+__addIntrinsic('%DataView%', () => DataView);
+__addIntrinsic('%Date%', () => Date);
+__addIntrinsic('%decodeURI%', () => decodeURI);
+__addIntrinsic('%decodeURIComponent%', () => decodeURIComponent);
+__addIntrinsic('%encodeURI%', () => encodeURI);
+__addIntrinsic('%encodeURIComponent%', () => encodeURIComponent);
+__addIntrinsic('%Error%', () => Error);
+__addIntrinsic('%eval%', () => eval);
+__addIntrinsic('%EvalError%', () => EvalError);
+__addIntrinsic('%FinalizationRegistry%', () => FinalizationRegistry);
+__addIntrinsic('%Float32Array%', () => Float32Array);
+__addIntrinsic('%Float64Array%', () => Float64Array);
+__addIntrinsic('%ForInIteratorPrototype%', () => undefined);
+__addIntrinsic('%Function%', () => Function);
+__addIntrinsic('%GeneratorFunction%', () => (function* () {}).constructor);
+__addIntrinsic('%GeneratorPrototype%', () => Object.getPrototypeOf(function* () {}).prototype);
+__addIntrinsic('%Int8Array%', () => Int8Array);
+__addIntrinsic('%Int16Array%', () => Int16Array);
+__addIntrinsic('%Int32Array%', () => Int32Array);
+__addIntrinsic('%isFinite%', () => isFinite);
+__addIntrinsic('%isNaN%', () => isNaN);
+__addIntrinsic('%JSON%', () => JSON);
+__addIntrinsic('%Map%', () => Map);
+__addIntrinsic('%MapIteratorPrototype%', () => Object.getPrototypeOf(new Map()[Symbol.iterator]()));
+__addIntrinsic('%Math%', () => Math);
+__addIntrinsic('%Number%', () => Number);
+__addIntrinsic('%Object%', () => Object);
+__addIntrinsic('%parseFloat%', () => parseFloat);
+__addIntrinsic('%parseInt%', () => parseInt);
+__addIntrinsic('%Promise%', () => Promise);
+__addIntrinsic('%Proxy%', () => Proxy);
+__addIntrinsic('%RangeError%', () => RangeError);
+__addIntrinsic('%ReferenceError%', () => ReferenceError);
+__addIntrinsic('%Reflect%', () => Reflect);
+__addIntrinsic('%RegExp%', () => RegExp);
+__addIntrinsic('%Set%', () => Set);
+__addIntrinsic('%SetIteratorPrototype%', () => Object.getPrototypeOf(new Set()[Symbol.iterator]()));
+__addIntrinsic('%SharedArrayBuffer%', () => SharedArrayBuffer);
+__addIntrinsic('%String%', () => String);
+__addIntrinsic('%StringIteratorPrototype%', () => Object.getPrototypeOf(''[Symbol.iterator]()));
+__addIntrinsic('%Symbol%', () => Symbol);
+__addIntrinsic('%SyntaxError%', () => SyntaxError);
+__addIntrinsic('%TypedArray%', () => Object.getPrototypeOf(Uint8Array));
+__addIntrinsic('%TypeError%', () => TypeError);
+__addIntrinsic('%Uint8Array%', () => Uint8Array);
+__addIntrinsic('%Uint8ClampedArray%', () => Uint8ClampedArray);
+__addIntrinsic('%Uint16Array%', () => Uint16Array);
+__addIntrinsic('%Uint32Array%', () => Uint32Array);
+__addIntrinsic('%URIError%', () => URIError);
+__addIntrinsic('%WeakMap%', () => WeakMap);
+__addIntrinsic('%WeakRef%', () => WeakRef);
+__addIntrinsic('%WeakSet%', () => WeakSet);
+__addIntrinsic('%escape%', () => escape);
+__addIntrinsic('%unescape%', () => unescape);
+
+function getWellKnownIntrinsicObject(key) {
+  for (var i = 0; i < WellKnownIntrinsicObjects.length; i++) {
+    if (WellKnownIntrinsicObjects[i].name === key) {
+      var value = WellKnownIntrinsicObjects[i].value;
+      if (value !== undefined) return value;
+      throw new Test262Error('this implementation could not obtain ' + key);
+    }
+  }
+  throw new Test262Error('unknown well-known intrinsic ' + key);
+}
