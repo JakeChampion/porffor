@@ -118,6 +118,16 @@ export default async (test262Path, filter, preludes, first = []) => {
       return;
     }
 
+    // Skip Intl - they have an esid which starts with sec-intl
+    if (contents.match(/^esid:\s*sec-intl\./m)) {
+      return;
+    }
+
+    // Skip Intl - they have files which contain the path /intl402/
+    if (file.includes('/intl402/')) {
+      return;
+    }
+
     // Skip Unicode 17.0.0 tests (acorn doesn't support it yet)
     if (contents.includes('Unicode v17.0.0')) {
       return;
@@ -130,6 +140,11 @@ export default async (test262Path, filter, preludes, first = []) => {
 
     // skip es5id: 12.2.1-9-s
     if (contents.match(/^es5id:\s*12\.2\.1-9-s\s*$/m)) {
+      return;
+    }
+
+    // skip eval tests - they all have a file path containing /language/eval-code
+    if (file.includes('/language/eval-code/')) {
       return;
     }
 
