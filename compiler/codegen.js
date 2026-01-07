@@ -4894,6 +4894,7 @@ const generateUnary = (scope, decl) => {
         [ TYPES.undefined, () => makeString(scope, 'undefined') ],
         [ TYPES.function, () => makeString(scope, 'function') ],
         [ TYPES.symbol, () => makeString(scope, 'symbol') ],
+        [ TYPES.bigint, () => makeString(scope, 'bigint') ],
 
         // object and internal types
         [ 'default', () => makeString(scope, 'object') ],
