@@ -555,7 +555,7 @@ export const __Math_atan2 = (y: number, x: number): number => {
   return Math.atan(ratio) - Math.PI;
 };
 
-export const __Math_sumPrecise = (values: any[]): number => {
+export const __Math_sumPrecise = (values: any): number => {
   // based on "Fast exact summation using small and large superaccumulators" by Radford M. Neal
   // https://arxiv.org/abs/1505.05571
   // accuracy is top priority, it is fine for this to be slow(er)
@@ -576,9 +576,7 @@ export const __Math_sumPrecise = (values: any[]): number => {
   let sawPositiveZero: boolean = false;
   let sawNonZero: boolean = false;
 
-  const valuesLen: i32 = values.length;
-  for (let idx: i32 = 0; idx < valuesLen; idx++) {
-    const _: any = values[idx];
+  for (const _ of values) {
     if (Porffor.type(_) != Porffor.TYPES.number) throw new TypeError('Math.sumPrecise must have only numbers in values');
 
     const v: number = _;
