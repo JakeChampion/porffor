@@ -22,6 +22,7 @@ globalThis.precompile = true;
 globalThis.valtypeOverrides = {
   returns: {
     __Porffor_object_get: [ Valtype.f64, Valtype.i32 ],
+    __Porffor_object_get_own: [ Valtype.f64, Valtype.i32 ],
     __Porffor_object_get_withHash: [ Valtype.f64, Valtype.i32 ],
     __Porffor_object_readValue: [ Valtype.f64, Valtype.i32 ],
     __Porffor_object_set: [ Valtype.f64, Valtype.i32 ],

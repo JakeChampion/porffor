@@ -6678,7 +6678,10 @@ const generateMember = (scope, decl, _global, _name) => {
 
       ...toPropertyKey(scope, [ propertyGet ], getNodeType(scope, property), decl.computed, true),
 
-      ...(hash != null ? [
+      ...(decl.property.type === 'PrivateIdentifier' ? [
+        // Private member access - use own property lookup only (brand check)
+        [ Opcodes.call, includeBuiltin(scope, '__Porffor_object_get_own').index ]
+      ] : hash != null ? [
         number(hash, Valtype.i32),
         number(TYPES.number, Valtype.i32),
         [ Opcodes.call, includeBuiltin(scope, '__Porffor_object_get_withHash').index ]

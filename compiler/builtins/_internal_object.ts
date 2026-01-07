@@ -544,6 +544,38 @@ i32.shr_u
 return`;
 };
 
+// Get property without traversing prototype chain - for private member access
+export const __Porffor_object_get_own = (_obj: any, key: any): any => {
+  let obj: any = _obj;
+  if (Porffor.wasm`local.get ${obj+1}` != Porffor.TYPES.object) obj = __Porffor_object_underlying(obj);
+
+  if (Porffor.wasm`local.get ${obj}` == 0) throw new TypeError('Cannot read private member from null');
+
+  const hash: i32 = __Porffor_object_hash(key);
+  let entryPtr: i32 = __Porffor_object_lookup(obj, key, hash);
+
+  // Private members must be own properties - not found means brand check failure
+  if (entryPtr == -1) throw new TypeError('Cannot read private member from an object whose class did not declare it');
+
+  const tail: i32 = Porffor.wasm.i32.load16_u(entryPtr, 0, 16);
+  if (tail & 0b0001) {
+    // accessor descriptor
+    const get: Function = __Porffor_object_accessorGet(entryPtr);
+
+    if (Porffor.wasm`local.get ${get}` == 0) return undefined;
+    return get.call(_obj);
+  }
+
+  // data descriptor
+  Porffor.wasm`
+local.get ${entryPtr}
+f64.load 0 8
+local.get ${tail}
+i32.const 8
+i32.shr_u
+return`;
+};
+
 export const __Porffor_object_get_withHash = (_obj: any, key: any, hash: i32): any => {
   let obj: any = _obj;
   const trueType: i32 = Porffor.wasm`local.get ${obj+1}`;
