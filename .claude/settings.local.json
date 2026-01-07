@@ -27,7 +27,9 @@
       "Bash(timeout 5 ./porf:*)",
       "Bash(tee:*)",
       "Bash(xargs node:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(node /tmp/find_errors.js:*)",
+      "Bash(find:*)"
     ]
   }
 }
