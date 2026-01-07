@@ -5,7 +5,7 @@ export default async (test262Path, filter, preludes, first = []) => {
   if (filter.startsWith('test/')) filter = filter.slice(5);
   const testPath = join(test262Path, 'test');
 
-  const alwaysPrelude = preludes['assert.js'] + preludes['sta.js'];
+  const alwaysPrelude = preludes['assert.js'] + preludes['sta.js'] + preludes['compareArray.js'];
 
   const tests = [];
   const scan = async x => {
