@@ -293,8 +293,16 @@ export const __JSON_stringify = (value: any, replacer: any, space: any) => {
 
 // todo: not globals when closures work well
 let text: bytestring, pos: i32, len: i32;
-export const __JSON_parse = (_: bytestring) => {
-  text = _;
+export const __JSON_parse = (_text: any) => {
+  // Convert non-string inputs to string per spec
+  if (!Porffor.fastOr(
+    Porffor.type(_text) == Porffor.TYPES.string,
+    Porffor.type(_text) == Porffor.TYPES.bytestring,
+    Porffor.type(_text) == Porffor.TYPES.stringobject
+  )) {
+    _text = ecma262.ToString(_text);
+  }
+  text = _text;
   pos = 0;
   len = text.length;
 
