@@ -29,7 +29,9 @@
       "Bash(xargs node:*)",
       "Bash(xargs:*)",
       "Bash(node /tmp/find_errors.js:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(ls:*)"
     ]
   }
 }
