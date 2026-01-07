@@ -562,7 +562,8 @@ export const __Porffor_object_get_own = (_obj: any, key: any): any => {
     // accessor descriptor
     const get: Function = __Porffor_object_accessorGet(entryPtr);
 
-    if (Porffor.wasm`local.get ${get}` == 0) return undefined;
+    // For private accessors, missing getter should throw (unlike public accessors)
+    if (Porffor.wasm`local.get ${get}` == 0) throw new TypeError('Cannot read private member without getter');
     return get.call(_obj);
   }
 
@@ -574,6 +575,48 @@ local.get ${tail}
 i32.const 8
 i32.shr_u
 return`;
+};
+
+// Set property without traversing prototype chain - for private member access
+export const __Porffor_object_set_own = (_obj: any, key: any, value: any): any => {
+  let obj: any = _obj;
+  if (Porffor.wasm`local.get ${obj+1}` != Porffor.TYPES.object) obj = __Porffor_object_underlying(obj);
+
+  if (Porffor.wasm`local.get ${obj}` == 0) throw new TypeError('Cannot write private member to null');
+
+  const hash: i32 = __Porffor_object_hash(key);
+  let entryPtr: i32 = __Porffor_object_lookup(obj, key, hash);
+
+  // Private members must be own properties - not found means brand check failure
+  if (entryPtr == -1) throw new TypeError('Cannot write private member to an object whose class did not declare it');
+
+  const tail: i32 = Porffor.wasm.i32.load16_u(entryPtr, 0, 16);
+  if (tail & 0b0001) {
+    // accessor descriptor
+    const set: Function = __Porffor_object_accessorSet(entryPtr);
+
+    // For private accessors, missing setter should throw
+    if (Porffor.wasm`local.get ${set}` == 0) throw new TypeError('Cannot write private member without setter');
+    set.call(_obj, value);
+    return value;
+  }
+
+  // data descriptor - check if it's a method (function type)
+  const valueType: i32 = tail >> 8;
+  if (valueType == Porffor.TYPES.function) {
+    // Private methods cannot be reassigned
+    throw new TypeError('Cannot write to private method');
+  }
+
+  // write new value
+  Porffor.wasm.f64.store(entryPtr, value, 0, 8);
+
+  // update value type in tail
+  Porffor.wasm.i32.store16(entryPtr,
+    (tail & 0b1111) + (Porffor.wasm`local.get ${value+1}` << 8),
+    0, 16);
+
+  return value;
 };
 
 export const __Porffor_object_get_withHash = (_obj: any, key: any, hash: i32): any => {

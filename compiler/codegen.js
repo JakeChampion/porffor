@@ -3985,16 +3985,19 @@ const generateVar = (scope, decl) => {
   return out;
 };
 
-const privateIDName = name => '__#' + name;
-const getProperty = (decl, forceValueStr = false) => {
+const privateIDName = (name, classId) => '__#' + (classId != null ? classId + '_' : '') + name;
+const getProperty = (decl, forceValueStr = false, scope = null) => {
   const prop = decl.property ?? decl.key;
   if (decl.computed) return prop;
 
   // identifier -> literal
-  if (prop.name != null) return {
-    type: 'Literal',
-    value: prop.type === 'PrivateIdentifier' ? privateIDName(prop.name) : prop.name,
-  };
+  if (prop.name != null) {
+    const classId = scope?._classPrivateId;
+    return {
+      type: 'Literal',
+      value: prop.type === 'PrivateIdentifier' ? privateIDName(prop.name, classId) : prop.name,
+    };
+  }
 
   // force literal values to be string (eg 0 -> '0')
   if (forceValueStr && prop.value != null) return {
@@ -4267,7 +4270,7 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
     const object = decl.left.object;
     const newValueTmp = !valueUnused && localTmp(scope, '#member_setter_val_tmp');
     const pointerTmp = localTmp(scope, '#member_setter_ptr_tmp', Valtype.i32);
-    const property = getProperty(decl.left);
+    const property = getProperty(decl.left, false, scope);
 
     // todo/perf: use i32 object (and prop?) locals
     const { objectTmp, propertyTmp, objectGet, propertyGet } = memberTmpNames(scope);
@@ -4568,7 +4571,10 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
           ...(valtypeBinary === Valtype.i32 ? [ [ Opcodes.f64_convert_i32_s ] ] : []),
           ...getNodeType(scope, decl),
 
-          ...(hash != null ? [
+          ...(decl.left.property?.type === 'PrivateIdentifier' ? [
+            // Private member set - use own property only (brand check + method protection)
+            [ Opcodes.call, includeBuiltin(scope, '__Porffor_object_set_own').index ],
+          ] : hash != null ? [
             number(hash, Valtype.i32),
             number(TYPES.number, Valtype.i32),
             [ Opcodes.call, includeBuiltin(scope, scope.strict ? '__Porffor_object_setStrict_withHash' : '__Porffor_object_set_withHash').index ],
@@ -4822,7 +4828,7 @@ const generateUnary = (scope, decl) => {
         // disallow `delete super.*`
         if (object.type === 'Super') return internalThrow(scope, 'ReferenceError', 'Cannot delete super property', true);
 
-        const property = getProperty(decl.argument);
+        const property = getProperty(decl.argument, false, scope);
         const coctc = coctcOffset(decl.argument);
         const objectTmp = coctc > 0 && localTmp(scope, '#coctc_object', Valtype.i32);
 
@@ -6352,7 +6358,7 @@ const generateMember = (scope, decl, _global, _name) => {
   // todo: handle globalThis.foo efficiently
 
   const object = decl.object;
-  const property = getProperty(decl);
+  const property = getProperty(decl, false, scope);
 
   let chainCount = scope.chainMembers != null ? ++scope.chainMembers : 0;
 
@@ -6792,6 +6798,9 @@ const generateClass = (scope, decl) => {
   const name = decl.id.name;
   if (!expr) hoist(scope, name, 2, true);
 
+  // Generate unique class ID for private names
+  const classPrivateId = uniqId();
+
   const body = decl.body.body;
   const root = {
     type: 'Identifier',
@@ -6831,7 +6840,8 @@ const generateClass = (scope, decl) => {
     strict: true,
     type: expr ? 'FunctionExpression' : 'FunctionDeclaration',
     _onlyConstr: true,
-    _subclass: !!decl.superClass
+    _subclass: !!decl.superClass,
+    _classPrivateId: classPrivateId
   });
 
   // always generate class constructor funcs
@@ -6924,7 +6934,7 @@ const generateClass = (scope, decl) => {
       continue;
     }
 
-    const key = getProperty(x, true);
+    const key = getProperty(x, true, func);
 
     value ??= {
       type: 'Identifier',
@@ -6944,12 +6954,21 @@ const generateClass = (scope, decl) => {
         ...value,
         id,
         strict: true,
-        _onlyThisMethod: true
+        _onlyThisMethod: true,
+        _classPrivateId: classPrivateId
       };
     }
 
-    if (type === 'PropertyDefinition' && !_static) {
+    // Check if this is a private member (field or method)
+    const isPrivate = x.key?.type === 'PrivateIdentifier';
+
+    // Non-static properties and non-static private methods should be defined on instances
+    if ((type === 'PropertyDefinition' && !_static) ||
+        (type === 'MethodDefinition' && !_static && isPrivate)) {
       // define in construction instead
+      let initKind = type === 'MethodDefinition' ? 'method' : 'value';
+      if (kind === 'get' || kind === 'set') initKind = kind;
+
       if (computed) {
         // compute key now, reference in construction
         const computedTmp = allocVar(scope, `#class_computed_prop${uniqId()}`, true, true, true);
@@ -6969,9 +6988,10 @@ const generateClass = (scope, decl) => {
           [ Opcodes.global_get, computedTmp + 1 ],
 
           ...generate(func, value),
+          ...(initKind !== 'value' && initKind !== 'method' ? [ Opcodes.i32_to_u ] : []),
           ...getNodeType(func, value),
 
-          [ Opcodes.call, includeBuiltin(func, `__Porffor_object_class_value`).index ]
+          [ Opcodes.call, includeBuiltin(func, `__Porffor_object_class_${initKind}`).index ]
         );
       } else {
         batchedNonStaticPropWasm.push(
@@ -6984,9 +7004,10 @@ const generateClass = (scope, decl) => {
           ...getNodeType(func, key),
 
           ...generate(func, value),
+          ...(initKind !== 'value' && initKind !== 'method' ? [ Opcodes.i32_to_u ] : []),
           ...getNodeType(func, value),
 
-          [ Opcodes.call, includeBuiltin(func, `__Porffor_object_class_value`).index ]
+          [ Opcodes.call, includeBuiltin(func, `__Porffor_object_class_${initKind}`).index ]
         );
       }
     } else {
@@ -7320,7 +7341,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     constr: !arrow && !decl.generator && !decl.async && !decl._method, // constructable
     method: !arrow && (decl._method || decl.generator || decl.async), // has this but not constructable
     async: decl.async,
-    subclass: decl._subclass, _onlyConstr: decl._onlyConstr, _onlyThisMethod: decl._onlyThisMethod,
+    subclass: decl._subclass, _onlyConstr: decl._onlyConstr, _onlyThisMethod: decl._onlyThisMethod, _classPrivateId: decl._classPrivateId,
     strict: scope.strict || decl.strict,
     _usesArgumentsObject: needsArgumentsRest,
     _declaredParamCount: needsArgumentsRest ? declaredParamCount : undefined,

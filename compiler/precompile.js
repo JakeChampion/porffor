@@ -26,6 +26,7 @@ globalThis.valtypeOverrides = {
     __Porffor_object_get_withHash: [ Valtype.f64, Valtype.i32 ],
     __Porffor_object_readValue: [ Valtype.f64, Valtype.i32 ],
     __Porffor_object_set: [ Valtype.f64, Valtype.i32 ],
+    __Porffor_object_set_own: [ Valtype.f64, Valtype.i32 ],
     __Porffor_object_set_withHash: [ Valtype.f64, Valtype.i32 ],
     __Porffor_object_setStrict: [ Valtype.f64, Valtype.i32 ],
     __Porffor_object_setStrict_withHash: [ Valtype.f64, Valtype.i32 ],
@@ -33,6 +34,7 @@ globalThis.valtypeOverrides = {
   },
   params: {
     __Porffor_object_set: [ Valtype.i32, Valtype.i32, Valtype.i32, Valtype.i32, Valtype.f64, Valtype.i32 ],
+    __Porffor_object_set_own: [ Valtype.i32, Valtype.i32, Valtype.i32, Valtype.i32, Valtype.f64, Valtype.i32 ],
     __Porffor_object_set_withHash: [ Valtype.i32, Valtype.i32, Valtype.i32, Valtype.i32, Valtype.f64, Valtype.i32, Valtype.i32, Valtype.i32 ],
     __Porffor_object_setStrict: [ Valtype.i32, Valtype.i32, Valtype.i32, Valtype.i32, Valtype.f64, Valtype.i32 ],
     __Porffor_object_setStrict_withHash: [ Valtype.i32, Valtype.i32, Valtype.i32, Valtype.i32, Valtype.f64, Valtype.i32, Valtype.i32, Valtype.i32 ],
