@@ -575,6 +575,50 @@ function verifyNotConfigurable(obj, name) {
   }
 }
 
+function verifyCallableProperty(obj, name, functionName, functionLength, desc, options) {
+  var value = obj[name];
+
+  assert.sameValue(typeof value, "function",
+    "obj['" + String(name) + "'] descriptor should be a function");
+
+  if (desc === undefined) {
+    desc = {
+      writable: true,
+      enumerable: false,
+      configurable: true,
+      value: value
+    };
+  } else if (!Object.hasOwn(desc, "value") && !Object.hasOwn(desc, "get")) {
+    desc.value = value;
+  }
+
+  verifyProperty(obj, name, desc, options);
+
+  if (functionName === undefined) {
+    if (typeof name === "symbol") {
+      functionName = "[" + name.description + "]";
+    } else {
+      functionName = name;
+    }
+  }
+
+  verifyProperty(value, "name", {
+    value: functionName,
+    writable: false,
+    enumerable: false,
+    configurable: desc.configurable
+  }, options);
+
+  verifyProperty(value, "length", {
+    value: functionLength,
+    writable: false,
+    enumerable: false,
+    configurable: desc.configurable
+  }, options);
+}
+
+var verifyPrimordialCallableProperty = verifyCallableProperty;
+
 /// promiseHelper.js
 function checkSequence(arr) {
   for (let i = 0; i < arr.length; i++) {
