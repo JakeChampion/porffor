@@ -103,6 +103,7 @@ export default async (test262Path, filter, preludes, first = []) => {
       'Symbol.iterator', 
       'destructuring-binding',
       'cross-realm',
+      'dynamic-import',
     ];
     if (features.some(f => unsupportedFeatures.includes(f))) {
       return; // Skip this test
