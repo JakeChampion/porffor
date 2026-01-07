@@ -1592,6 +1592,37 @@ export const __ByteString_prototype_match = (_this: bytestring, regexp: any) => 
   return __Porffor_regex_match(regexp, _this);
 };
 
+export const __Porffor_regex_search = (regexp: any, input: any) => {
+  if (Porffor.type(regexp) !== Porffor.TYPES.regexp) regexp = new RegExp(regexp);
+
+  const t: i32 = Porffor.type(input);
+  if (t != Porffor.TYPES.bytestring && t != Porffor.TYPES.string) {
+    input = ecma262.ToString(input);
+  }
+
+  // If it's a regular string (2-byte chars), convert to bytestring (1-byte chars)
+  if (Porffor.type(input) == Porffor.TYPES.string) {
+    const len: i32 = (input as string).length;
+    const bs: bytestring = Porffor.malloc();
+    for (let i: i32 = 0; i < len; i++) {
+      Porffor.bytestring.appendChar(bs, (input as string).charCodeAt(i));
+    }
+    input = bs;
+  }
+
+  const result: any = __Porffor_regex_interpret(regexp, input, false);
+  if (result == null) return -1;
+  return result.index;
+};
+
+export const __String_prototype_search = (_this: string, regexp: any) => {
+  return __Porffor_regex_search(regexp, _this);
+};
+
+export const __ByteString_prototype_search = (_this: bytestring, regexp: any) => {
+  return __Porffor_regex_search(regexp, _this);
+};
+
 
 // todo: use actual iterator not array
 export const __Porffor_regex_matchAll = (regexp: any, input: any) => {
