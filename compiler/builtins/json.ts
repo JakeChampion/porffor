@@ -44,14 +44,15 @@ export const __Porffor_json_canSerialize = (value: any): boolean => {
     Porffor.type(value) > Porffor.TYPES.function
   )) return true;
 
-  if (Porffor.type(value) == Porffor.TYPES.bigint) {
-    throw new TypeError('Cannot serialize BigInts');
-  }
-
   return false;
 };
 
-export const __Porffor_json_serialize = (_buffer: i32, value: any, depth: i32, space: bytestring|undefined): i32 => {
+export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestring, depth: i32, space: bytestring|undefined, replacer: any): i32 => {
+  // Apply replacer if provided
+  if (typeof replacer === 'function') {
+    value = replacer(key, value);
+  }
+
   // somewhat modelled after 25.5.2.2 SerializeJSONProperty: https://tc39.es/ecma262/#sec-serializejsonproperty
   let buffer: i32 = Porffor.wasm`local.get ${_buffer}`;
   if (value === null) return __Porffor_bytestring_bufferStr(buffer, 'null');
@@ -143,14 +144,18 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, depth: i32, s
     const hasSpace: boolean = space !== undefined;
     depth += 1;
 
+    let idx: i32 = 0;
     for (const x of (value as any[])) {
       if (hasSpace) {
         buffer = __Porffor_bytestring_bufferChar(buffer, 10); // \n
         for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_bytestring_bufferStr(buffer, space as bytestring);
       }
 
-      if (__Porffor_json_canSerialize(x)) {
-        buffer = __Porffor_json_serialize(buffer, x, depth, space);
+      const keyStr: bytestring = '' + idx;
+      idx++;
+      const result: i32 = __Porffor_json_serialize(buffer, x, keyStr, depth, space, replacer);
+      if (result != -1) {
+        buffer = result;
       } else {
         // non-serializable value, write null
         buffer = __Porffor_bytestring_bufferStr(buffer, 'null');
@@ -183,15 +188,12 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, depth: i32, s
     const hasSpace: boolean = space !== undefined;
     depth += 1;
 
-    for (const key: bytestring in (value as object)) {
+    for (const objKey: bytestring in (value as object)) {
       // skip symbol keys
-      if (Porffor.type(key) == Porffor.TYPES.symbol) continue;
+      if (Porffor.type(objKey) == Porffor.TYPES.symbol) continue;
 
-      const val: any = (value as object)[key];
-      if (!__Porffor_json_canSerialize(val)) {
-        // skip non-serializable value
-        continue;
-      }
+      const val: any = (value as object)[objKey];
+      const startPos: i32 = buffer;
 
       if (hasSpace) {
         buffer = __Porffor_bytestring_bufferChar(buffer, 10); // \n
@@ -199,13 +201,19 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, depth: i32, s
       }
 
       buffer = __Porffor_bytestring_bufferChar(buffer, 34); // "
-      buffer = __Porffor_bytestring_bufferStr(buffer, key);
+      buffer = __Porffor_bytestring_bufferStr(buffer, objKey);
       buffer = __Porffor_bytestring_bufferChar(buffer, 34); // "
 
       buffer = __Porffor_bytestring_bufferChar(buffer, 58); // :
       if (hasSpace) buffer = __Porffor_bytestring_bufferChar(buffer, 32); // space
 
-      buffer = __Porffor_json_serialize(buffer, val, depth, space);
+      const result: i32 = __Porffor_json_serialize(buffer, val, objKey, depth, space, replacer);
+      if (result == -1) {
+        // non-serializable value, roll back everything we wrote
+        buffer = startPos;
+        continue;
+      }
+      buffer = result;
       buffer = __Porffor_bytestring_bufferChar(buffer, 44); // ,
     }
 
@@ -226,8 +234,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, depth: i32, s
     return __Porffor_bytestring_bufferChar(buffer, 125); // }
   }
 
-  if (Porffor.type(value) == 0x04) {
-    // bigint
+  if (Porffor.type(value) == Porffor.TYPES.bigint) {
     throw new TypeError('Cannot serialize BigInts');
   }
 
@@ -235,8 +242,6 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, depth: i32, s
 };
 
 export const __JSON_stringify = (value: any, replacer: any, space: any) => {
-  // todo: replacer
-
   if (space !== undefined) {
     if (Porffor.fastOr(
       Porffor.type(space) == Porffor.TYPES.number,
@@ -270,7 +275,7 @@ export const __JSON_stringify = (value: any, replacer: any, space: any) => {
   }
 
   const buffer: bytestring = Porffor.malloc(4096);
-  const out: i32 = __Porffor_json_serialize(buffer, value, 0, space);
+  const out: i32 = __Porffor_json_serialize(buffer, value, '', 0, space, replacer);
   if (out == -1) return undefined;
 
   buffer.length = out - (buffer as i32);
