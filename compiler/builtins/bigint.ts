@@ -429,3 +429,4 @@ export const __BigInt_asUintN = (bits: any, bigint: any): bigint => {
 
   return __Porffor_bigint_fromNumber(mod);
 };
+

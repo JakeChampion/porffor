@@ -235,6 +235,14 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
   }
 
   if (Porffor.type(value) == Porffor.TYPES.bigint) {
+    // BigInt: check for toJSON method before throwing
+    const toJSON: any = BigInt.prototype.toJSON;
+    if (typeof toJSON === 'function') {
+      // Call toJSON with bigint as this
+      const converted: any = toJSON.call(value, key);
+      // Re-serialize the converted value (without replacer to avoid double-apply)
+      return __Porffor_json_serialize(buffer, converted, key, depth, space, undefined);
+    }
     throw new TypeError('Cannot serialize BigInts');
   }
 
