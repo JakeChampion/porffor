@@ -219,8 +219,18 @@ export const __Object_assign = (target: any, ...sources: any[]): any => {
     const vals: any[] = __Object_values(x);
 
     const len: i32 = keys.length;
+    const targetIsArray: boolean = Porffor.type(target) == Porffor.TYPES.array;
     for (let i: i32 = 0; i < len; i++) {
-      target[keys[i]] = vals[i];
+      let key: any = keys[i];
+      // Convert numeric string keys to numbers for array targets
+      // since array index assignment with string keys doesn't work
+      if (targetIsArray) {
+        const numKey: number = Number(key);
+        if (Number.isInteger(numKey) && numKey >= 0) {
+          key = numKey;
+        }
+      }
+      target[key] = vals[i];
     }
 
     // Then copy symbol keys (if source is an object)
