@@ -1539,14 +1539,13 @@ export const __Date_prototype_toISOString = (_this: any) => {
 export const __Date_prototype_toJSON = (_this: any, key: any) => {
   // 1. Let O be ? ToObject(this value).
   // 2. Let tv be ? ToPrimitive(O, number).
-  // todo: use generic ecma262.ToNumber() once it supports Date
-  const tv: number = __Porffor_date_read(_this);
+  const tv: any = ecma262.ToPrimitive.Number(_this);
 
   // 3. If tv is a Number and tv is not finite, return null.
-  if (!Number.isFinite(tv)) return null;
+  if (typeof tv === 'number' && !Number.isFinite(tv)) return null;
 
   // 4. Return ? Invoke(O, "toISOString").
-  return __Date_prototype_toISOString(_this);
+  return _this.toISOString();
 };
 
 
