@@ -4279,6 +4279,12 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
     // opt: do not mark prototype funcs as referenced to optimize this in them
     if (object?.property?.name === 'prototype' && isFuncType(decl.right.type)) decl.right._doNotMarkFuncRef = true;
 
+    // Check if property is known to be a symbol at compile time
+    // If so, skip array/typed array fast paths as they only handle numeric indices
+    const setterPropertyType = getNodeType(scope, property);
+    const setterPropertyKnownType = knownType(scope, setterPropertyType);
+    const isSetterSymbolProperty = setterPropertyKnownType === TYPES.symbol;
+
     const out = [
       ...generate(scope, object),
       [ Opcodes.local_set, objectTmp ],
@@ -4288,7 +4294,7 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
 
       // todo: review last type usage here
       ...typeSwitch(scope, getNodeType(scope, object), {
-        ...(decl.left.computed ? {
+        ...(decl.left.computed && !isSetterSymbolProperty ? {
           [TYPES.array]: () => [
             objectGet,
             Opcodes.i32_to_u,
@@ -6460,8 +6466,14 @@ const generateMember = (scope, decl, _global, _name) => {
   const coctc = coctcOffset(decl);
   const coctcObjTmp = coctc > 0 && localTmp(scope, '#coctc_obj' + uniqId(), Valtype.i32);
 
+  // Check if property is known to be a symbol at compile time
+  // If so, skip array/typed array fast paths as they only handle numeric indices
+  const propertyType = getNodeType(scope, property);
+  const propertyKnownType = knownType(scope, propertyType);
+  const isSymbolProperty = propertyKnownType === TYPES.symbol;
+
   const out = typeSwitch(scope, type, {
-    ...(decl.computed ? {
+    ...(decl.computed && !isSymbolProperty ? {
       [TYPES.array]: () => [
         propertyGet,
         Opcodes.i32_to_u,

@@ -98,10 +98,15 @@ export const __ArrayBuffer_prototype_slice = (_this: ArrayBuffer, start: any, en
   }
   if (end > len) end = len;
 
-  const out: ArrayBuffer = Porffor.malloc(4 + (end - start));
-  Porffor.wasm.i32.store(out, end - start, 0, 0);
+  // Ensure newLen is non-negative (spec: max(final - first, 0))
+  let newLen: i32 = end - start;
+  if (newLen < 0) newLen = 0;
 
-  Porffor.wasm`
+  const out: ArrayBuffer = Porffor.malloc(4 + newLen);
+  Porffor.wasm.i32.store(out, newLen, 0, 0);
+
+  if (newLen > 0) {
+    Porffor.wasm`
 ;; dst = out + 4
 local.get ${out}
 i32.to_u
@@ -117,14 +122,12 @@ local.get ${start}
 i32.to_u
 i32.add
 
-;; size = end - start
-local.get ${end}
+;; size = newLen
+local.get ${newLen}
 i32.to_u
-local.get ${start}
-i32.to_u
-i32.sub
 
 memory.copy 0 0`;
+  }
 
   return out;
 };
@@ -222,10 +225,15 @@ export const __SharedArrayBuffer_prototype_slice = (_this: SharedArrayBuffer, st
   }
   if (end > len) end = len;
 
-  const out: SharedArrayBuffer = Porffor.malloc(4 + (end - start));
-  Porffor.wasm.i32.store(out, end - start, 0, 0);
+  // Ensure newLen is non-negative (spec: max(final - first, 0))
+  let newLen: i32 = end - start;
+  if (newLen < 0) newLen = 0;
 
-  Porffor.wasm`
+  const out: SharedArrayBuffer = Porffor.malloc(4 + newLen);
+  Porffor.wasm.i32.store(out, newLen, 0, 0);
+
+  if (newLen > 0) {
+    Porffor.wasm`
 ;; dst = out + 4
 local.get ${out}
 i32.to_u
@@ -241,14 +249,12 @@ local.get ${start}
 i32.to_u
 i32.add
 
-;; size = end - start
-local.get ${end}
+;; size = newLen
+local.get ${newLen}
 i32.to_u
-local.get ${start}
-i32.to_u
-i32.sub
 
 memory.copy 0 0`;
+  }
 
   return out;
 };
