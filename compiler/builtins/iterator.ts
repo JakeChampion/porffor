@@ -467,7 +467,8 @@ export const __Iterator_concat = (...iterables: any[]): __Porffor_WrapperIterato
 };
 
 // Iterator.zip - zips multiple iterables together
-export const __Iterator_zip = (iterables: any[], options: any): __Porffor_WrapperIterator => {
+// options has default value so length property is 1
+export const __Iterator_zip = (iterables: any[], options: any = undefined): __Porffor_WrapperIterator => {
   // Get mode from options (default: 'shortest')
   let mode: string = 'shortest';
   if (options !== undefined && options !== null) {
@@ -554,7 +555,8 @@ export const __Iterator_zip = (iterables: any[], options: any): __Porffor_Wrappe
 };
 
 // Iterator.zipKeyed - zips iterables into objects with keys
-export const __Iterator_zipKeyed = (iterables: any, options: any): __Porffor_WrapperIterator => {
+// options has default value so length property is 1
+export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): __Porffor_WrapperIterator => {
   // Get mode from options (default: 'shortest')
   let mode: string = 'shortest';
   if (options !== undefined && options !== null) {
