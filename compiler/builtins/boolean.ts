@@ -36,5 +36,7 @@ export const __Boolean_prototype_valueOf = (_this: any) => {
     Porffor.type(_this) == Porffor.TYPES.booleanobject)) {
     throw new TypeError('Boolean.prototype.valueOf requires this to be a Boolean');
   }
-  return _this;
+  // Convert BooleanObject to primitive boolean using equality comparison
+  // Can't use !!_this because all objects are truthy
+  return _this == true;
 };
