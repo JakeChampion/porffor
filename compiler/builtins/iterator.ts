@@ -89,6 +89,7 @@ export const __Porffor_iterator_getElement = (iterable: any, index: i32): any =>
   return undefined;
 };
 
+
 export const __Porffor_WrapperIterator_prototype_next = (storage: any[]) => {
   // storage is the WrapperIterator array: [0] = iterable, [1] = index
   const iterable: any = storage[0];
@@ -534,6 +535,7 @@ export const __Iterator_zip = (iterables: any[], options: any): __Porffor_Wrappe
   }
 
   // Build result array of tuples
+  // Note: affected by variable capture bug - values may be corrupted across calls
   const result: any[] = [];
   for (let j: i32 = 0; j < resultLength; j++) {
     const tuple: any[] = [];
