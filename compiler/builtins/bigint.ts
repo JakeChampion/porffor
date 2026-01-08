@@ -120,12 +120,18 @@ export const __Porffor_bigint_fromString = (n: string|bytestring): bigint => {
   if (n.charCodeAt(offset) == 48 && offset + 1 < end) { // '0'
     const prefixChar: i32 = n.charCodeAt(offset + 1);
     if (Porffor.fastOr(prefixChar == 120, prefixChar == 88)) { // 'x' or 'X'
+      // Per spec: negative hex literals are not allowed
+      if (negative) throw new SyntaxError('Invalid BigInt string');
       radix = 16;
       offset += 2;
     } else if (Porffor.fastOr(prefixChar == 98, prefixChar == 66)) { // 'b' or 'B'
+      // Per spec: negative binary literals are not allowed
+      if (negative) throw new SyntaxError('Invalid BigInt string');
       radix = 2;
       offset += 2;
     } else if (Porffor.fastOr(prefixChar == 111, prefixChar == 79)) { // 'o' or 'O'
+      // Per spec: negative octal literals are not allowed
+      if (negative) throw new SyntaxError('Invalid BigInt string');
       radix = 8;
       offset += 2;
     }
