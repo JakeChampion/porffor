@@ -6,12 +6,25 @@ export default () => {
     errors.push(name);
     // options has default value so length property is 1
     out += `export const ${name} = function (message: any, options: any = undefined): ${name} {
-  if (message === undefined) message = '';
-    else message = ecma262.ToString(message);
-
   const obj: ${name} = Porffor.malloc(8);
-  Porffor.wasm.i32.store(obj, message, 0, 0);
-  Porffor.wasm.i32.store8(obj, Porffor.type(message), 0, 4);
+
+  // Per spec: only define message as own property if message is not undefined
+  if (message !== undefined) {
+    message = ecma262.ToString(message);
+    Porffor.wasm.i32.store(obj, message, 0, 0);
+    Porffor.wasm.i32.store8(obj, Porffor.type(message), 0, 4);
+    Object.defineProperty(obj, 'message', {
+      value: message,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+  } else {
+    // Store empty string for internal use
+    const emptyMsg: bytestring = '';
+    Porffor.wasm.i32.store(obj, emptyMsg, 0, 0);
+    Porffor.wasm.i32.store8(obj, Porffor.type(emptyMsg), 0, 4);
+  }
 
   // InstallErrorCause: if options is an object with "cause" property, set it
   if (Porffor.object.isObject(options) && 'cause' in options) {
@@ -63,12 +76,25 @@ export const __${name}_prototype_toString = (_this: ${name}) => {
   // options has default value so length property is 2
   errors.push('AggregateError');
   out += `export const AggregateError = function (errorsArg: any, message: any, options: any = undefined): AggregateError {
-  if (message === undefined) message = '';
-    else message = ecma262.ToString(message);
-
   const obj: AggregateError = Porffor.malloc(8);
-  Porffor.wasm.i32.store(obj, message, 0, 0);
-  Porffor.wasm.i32.store8(obj, Porffor.type(message), 0, 4);
+
+  // Per spec: only define message as own property if message is not undefined
+  if (message !== undefined) {
+    message = ecma262.ToString(message);
+    Porffor.wasm.i32.store(obj, message, 0, 0);
+    Porffor.wasm.i32.store8(obj, Porffor.type(message), 0, 4);
+    Object.defineProperty(obj, 'message', {
+      value: message,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+  } else {
+    // Store empty string for internal use
+    const emptyMsg: bytestring = '';
+    Porffor.wasm.i32.store(obj, emptyMsg, 0, 0);
+    Porffor.wasm.i32.store8(obj, Porffor.type(emptyMsg), 0, 4);
+  }
 
   // Store errors as own property
   obj.errors = Array.from(errorsArg);
@@ -126,12 +152,25 @@ export const __AggregateError_prototype_toString = (_this: AggregateError) => {
   // SuppressedError has a different signature: (error, suppressed, message)
   errors.push('SuppressedError');
   out += `export const SuppressedError = function (errorArg: any, suppressed: any, message: any): SuppressedError {
-  if (message === undefined) message = '';
-    else message = ecma262.ToString(message);
-
   const obj: SuppressedError = Porffor.malloc(8);
-  Porffor.wasm.i32.store(obj, message, 0, 0);
-  Porffor.wasm.i32.store8(obj, Porffor.type(message), 0, 4);
+
+  // Per spec: only define message as own property if message is not undefined
+  if (message !== undefined) {
+    message = ecma262.ToString(message);
+    Porffor.wasm.i32.store(obj, message, 0, 0);
+    Porffor.wasm.i32.store8(obj, Porffor.type(message), 0, 4);
+    Object.defineProperty(obj, 'message', {
+      value: message,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+  } else {
+    // Store empty string for internal use
+    const emptyMsg: bytestring = '';
+    Porffor.wasm.i32.store(obj, emptyMsg, 0, 0);
+    Porffor.wasm.i32.store8(obj, Porffor.type(emptyMsg), 0, 4);
+  }
 
   // Store error and suppressed as own properties
   obj.error = errorArg;
