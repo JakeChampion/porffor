@@ -1,11 +1,15 @@
 import { Opcodes, Valtype } from './wasmSpec.js';
 import { TYPES } from './types.js';
 
+// ToInt32: convert f64 to i32 using modulo 2^32 semantics per ES spec
+// i64.trunc_sat_f64_s handles large values, then i32.wrap_i64 takes lower 32 bits
 const f64ifyBitwise = op => (_1, _2, { left, right }) => [
   ...left,
-  Opcodes.i32_trunc_sat_f64_s,
+  Opcodes.i64_trunc_sat_f64_s,
+  [ Opcodes.i32_wrap_i64 ],
   ...right,
-  Opcodes.i32_trunc_sat_f64_s,
+  Opcodes.i64_trunc_sat_f64_s,
+  [ Opcodes.i32_wrap_i64 ],
   [ op ],
   [ Opcodes.f64_convert_i32_s ]
 ];
