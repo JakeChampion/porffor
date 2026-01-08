@@ -1732,22 +1732,38 @@ const generateBinaryExp = (scope, decl) => {
   // bitwise and arithmetic operators require ToNumber conversion of operands
   // (excluding + which has special string concatenation handling)
   const toNumberOps = ['&', '|', '^', '<<', '>>', '>>>', '-', '*', '/', '%', '**'];
+  const relationalOps = ['>', '>=', '<', '<='];
   let leftNode = decl.left;
   let rightNode = decl.right;
+
+  // wrap operands in ToNumber to handle string/other type coercion
+  const wrapToNumber = node => ({
+    type: 'CallExpression',
+    callee: { type: 'Identifier', name: '__ecma262_ToNumber' },
+    arguments: [ node ]
+  });
+
+  const leftKnown = knownType(scope, getNodeType(scope, decl.left));
+  const rightKnown = knownType(scope, getNodeType(scope, decl.right));
+
   if (toNumberOps.includes(decl.operator)) {
-    // wrap operands in ToNumber to handle string/other type coercion
-    const wrapToNumber = node => ({
-      type: 'CallExpression',
-      callee: { type: 'Identifier', name: '__ecma262_ToNumber' },
-      arguments: [ node ]
-    });
-
-    const leftKnown = knownType(scope, getNodeType(scope, decl.left));
-    const rightKnown = knownType(scope, getNodeType(scope, decl.right));
-
     // only wrap if not known to be a number
     if (leftKnown !== TYPES.number) leftNode = wrapToNumber(decl.left);
     if (rightKnown !== TYPES.number) rightNode = wrapToNumber(decl.right);
+  }
+
+  // relational operators: if one is string and one is not, convert both to numbers
+  // (if both are strings, performOp handles string comparison)
+  // (exclude BigInt which has its own comparison semantics)
+  if (relationalOps.includes(decl.operator)) {
+    const leftStr = leftKnown === TYPES.string || leftKnown === TYPES.bytestring;
+    const rightStr = rightKnown === TYPES.string || rightKnown === TYPES.bytestring;
+    const hasBigInt = leftKnown === TYPES.bigint || rightKnown === TYPES.bigint;
+    if ((leftStr || rightStr) && !(leftStr && rightStr) && !hasBigInt) {
+      // mixed string/non-string (excluding BigInt): convert both to numbers
+      if (leftKnown !== TYPES.number) leftNode = wrapToNumber(decl.left);
+      if (rightKnown !== TYPES.number) rightNode = wrapToNumber(decl.right);
+    }
   }
 
   const out = performOp(scope, decl.operator, generate(scope, leftNode), generate(scope, rightNode), getNodeType(scope, leftNode), getNodeType(scope, rightNode));
