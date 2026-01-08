@@ -23,8 +23,15 @@ export const WeakSet = function (iterable: any): WeakSet {
   if (!new.target) throw new TypeError("Constructor WeakSet requires 'new'");
 
   const out: WeakSet = Porffor.malloc();
-  if (iterable != null) for (const x of iterable) {
-    __WeakSet_prototype_add(out, x);
+  if (iterable != null) {
+    // 7a. Let adder be Get(set, "add").
+    // 7c. If IsCallable(adder) is false, throw a TypeError exception.
+    const adder: any = out.add;
+    if (typeof adder !== 'function') throw new TypeError('WeakSet.prototype.add is not a function');
+
+    for (const x of iterable) {
+      __WeakSet_prototype_add(out, x);
+    }
   }
 
   return out;
