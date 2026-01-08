@@ -42,7 +42,7 @@ if (cluster.isPrimary) {
 
   let lastCommitResults = minimal ? [] : execSync(`git log -200 --pretty=%B`).toString().split('\n').find(x => x.startsWith('test262: 1') || x.startsWith('test262: 2') || x.startsWith('test262: 3') || x.startsWith('test262: 4') || x.startsWith('test262: 5') || x.startsWith('test262: 6')).split('|').map(x => parseFloat(x.split('(')[0].trim().split(' ').pop().trim().replace('%', '')));
 
-  if (!resultOnly) process.stdout.write('\u001b[90mreading tests...\u001b[0m');
+  if (!resultOnly) process.stdout.write('reading tests...');
 
   const preludes = fs.readFileSync(join(__dirname, 'harness.js'), 'utf8').split('///').reduce((acc, x) => {
     const [ k, ...content ] = x.split('\n');
@@ -57,10 +57,10 @@ if (cluster.isPrimary) {
   }
   // deduplicate tests by file path
   tests = [...new Map(tests.map(t => [t.file, t])).values()];
-  if (!resultOnly) process.stdout.write(`\r${' '.repeat(60)}\r\u001b[90mcaching tests to tmp...\u001b[0m`);
+  if (!resultOnly) process.stdout.write(`\r${' '.repeat(60)}\rcaching tests to tmp...`);
 
   fs.writeFileSync(workerDataPath, JSON.stringify(tests, undefined, 2));
-  if (!resultOnly) process.stdout.write(`\r${' '.repeat(60)}\r\u001b[90mstarting ${threads} runners...\u001b[0m`);
+  if (!resultOnly) process.stdout.write(`\r${' '.repeat(60)}\rstarting ${threads} runners...`);
 
   const profile = process.argv.includes('--profile');
   if (profile) process.argv.push('--profile-compiler');
@@ -80,14 +80,14 @@ if (cluster.isPrimary) {
     for (let i = 0; i < arr.length; i++) {
       let icon = [ '🧪', '🤠', '❌', '💀', '🏗️', '💥', '⏰', '📝' ][i];
       let iconDesc = [ 'total', 'pass', 'fail', 'runtime error', 'wasm compile error', 'compile error', 'timeout', 'todo' ][i];
-      // let color = resultOnly ? '' : ['', '\u001b[42m', '\u001b[43m', '\u001b[101m', '\u001b[41m', '\u001b[41m', '\u001b[101m', todoTime === 'runtime' ? '\u001b[101m' : '\u001b[41m'][i];
-      // let color = resultOnly ? '' : ('\u001b[1m' + ['', '\u001b[32m', '\u001b[33m', '\u001b[91m', '\u001b[31m', '\u001b[31m', '\u001b[91m', todoTime === 'runtime' ? '\u001b[91m' : '\u001b[31m'][i]);
+      // let color = resultOnly ? '' : ['', '', '', '', '', '', '', todoTime === 'runtime' ? '' : ''][i];
+      // let color = resultOnly ? '' : ('' + ['', '', '', '', '', '', '', todoTime === 'runtime' ? '' : ''][i]);
 
       let change = arr[i] - lastCommitResults[i + 1];
-      // let str = `${color}${icon} ${arr[i]}${resultOnly ? '' : '\u001b[0m'}${overall && change !== 0 ? ` (${change > 0 ? '+' : ''}${change})` : ''}`;
-      let str = `${resultOnly ? '' : '\u001b[1m'}${plainResults ? iconDesc : icon} ${arr[i]}${resultOnly ? '' : '\u001b[0m'}${overall && change !== 0 ? ` (${change > 0 ? '+' : ''}${change})` : ''}`;
+      // let str = `${color}${icon} ${arr[i]}${resultOnly ? '' : ''}${overall && change !== 0 ? ` (${change > 0 ? '+' : ''}${change})` : ''}`;
+      let str = `${resultOnly ? '' : ''}${plainResults ? iconDesc : icon} ${arr[i]}${resultOnly ? '' : ''}${overall && change !== 0 ? ` (${change > 0 ? '+' : ''}${change})` : ''}`;
 
-      if (i !== arr.length - 1) str += resultOnly ? ' | ' : '\u001b[90m | \u001b[0m';
+      if (i !== arr.length - 1) str += resultOnly ? ' | ' : ' | ';
       out += str;
     }
 
@@ -99,14 +99,14 @@ if (cluster.isPrimary) {
 
     let out = '';
     for (let i = 1; i < arr.length; i++) {
-      const color = [ '\u001b[42m', '\u001b[43m', '\u001b[101m', '\u001b[41m', '\u001b[46m' ][i - 1];
+      const color = [ '', '', '', '', '' ][i - 1];
 
       const width = Math.round((arr[i] / total) * barWidth);
 
       const label = arr[i].toString();
       const showLabel = width > (label.length + 2);
 
-      out += `${color}\u001b[97m${showLabel ? (' ' + label) : ''}${' '.repeat(width - (showLabel ? (label.length + 1) : 0))}\u001b[0m`;
+      out += `${color}${showLabel ? (' ' + label) : ''}${' '.repeat(width - (showLabel ? (label.length + 1) : 0))}`;
     }
 
     return out;
@@ -235,24 +235,24 @@ if (cluster.isPrimary) {
       if (!resultOnly && !logErrors) {
         const percent = ((total / tests.length) * 100);
         if (allTests) {
-          // if (percent > lastPercent) process.stdout.write(`\r${' '.repeat(200)}\r\u001b[90m${percent.toFixed(0).padStart(4, ' ')}% |\u001b[0m \u001b[${pass ? '92' : (result === 4 ? '93' : '91')}m${file}\u001b[0m`);
+          // if (percent > lastPercent) process.stdout.write(`\r${' '.repeat(200)}\r${percent.toFixed(0).padStart(4, ' ')}% | ${file}`);
           if (percent > lastPercent) {
-            const tab = `  \u001b[1m${spinner[spin++ % 4]} ${percent.toFixed(1)}%\u001b[0m    ` +
+            const tab = `  ${spinner[spin++ % 4]} ${percent.toFixed(1)}%    ` +
               table(false, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts);
 
             process.stdout.write(
-              (lastPercent != 0 ? `\u001b[2F\u001b[0J` : `\r${' '.repeat(100)}\r`) +
+              (lastPercent != 0 ? `` : `\r${' '.repeat(100)}\r`) +
               bar([...noAnsi(tab)].length + 8, total, passes, fails, runtimeErrors + timeouts, compileErrors + wasmErrors, 0) +
               '\n' + tab + '\n'
             );
             lastPercent = percent + 0.1;
           }
         } else {
-          process.stdout.write(`\r${' '.repeat(100)}\r\u001b[90m${percent.toFixed(0).padStart(4, ' ')}% |\u001b[0m \u001b[${pass ? '92' : (result === 4 ? '93' : (result === 5 ? '90' : '91'))}m${runIconTable[result]} ${file}\u001b[0m\n`);
+          process.stdout.write(`\r${' '.repeat(100)}\r${percent.toFixed(0).padStart(4, ' ')}% | ${runIconTable[result]} ${file}\n`);
 
           if (threads === 1 && tests[i + 1]) {
             const nextFile = tests[i + 1].file;
-            process.stdout.write(`\u001b[90m${percent.toFixed(0).padStart(4, ' ')}% | ${nextFile}\u001b[0m`);
+            process.stdout.write(`${percent.toFixed(0).padStart(4, ' ')}% | ${nextFile}`);
           }
         }
 
@@ -283,7 +283,7 @@ if (cluster.isPrimary) {
     process.exit();
   }
 
-  if (allTests) process.stdout.write('\u001b[2F\u001b[0J');
+  if (allTests) process.stdout.write('');
     else console.log();
 
   const nextMinorPercent = parseFloat(((Math.floor(percent * 10) / 10) + 0.1).toFixed(1));
@@ -293,7 +293,7 @@ if (cluster.isPrimary) {
 
   const whatTestsLabel = whatTests.length === 1 && whatTests[0] === '' ? '' : whatTests.join(', ');
   const isFullRun = whatTests.length === 1 && whatTests[0] === '';
-  console.log(`\u001b[1m${whatTestsLabel || 'test262'}: ${passes}/${total} passed - ${percent.toFixed(2)}%${isFullRun && percentChange !== 0 ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''}\u001b[0m \u001b[90m(${togo(nextMinorPercent)}, ${togo(nextMajorPercent)})\u001b[0m`);
+  console.log(`${whatTestsLabel || 'test262'}: ${passes}/${total} passed - ${percent.toFixed(2)}%${isFullRun && percentChange !== 0 ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''} (${togo(nextMinorPercent)}, ${togo(nextMajorPercent)})`);
   const tab = table(isFullRun, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts);
   console.log(bar([...noAnsi(tab)].length + 10, total, passes, fails, runtimeErrors + timeouts, compileErrors + wasmErrors, 0));
   process.stdout.write('  ');
@@ -313,11 +313,11 @@ if (cluster.isPrimary) {
       console.log();
     }
 
-    if (lastResults.compileErrors) console.log(`\n\n\u001b[4mnew compile errors\u001b[0m\n${compileErrorFiles.filter(x => !lastResults.compileErrors.includes(x)).join('\n')}\n\n`);
-    if (lastResults.wasmErrors) console.log(`\u001b[4mnew wasm errors\u001b[0m\n${wasmErrorFiles.filter(x => !lastResults.wasmErrors.includes(x)).join('\n')}\n\n`);
+    if (lastResults.compileErrors) console.log(`\n\nnew compile errors\n${compileErrorFiles.filter(x => !lastResults.compileErrors.includes(x)).join('\n')}\n\n`);
+    if (lastResults.wasmErrors) console.log(`new wasm errors\n${wasmErrorFiles.filter(x => !lastResults.wasmErrors.includes(x)).join('\n')}\n\n`);
 
-    if (lastResults.passes) console.log(`\u001b[4mnew passes\u001b[0m\n${passFiles.filter(x => !lastResults.passes.includes(x)).join('\n')}\n\n`);
-    if (lastResults.passes) console.log(`\u001b[4mnew fails\u001b[0m\n${lastResults.passes.filter(x => !passFiles.includes(x)).join('\n')}`);
+    if (lastResults.passes) console.log(`new passes\n${passFiles.filter(x => !lastResults.passes.includes(x)).join('\n')}\n\n`);
+    if (lastResults.passes) console.log(`new fails\n${lastResults.passes.filter(x => !passFiles.includes(x)).join('\n')}`);
 
     if (!dontWriteResults) {
       const alphabetically = (a, b) => a.localeCompare(b);
@@ -356,7 +356,7 @@ if (cluster.isPrimary) {
     out += `${s | 0}s`;
     return out;
   };
-  console.log(`\u001b[90mtook ${timeStr(performance.now() - start)}\u001b[0m`);
+  console.log(`took ${timeStr(performance.now() - start)}`);
 
   if (trackErrors) {
     console.log('\n');
@@ -533,7 +533,7 @@ if (cluster.isPrimary) {
       let e = (!pass && error ? (error?.stack || error.toString()) : '');
       if (e.includes('throw porfToJSValue')) e = e.split('\n').at(-1);
 
-      console.log(`\u001b[${pass ? '92' : '91'}m${runIconTable[out & 0b1111]} ${test.file}\u001b[0m${e ? `\n${e}` : ''}`);
+      console.log(`${runIconTable[out & 0b1111]} ${test.file}${e ? `\n${e}` : ''}`);
     }
 
     process.send(out);
