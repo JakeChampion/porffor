@@ -105,9 +105,16 @@ export const Map = function (iterable: any): Map {
   Porffor.wasm.i32.store(out, keys, 0, 0);
   Porffor.wasm.i32.store(out, vals, 0, 4);
 
-  if (iterable != null) for (const x of iterable) {
-    if (!Porffor.object.isObject(x)) throw new TypeError('Iterator contains non-object');
-    __Map_prototype_set(out, x[0], x[1]);
+  if (iterable != null) {
+    // 7a. Let adder be Get(map, "set").
+    // 7c. If IsCallable(adder) is false, throw a TypeError exception.
+    const adder: any = out.set;
+    if (typeof adder !== 'function') throw new TypeError('Map.prototype.set is not a function');
+
+    for (const x of iterable) {
+      if (!Porffor.object.isObject(x)) throw new TypeError('Iterator contains non-object');
+      __Map_prototype_set(out, x[0], x[1]);
+    }
   }
 
   return out;
