@@ -215,6 +215,18 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
       // skip symbol keys
       if (Porffor.type(objKey) == Porffor.TYPES.symbol) continue;
 
+      // If replacer is an array, only include keys that are in the array
+      if (Porffor.type(replacer) == Porffor.TYPES.array) {
+        let found: boolean = false;
+        for (const k of (replacer as any[])) {
+          if (k == objKey || ('' + k) == objKey) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) continue;
+      }
+
       const val: any = (value as object)[objKey];
       const startPos: i32 = buffer;
 
