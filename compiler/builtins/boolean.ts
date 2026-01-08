@@ -29,8 +29,12 @@ export const __Boolean_prototype_toString = (_this: any) => {
 
 // 20.3.3.3 Boolean.prototype.valueOf ()
 // https://tc39.es/ecma262/#sec-boolean.prototype.valueof
-export const __Boolean_prototype_valueOf = (_this: boolean) => {
+export const __Boolean_prototype_valueOf = (_this: any) => {
   // 1. Return ? ThisBooleanValue(this value).
-  // Note: Type annotation enforces this is a Boolean type
+  if (!Porffor.fastOr(
+    Porffor.type(_this) == Porffor.TYPES.boolean,
+    Porffor.type(_this) == Porffor.TYPES.booleanobject)) {
+    throw new TypeError('Boolean.prototype.valueOf requires this to be a Boolean');
+  }
   return _this;
 };
