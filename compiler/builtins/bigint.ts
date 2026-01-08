@@ -354,15 +354,26 @@ export const BigInt = (value: any): bigint => {
   return __ecma262_ToBigInt(prim);
 };
 
-export const __BigInt_prototype_toString = (_this: bigint, radix: any) => {
+export const __BigInt_prototype_toString = (_this: any, radix: any) => {
+  if (Porffor.type(_this) != Porffor.TYPES.bigint) {
+    throw new TypeError('BigInt.prototype.toString requires this to be a BigInt');
+  }
   return __Porffor_bigint_toString(_this, radix);
 };
 
-export const __BigInt_prototype_toLocaleString = (_this: bigint) => {
+export const __BigInt_prototype_toLocaleString = (_this: any) => {
+  if (Porffor.type(_this) != Porffor.TYPES.bigint) {
+    throw new TypeError('BigInt.prototype.toLocaleString requires this to be a BigInt');
+  }
   return __Porffor_bigint_toString(_this, 10);
 };
 
-export const __BigInt_prototype_valueOf = (_this: bigint) => {
+export const __BigInt_prototype_valueOf = (_this: any) => {
+  // thisBigIntValue: If Type(value) is BigInt, return value.
+  // Otherwise, throw a TypeError exception.
+  if (Porffor.type(_this) != Porffor.TYPES.bigint) {
+    throw new TypeError('BigInt.prototype.valueOf requires this to be a BigInt');
+  }
   return _this;
 };
 

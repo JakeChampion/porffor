@@ -987,19 +987,22 @@ params:[124,127],typedParams:1,returns:[124],returnType:4,jsLength:1,
 locals:[124,127,127],localNames:["value","value#type","prim","prim#type","#last_type"]
 }
 x.__BigInt_prototype_toString={
-wasm:(_,{builtin})=>eval("[[32,0],[65,4],[32,2],[32,3],[16,builtin('__Porffor_bigint_toString')],[34,4],[15]]"),
+wasm:(_,{builtin,internalThrow})=>eval("[[32,1],[184],[68,4],[98],[4,64],...internalThrow(_,'TypeError',`BigInt.prototype.toString requires this to be a BigInt`),[26],[11],[32,0],[32,1],[32,2],[32,3],[16,builtin('__Porffor_bigint_toString')],[34,4],[15]]"),
 params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:0,
-locals:[127],localNames:["_this","_this#type","radix","radix#type","#last_type"]
+locals:[127],localNames:["_this","_this#type","radix","radix#type","#last_type"],
+usesTag:1
 }
 x.__BigInt_prototype_toLocaleString={
-wasm:(_,{builtin})=>eval("[[32,0],[65,4],[68,10],[65,1],[16,builtin('__Porffor_bigint_toString')],[34,2],[15]]"),
+wasm:(_,{builtin,internalThrow})=>eval("[[32,1],[184],[68,4],[98],[4,64],...internalThrow(_,'TypeError',`BigInt.prototype.toLocaleString requires this to be a BigInt`),[26],[11],[32,0],[32,1],[68,10],[65,1],[16,builtin('__Porffor_bigint_toString')],[34,2],[15]]"),
 params:[124,127],typedParams:1,returns:[124,127],jsLength:0,
-locals:[127],localNames:["_this","_this#type","#last_type"]
+locals:[127],localNames:["_this","_this#type","#last_type"],
+usesTag:1
 }
 x.__BigInt_prototype_valueOf={
-wasm:()=>eval("[[32,0],[65,4],[15]]"),
+wasm:(_,{internalThrow})=>eval("[[32,1],[184],[68,4],[98],[4,64],...internalThrow(_,'TypeError',`BigInt.prototype.valueOf requires this to be a BigInt`),[26],[11],[32,0],[32,1],[15]]"),
 params:[124,127],typedParams:1,returns:[124,127],jsLength:0,
-locals:[],localNames:["_this","_this#type"]
+locals:[],localNames:["_this","_this#type"],
+usesTag:1
 }
 x.__BigInt_asIntN={
 wasm:(_,{builtin})=>eval("[[32,0],[32,1],[16,builtin('__ecma262_ToIndex')],[33,0],[65,1],[33,1],[32,2],[32,3],[16,builtin('__ecma262_ToBigInt')],[33,2],[65,4],[33,3],[32,2],[65,4],[16,builtin('__Porffor_bigint_toNumber')],[33,4],[32,0],[68,0],[97],[4,64],[68,0],[15],[26],[11],[32,0],[68,53],[102],[4,64],[32,2],[15],[26],[11],[68,2],[65,1],[32,0],[65,1],[16,builtin('__Math_pow')],[33,5],[68,2],[65,1],[32,0],[68,1],[161],[65,1],[16,builtin('__Math_pow')],[33,6],[32,4],[34,8],[32,5],[34,9],[32,8],[32,9],[163],[157],[162],[161],[34,7],[68,0],[99],[4,64],[32,7],[32,5],[160],[33,7],[11],[32,7],[32,6],[102],[4,64],[32,7],[32,5],[161],[65,1],[16,builtin('__Porffor_bigint_fromNumber')],[15],[26],[11],[32,7],[65,1],[16,builtin('__Porffor_bigint_fromNumber')],[15]]"),
