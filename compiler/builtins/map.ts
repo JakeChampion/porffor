@@ -82,6 +82,8 @@ export const __Map_prototype_clear = (_this: Map) => {
 };
 
 export const __Map_prototype_forEach = (_this: Map, callbackFn: any, thisArg: any = undefined) => {
+  if (typeof callbackFn !== 'function') throw new TypeError('callbackFn must be a function');
+
   const keys: any[] = Porffor.wasm.i32.load(_this, 0, 0);
   const vals: any[] = Porffor.wasm.i32.load(_this, 0, 4);
 
@@ -168,6 +170,8 @@ export const __Map_prototype_getOrInsert = (_this: Map, key: any, value: any) =>
 };
 
 export const __Map_prototype_getOrInsertComputed = (_this: Map, key: any, callbackFn: any) => {
+  if (typeof callbackFn !== 'function') throw new TypeError('callbackFn must be a function');
+
   if (!__Map_prototype_has(_this, key)) {
     __Map_prototype_set(_this, key, callbackFn(key));
   }
