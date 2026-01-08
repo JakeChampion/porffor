@@ -794,11 +794,12 @@ export const parseInt = (input: any, radix: any): f64 => {
   input = ecma262.ToString(input).trim();
 
   let defaultRadix: boolean = false;
-  if (Porffor.type(radix) != Porffor.TYPES.number) {
+  if (radix === undefined) {
     radix = 10;
     defaultRadix = true;
   } else {
-    radix |= 0;
+    // Per spec, ToInt32(radix)
+    radix = +radix | 0;
     if (radix == 0) {
       defaultRadix = true;
       radix = 10;
