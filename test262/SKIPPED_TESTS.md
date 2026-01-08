@@ -84,3 +84,19 @@ This file documents tests that were examined but skipped during debugging sessio
 - **Issue**: Array.prototype methods don't work correctly when called on non-array objects (RegExp, Math, generic objects with length property)
 - **Root cause**: Array methods assume `this` is an actual array, not a generic array-like object
 - **Complexity**: High - requires generic object iteration support for all Array.prototype methods
+
+## Property Access on Arrays
+
+### Array Element Access Bypasses Getters/Setters
+- **Tests affected**: `built-ins/Array/prototype/toReversed/get-descending-order.js` and similar
+- **Issue**: `Object.defineProperty(arr, 0, { get: ... })` doesn't work - the getter is never called when accessing `arr[0]`
+- **Root cause**: Porffor accesses array elements directly from internal storage, bypassing the property descriptor system
+- **Complexity**: High - fundamental change to array element access in the compiler
+
+## Primitive Wrapper Object Identity
+
+### new Number/String/Boolean Don't Create Distinct Objects
+- **Tests affected**: `built-ins/Object/is/not-same-value-x-y-object.js` and similar
+- **Issue**: `new Number(0) === new Number(0)` returns true, but should return false (different objects)
+- **Root cause**: `new Number(value)` returns `n as NumberObject` which casts the primitive to a typed value rather than creating a heap-allocated object with distinct identity
+- **Complexity**: High - fundamental change to how primitive wrappers work in the type system
