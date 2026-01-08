@@ -139,8 +139,10 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     Porffor.type(value) == Porffor.TYPES.number,
     Porffor.type(value) == Porffor.TYPES.numberobject
   )) { // number
-    if (Number.isFinite(value)) {
-      return __Porffor_bytestring_bufferStr(buffer, __Number_prototype_toString(value, 10));
+    // Convert NumberObject to primitive number for proper handling
+    const numValue: number = value - 0;
+    if (Number.isFinite(numValue)) {
+      return __Porffor_bytestring_bufferStr(buffer, __Number_prototype_toString(numValue, 10));
     }
 
     return __Porffor_bytestring_bufferStr(buffer, 'null');
