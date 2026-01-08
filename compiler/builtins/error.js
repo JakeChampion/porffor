@@ -120,6 +120,55 @@ export const __AggregateError_prototype_toString = (_this: AggregateError) => {
   error('RangeError');
   error('EvalError');
   error('URIError');
+
+  // SuppressedError has a different signature: (error, suppressed, message)
+  errors.push('SuppressedError');
+  out += `export const SuppressedError = function (errorArg: any, suppressed: any, message: any): SuppressedError {
+  if (message === undefined) message = '';
+    else message = ecma262.ToString(message);
+
+  const obj: SuppressedError = Porffor.malloc(8);
+  Porffor.wasm.i32.store(obj, message, 0, 0);
+  Porffor.wasm.i32.store8(obj, Porffor.type(message), 0, 4);
+
+  // Store error and suppressed as own properties
+  obj.error = errorArg;
+  obj.suppressed = suppressed;
+
+  return obj;
+};
+
+export const __SuppressedError_prototype_constructor$get = (_this: SuppressedError) => {
+  return SuppressedError;
+};
+
+export const __SuppressedError_prototype_name$get = (_this: SuppressedError) => {
+  return 'SuppressedError';
+};
+
+export const __SuppressedError_prototype_message$get = (_this: SuppressedError) => {
+  Porffor.wasm\`
+local.get \${_this}
+i32.trunc_sat_f64_u
+i32.load 0 0
+f64.convert_i32_u
+
+local.get \${_this}
+i32.trunc_sat_f64_u
+i32.load8_u 0 4
+return\`;
+};
+
+export const __SuppressedError_prototype_toString = (_this: SuppressedError) => {
+  const name: any = _this.name;
+  const message: any = _this.message;
+  if (message.length == 0) {
+    return name;
+  }
+
+  return name + ': ' + message;
+};\n`;
+
   error('Test262Error');
 
   out += `

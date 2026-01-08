@@ -292,6 +292,9 @@ export const __Porffor_print = (arg: any, colors: boolean = true, depth: number 
     case Porffor.TYPES.urierror:
       __Porffor_printString(__URIError_prototype_toString(arg));
       return;
+    case Porffor.TYPES.suppressederror:
+      __Porffor_printString(__SuppressedError_prototype_toString(arg));
+      return;
     case Porffor.TYPES.test262error:
       __Porffor_printString(__Test262Error_prototype_toString(arg));
       return;

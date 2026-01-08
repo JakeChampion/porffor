@@ -70,7 +70,7 @@ registerInternalType('SymbolObject');
 registerInternalType('__Porffor_Generator');
 registerInternalType('__Porffor_AsyncGenerator');
 
-for (const x of [ '', 'Aggregate', 'Type', 'Reference', 'Syntax', 'Range', 'Eval', 'URI', 'Test262' ])
+for (const x of [ '', 'Aggregate', 'Type', 'Reference', 'Syntax', 'Range', 'Eval', 'URI', 'Suppressed', 'Test262' ])
   registerInternalType(`${x}Error`);
 
 if (Prefs.largestTypes) {

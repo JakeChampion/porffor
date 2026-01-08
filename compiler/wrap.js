@@ -302,6 +302,7 @@ ${flags & 0b0001 ? `    get func idx: ${get}
     case TYPES.rangeerror:
     case TYPES.evalerror:
     case TYPES.urierror:
+    case TYPES.suppressederror:
     case TYPES.test262error: {
       const message = porfToJSValue({ memory, funcs, pages }, read(Uint32Array, memory, value, 1)[0], read(Uint8Array, memory, value + 4, 1)[0]);
       const name = TYPE_NAMES[type];
