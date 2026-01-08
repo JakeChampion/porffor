@@ -4,7 +4,8 @@ export default () => {
   const errors = [];
   const error = name => {
     errors.push(name);
-    out += `export const ${name} = function (message: any, options: any): ${name} {
+    // options has default value so length property is 1
+    out += `export const ${name} = function (message: any, options: any = undefined): ${name} {
   if (message === undefined) message = '';
     else message = ecma262.ToString(message);
 
@@ -59,8 +60,9 @@ export const __${name}_prototype_toString = (_this: ${name}) => {
 
   error('Error');
   // AggregateError has a different signature: (errors, message, options)
+  // options has default value so length property is 2
   errors.push('AggregateError');
-  out += `export const AggregateError = function (errorsArg: any, message: any, options: any): AggregateError {
+  out += `export const AggregateError = function (errorsArg: any, message: any, options: any = undefined): AggregateError {
   if (message === undefined) message = '';
     else message = ecma262.ToString(message);
 
