@@ -361,6 +361,20 @@ export const encodeURI = (input: any): bytestring => {
       outLength += 3; // %XX
     } else if (chr < 0x800) {
       outLength += 6; // %XX%XX
+    } else if (chr >= 0xD800 && chr <= 0xDBFF) {
+      // High surrogate - must be followed by low surrogate
+      if (i >= endPtr) {
+        throw new URIError('URI malformed');
+      }
+      const low: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
+      if (low < 0xDC00 || low > 0xDFFF) {
+        throw new URIError('URI malformed');
+      }
+      i += 2; // Skip the low surrogate
+      outLength += 12; // %XX%XX%XX%XX (4-byte UTF-8)
+    } else if (chr >= 0xDC00 && chr <= 0xDFFF) {
+      // Lone low surrogate - error
+      throw new URIError('URI malformed');
     } else {
       outLength += 9; // %XX%XX%XX
     }
@@ -435,6 +449,77 @@ export const encodeURI = (input: any): bytestring => {
       } else {
         Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
       }
+    } else if (chr >= 0xD800 && chr <= 0xDBFF) {
+      // Surrogate pair - combine with next character
+      const low: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
+      i += 2;
+      // Calculate code point: 0x10000 + (high - 0xD800) * 0x400 + (low - 0xDC00)
+      const codePoint: i32 = 0x10000 + ((chr - 0xD800) << 10) + (low - 0xDC00);
+
+      // Four byte UTF-8
+      const byte1: i32 = 0xF0 | (codePoint >> 18);
+      const byte2: i32 = 0x80 | ((codePoint >> 12) & 0x3F);
+      const byte3: i32 = 0x80 | ((codePoint >> 6) & 0x3F);
+      const byte4: i32 = 0x80 | (codePoint & 0x3F);
+
+      Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+      let nibble: i32 = byte1 >> 4;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+      nibble = byte1 & 0x0F;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+
+      Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+      nibble = byte2 >> 4;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+      nibble = byte2 & 0x0F;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+
+      Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+      nibble = byte3 >> 4;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+      nibble = byte3 & 0x0F;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+
+      Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+      nibble = byte4 >> 4;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+      nibble = byte4 & 0x0F;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+    } else if (chr >= 0xDC00 && chr <= 0xDFFF) {
+      // Lone low surrogate - already caught in first pass
+      throw new URIError('URI malformed');
     } else {
       // Three byte UTF-8
       const byte1: i32 = 0xE0 | (chr >> 12);
@@ -574,6 +659,20 @@ export const encodeURIComponent = (input: any): bytestring => {
       outLength += 3; // %XX
     } else if (chr < 0x800) {
       outLength += 6; // %XX%XX
+    } else if (chr >= 0xD800 && chr <= 0xDBFF) {
+      // High surrogate - must be followed by low surrogate
+      if (i >= endPtr) {
+        throw new URIError('URI malformed');
+      }
+      const low: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
+      if (low < 0xDC00 || low > 0xDFFF) {
+        throw new URIError('URI malformed');
+      }
+      i += 2; // Skip the low surrogate
+      outLength += 12; // %XX%XX%XX%XX (4-byte UTF-8)
+    } else if (chr >= 0xDC00 && chr <= 0xDFFF) {
+      // Lone low surrogate - error
+      throw new URIError('URI malformed');
     } else {
       outLength += 9; // %XX%XX%XX
     }
@@ -645,6 +744,77 @@ export const encodeURIComponent = (input: any): bytestring => {
       } else {
         Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
       }
+    } else if (chr >= 0xD800 && chr <= 0xDBFF) {
+      // Surrogate pair - combine with next character
+      const low: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
+      i += 2;
+      // Calculate code point: 0x10000 + (high - 0xD800) * 0x400 + (low - 0xDC00)
+      const codePoint: i32 = 0x10000 + ((chr - 0xD800) << 10) + (low - 0xDC00);
+
+      // Four byte UTF-8
+      const byte1: i32 = 0xF0 | (codePoint >> 18);
+      const byte2: i32 = 0x80 | ((codePoint >> 12) & 0x3F);
+      const byte3: i32 = 0x80 | ((codePoint >> 6) & 0x3F);
+      const byte4: i32 = 0x80 | (codePoint & 0x3F);
+
+      Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+      let nibble: i32 = byte1 >> 4;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+      nibble = byte1 & 0x0F;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+
+      Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+      nibble = byte2 >> 4;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+      nibble = byte2 & 0x0F;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+
+      Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+      nibble = byte3 >> 4;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+      nibble = byte3 & 0x0F;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+
+      Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+      nibble = byte4 >> 4;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+      nibble = byte4 & 0x0F;
+      if (nibble < 10) {
+        Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+      }
+    } else if (chr >= 0xDC00 && chr <= 0xDFFF) {
+      // Lone low surrogate - already caught in first pass
+      throw new URIError('URI malformed');
     } else {
       // Three byte UTF-8
       const byte1: i32 = 0xE0 | (chr >> 12);
