@@ -38,7 +38,8 @@
       "Bash(done)",
       "Bash(node /tmp/analyze_fails.js:*)",
       "Bash(node /Users/jakechampion/Code/porffor/test262/index.js:*)",
-      "Bash(shuf)"
+      "Bash(shuf)",
+      "Bash(xxd:*)"
     ]
   }
 }

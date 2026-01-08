@@ -76,12 +76,27 @@ export const __Reflect_setPrototypeOf = (target: any, proto: any) => {
   if (!Porffor.object.isObject(target)) throw new TypeError('Target is a non-object');
   if (!Porffor.object.isObjectOrNull(proto)) throw new TypeError('Prototype should be an object or null');
 
-  try {
-    Object.setPrototypeOf(target, proto);
-    return true;
-  } catch {
-    return false;
+  // Get current prototype
+  const currentProto: any = Porffor.object.getPrototypeWithHidden(target, Porffor.type(target));
+
+  // If proto is the same as current prototype, return true (no change needed)
+  if (proto === currentProto) return true;
+
+  // Check if target is extensible - if not extensible and proto is different, return false
+  if (Porffor.object.isInextensible(target)) return false;
+
+  // Check for circular prototype chain: walk up proto's chain to see if we encounter target
+  if (proto != null) {
+    let p: any = proto;
+    while (p != null) {
+      if (p === target) return false; // Would create a cycle
+      p = Porffor.object.getPrototypeWithHidden(p, Porffor.type(p));
+    }
   }
+
+  // Set the prototype
+  Porffor.object.setPrototype(target, proto);
+  return true;
 };
 
 export const __Reflect_ownKeys = (target: any) => {
