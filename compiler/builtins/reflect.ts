@@ -140,6 +140,9 @@ local.set ${key}`;
 
 
 export const __Reflect_apply = (target: any, thisArgument: any, argumentsList: any) => {
+  // CreateListFromArrayLike: If Type(argumentsList) is not Object, throw a TypeError
+  if (!Porffor.object.isObject(argumentsList)) throw new TypeError('CreateListFromArrayLike called on non-object');
+
   // Convert array-like to array using CreateListFromArrayLike logic
   // This handles objects with length property that aren't iterable
   // Use push instead of index assignment because assigning undefined doesn't grow array
@@ -159,6 +162,9 @@ export const __Reflect_construct = (target: any, argumentsList: any, newTarget: 
   if (newTarget === undefined) newTarget = target;
   // 3. Else, if IsConstructor(newTarget) is false, throw a TypeError exception.
   else if (!ecma262.IsConstructor(newTarget)) throw new TypeError('Reflect.construct: newTarget is not a constructor');
+
+  // CreateListFromArrayLike: If Type(argumentsList) is not Object, throw a TypeError
+  if (!Porffor.object.isObject(argumentsList)) throw new TypeError('CreateListFromArrayLike called on non-object');
 
   // Convert array-like to array using CreateListFromArrayLike logic
   const args: any[] = [];
