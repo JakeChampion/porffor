@@ -21,7 +21,7 @@ This regenerates `compiler/builtins_precompiled.js`.
 ### Test262 Suite
 
 ```bash
-# Run all tests (takes ~4 minutes)
+# Run all tests (takes ~1 minute)
 node test262/index.js
 
 # Run specific test directory
@@ -31,7 +31,7 @@ node test262/index.js built-ins/Set/prototype/union
 node test262/index.js built-ins/Set/prototype/union/allows-set-like-object.js
 
 # Quick result-only output (no progress bar)
-RESULT_ONLY=1 node test262/index.js
+node test262/index.js --minimal
 
 # Log errors for debugging (single-threaded)
 node test262/index.js --log-errors built-ins/Set
