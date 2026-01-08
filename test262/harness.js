@@ -416,13 +416,13 @@ function TestIterationAndResize(iterable, expected, rab, resizeAfter, newByteLen
 }
 
 /// propertyHelper.js
-function isConfigurable(obj, name) {
-  if (Object.hasOwn(obj, name)) return Object.getOwnPropertyDescriptor(obj, name).configurable;
+function isConfigurable(obj, propName) {
+  if (Object.hasOwn(obj, propName)) return Object.getOwnPropertyDescriptor(obj, propName).configurable;
   return true;
 }
 
-function isEnumerable(obj, name) {
-  return Object.hasOwn(obj, name) && Object.getOwnPropertyDescriptor(obj, name).enumerable;
+function isEnumerable(obj, propName) {
+  return Object.hasOwn(obj, propName) && Object.getOwnPropertyDescriptor(obj, propName).enumerable;
 }
 
 function isSameValue(a, b) {
@@ -432,42 +432,42 @@ function isSameValue(a, b) {
   return a === b;
 }
 
-function isWritable(obj, name, verifyProp, value) {
-  if (Object.hasOwn(obj, name) && Object.getOwnPropertyDescriptor(obj, name).writable != null) return Object.getOwnPropertyDescriptor(obj, name).writable;
-  if (!Object.hasOwn(obj, name) && Object.isExtensible(obj)) return true;
+function isWritable(obj, propName, verifyProp, value) {
+  if (Object.hasOwn(obj, propName) && Object.getOwnPropertyDescriptor(obj, propName).writable != null) return Object.getOwnPropertyDescriptor(obj, propName).writable;
+  if (!Object.hasOwn(obj, propName) && Object.isExtensible(obj)) return true;
 
-  var unlikelyValue = Array.isArray(obj) && name === "length" ?
+  var unlikelyValue = Array.isArray(obj) && propName === "length" ?
     Math.pow(2, 32) - 1 :
     "unlikelyValue";
   var newValue = value || unlikelyValue;
-  var hadValue = Object.hasOwn(obj, name);
-  var oldValue = obj[name];
+  var hadValue = Object.hasOwn(obj, propName);
+  var oldValue = obj[propName];
   var writeSucceeded;
 
   try {
-    obj[name] = newValue;
+    obj[propName] = newValue;
   } catch {}
 
-  writeSucceeded = isSameValue(obj[verifyProp || name], newValue);
+  writeSucceeded = isSameValue(obj[verifyProp || propName], newValue);
 
   if (writeSucceeded) {
     if (hadValue) {
-      obj[name] = oldValue;
+      obj[propName] = oldValue;
     } else {
-      delete obj[name];
+      delete obj[propName];
     }
   }
 
   return writeSucceeded;
 }
 
-function verifyProperty(obj, name, desc, options) {
+function verifyProperty(obj, propName, desc, options) {
   // Validate required arguments
   if (arguments.length < 3) {
-    throw new Test262Error('verifyProperty requires at least 3 arguments: obj, name, and descriptor');
+    throw new Test262Error('verifyProperty requires at least 3 arguments: obj, propName, and descriptor');
   }
 
-  var originalDesc = Object.getOwnPropertyDescriptor(obj, name);
+  var originalDesc = Object.getOwnPropertyDescriptor(obj, propName);
 
   if (desc === undefined) {
     if (originalDesc !== undefined) {
@@ -481,105 +481,105 @@ function verifyProperty(obj, name, desc, options) {
     throw new Test262Error('verifyProperty: desc must be an object');
   }
 
-  if (!Object.hasOwn(obj, name)) throw new Test262Error('verifyProperty: obj should have own property');
+  if (!Object.hasOwn(obj, propName)) throw new Test262Error('verifyProperty: obj should have own property');
 
   if (Object.hasOwn(desc, 'value')) {
     const v = desc.value;
     if (!isSameValue(originalDesc.value, v)) {
-      throw new Test262Error("obj['" + name + "'] descriptor value should be " + v + "; obj['" + name + "'] value should be " + v);
+      throw new Test262Error("obj['" + propName + "'] descriptor value should be " + v + "; obj['" + propName + "'] value should be " + v);
     }
   }
 
   if (Object.hasOwn(desc, 'enumerable')) {
     if (desc.enumerable !== originalDesc.enumerable ||
-        desc.enumerable !== isEnumerable(obj, name)) {
+        desc.enumerable !== isEnumerable(obj, propName)) {
       throw new Test262Error('enumerable fail');
     }
   }
 
   if (Object.hasOwn(desc, 'writable')) {
     if (desc.writable !== originalDesc.writable ||
-        desc.writable !== isWritable(obj, name)) {
+        desc.writable !== isWritable(obj, propName)) {
       throw new Test262Error('writable fail');
     }
   }
 
   if (Object.hasOwn(desc, 'configurable')) {
     if (desc.configurable !== originalDesc.configurable ||
-        desc.configurable !== isConfigurable(obj, name)) {
+        desc.configurable !== isConfigurable(obj, propName)) {
       throw new Test262Error('configurable fail');
     }
   }
 
   // delete the property (if configurable), then restore if requested
   if (originalDesc.configurable) {
-    delete obj[name];
+    delete obj[propName];
 
     if (options && options.restore) {
-      Object.defineProperty(obj, name, originalDesc);
+      Object.defineProperty(obj, propName, originalDesc);
     }
   }
 
   return true;
 }
 
-function verifyEqualTo(obj, name, value) {
-  if (!isSameValue(obj[name], value)) {
+function verifyEqualTo(obj, propName, value) {
+  if (!isSameValue(obj[propName], value)) {
     throw new Test262Error('propertyHelper verifyEqualTo failed');
   }
 }
 
-function verifyWritable(obj, name, verifyProp, value) {
+function verifyWritable(obj, propName, verifyProp, value) {
   if (!verifyProp) {
-    if (!Object.getOwnPropertyDescriptor(obj, name).writable)
+    if (!Object.getOwnPropertyDescriptor(obj, propName).writable)
       throw new Test262Error('propertyHelper verifyWritable failed');
   }
 
-  if (!isWritable(obj, name, verifyProp, value)) {
+  if (!isWritable(obj, propName, verifyProp, value)) {
     throw new Test262Error('propertyHelper verifyWritable failed');
   }
 }
 
-function verifyNotWritable(obj, name, verifyProp, value) {
+function verifyNotWritable(obj, propName, verifyProp, value) {
   if (!verifyProp) {
-    if (Object.getOwnPropertyDescriptor(obj, name).writable)
+    if (Object.getOwnPropertyDescriptor(obj, propName).writable)
       throw new Test262Error('propertyHelper verifyNotWritable failed');
   }
 
-  if (isWritable(obj, name, verifyProp)) {
+  if (isWritable(obj, propName, verifyProp)) {
     throw new Test262Error('propertyHelper verifyNotWritable failed');
   }
 }
 
-function verifyEnumerable(obj, name) {
-  if (!isEnumerable(obj, name)) {
+function verifyEnumerable(obj, propName) {
+  if (!isEnumerable(obj, propName)) {
     throw new Test262Error('propertyHelper verifyEnumerable failed');
   }
 }
 
-function verifyNotEnumerable(obj, name) {
-  if (isEnumerable(obj, name)) {
+function verifyNotEnumerable(obj, propName) {
+  if (isEnumerable(obj, propName)) {
     throw new Test262Error('propertyHelper verifyNotEnumerable failed');
   }
 }
 
-function verifyConfigurable(obj, name) {
-  if (!isConfigurable(obj, name)) {
+function verifyConfigurable(obj, propName) {
+  if (!isConfigurable(obj, propName)) {
     throw new Test262Error('propertyHelper verifyConfigurable failed');
   }
 }
 
-function verifyNotConfigurable(obj, name) {
-  if (isConfigurable(obj, name)) {
+function verifyNotConfigurable(obj, propName) {
+  if (isConfigurable(obj, propName)) {
     throw new Test262Error('propertyHelper verifyNotConfigurable failed');
   }
 }
 
-function verifyCallableProperty(obj, name, functionName, functionLength, desc, options) {
-  var value = obj[name];
+function verifyCallableProperty(obj, propName, functionName, functionLength, desc, options) {
+  var value = obj[propName];
 
   assert.sameValue(typeof value, "function",
-    "obj['" + String(name) + "'] descriptor should be a function");
+    "obj['" + String(propName) + "'] descriptor should be a function");
 
   if (desc === undefined) {
     desc = {
@@ -592,13 +592,13 @@ function verifyCallableProperty(obj, name, functionName, functionLength, desc, o
     desc.value = value;
   }
 
-  verifyProperty(obj, name, desc, options);
+  verifyProperty(obj, propName, desc, options);
 
   if (functionName === undefined) {
-    if (typeof name === "symbol") {
-      functionName = "[" + name.description + "]";
+    if (typeof propName === "symbol") {
+      functionName = "[" + propName.description + "]";
     } else {
-      functionName = name;
+      functionName = propName;
     }
   }
 
