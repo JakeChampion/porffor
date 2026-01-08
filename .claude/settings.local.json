@@ -43,7 +43,8 @@
       "Bash(node /tmp/test_eq.js:*)",
       "Bash(node /tmp/test_eq2.js:*)",
       "Bash(node /tmp/test_uri.js:*)",
-      "Bash(node /tmp/test_parseint.js:*)"
+      "Bash(node /tmp/test_parseint.js:*)",
+      "Bash(timeout 3:*)"
     ]
   }
 }

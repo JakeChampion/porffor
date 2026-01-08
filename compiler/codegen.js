@@ -1729,11 +1729,12 @@ const generateBinaryExp = (scope, decl) => {
     }
   }
 
-  // bitwise operators require ToNumber conversion of operands
-  const bitwiseOps = ['&', '|', '^', '<<', '>>', '>>>'];
+  // bitwise and arithmetic operators require ToNumber conversion of operands
+  // (excluding + which has special string concatenation handling)
+  const toNumberOps = ['&', '|', '^', '<<', '>>', '>>>', '-', '*', '/', '%', '**'];
   let leftNode = decl.left;
   let rightNode = decl.right;
-  if (bitwiseOps.includes(decl.operator)) {
+  if (toNumberOps.includes(decl.operator)) {
     // wrap operands in ToNumber to handle string/other type coercion
     const wrapToNumber = node => ({
       type: 'CallExpression',

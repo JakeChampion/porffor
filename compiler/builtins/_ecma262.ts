@@ -61,6 +61,11 @@ export const __ecma262_ToNumber = (argument: unknown): number => {
   // 1. If argument is a Number, return argument.
   if (Porffor.type(argument) == Porffor.TYPES.number) return argument;
 
+  // Fast path: NumberObject - extract primitive value directly
+  // This avoids ToPrimitive/valueOf which could cause recursion
+  if (Porffor.type(argument) == Porffor.TYPES.numberobject)
+    return Porffor.wasm`local.get ${argument}` as number;
+
   // 2. If argument is either a Symbol or a BigInt, throw a TypeError exception.
   if (Porffor.fastOr(
     Porffor.type(argument) == Porffor.TYPES.symbol,
