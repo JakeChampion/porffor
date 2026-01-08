@@ -67,6 +67,10 @@ export const __Number_prototype_toString = (_this: any, radix: number|any) => {
     throw new TypeError('Number.prototype.toString requires this to be a Number');
   }
 
+  // Convert NumberObject to primitive number for operations
+  // Note: Using subtraction because unary plus doesn't work correctly with numberobject
+  _this = _this - 0;
+
   // If radix is undefined, default to 10; otherwise convert to integer
   if (radix === undefined) {
     radix = 10;
@@ -783,7 +787,9 @@ export const __Number_prototype_valueOf = (_this: any) => {
     Porffor.type(_this) == Porffor.TYPES.numberobject)) {
     throw new TypeError('Number.prototype.valueOf requires this to be a Number');
   }
-  return _this;
+  // Convert NumberObject to primitive number
+  // Note: Using subtraction because unary plus doesn't work correctly with numberobject
+  return _this - 0;
 };
 
 
