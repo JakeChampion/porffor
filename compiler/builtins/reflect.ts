@@ -25,12 +25,34 @@ export const __Reflect_get = (target: any, prop: any, receiver: any = undefined)
   return undefined;
 };
 
-// todo: support receiver
-export const __Reflect_set = (target: any, prop: any, value: any) => {
+export const __Reflect_set = (target: any, prop: any, value: any, receiver: any = undefined) => {
   if (!Porffor.object.isObject(target)) throw new TypeError('Target is a non-object');
 
+  // If receiver is not present, let receiver be target
+  if (receiver === undefined) receiver = target;
+
   try {
-    target[prop] = value;
+    // Walk prototype chain to find property descriptor
+    let obj: any = target;
+    while (obj !== null) {
+      const desc: any = Object.getOwnPropertyDescriptor(obj, prop);
+      if (desc !== undefined) {
+        // Check if accessor descriptor (has set property)
+        const setter: any = desc.set;
+        if (setter !== undefined) {
+          // Call setter with receiver as this
+          setter.call(receiver, value);
+          return true;
+        }
+        // Data descriptor - check if writable
+        if (desc.writable === false) return false;
+        break;
+      }
+      obj = Object.getPrototypeOf(obj);
+    }
+
+    // Set on receiver for data property
+    receiver[prop] = value;
     return true;
   } catch {
     return false;
