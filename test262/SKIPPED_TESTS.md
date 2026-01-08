@@ -100,3 +100,12 @@ This file documents tests that were examined but skipped during debugging sessio
 - **Issue**: `new Number(0) === new Number(0)` returns true, but should return false (different objects)
 - **Root cause**: `new Number(value)` returns `n as NumberObject` which casts the primitive to a typed value rather than creating a heap-allocated object with distinct identity
 - **Complexity**: High - fundamental change to how primitive wrappers work in the type system
+
+## Object Property Storage
+
+### Duplicate Object Keys with String Object Characters
+- **Tests affected**: `built-ins/Object/fromEntries/string-entry-object-succeeds.js` and similar
+- **Issue**: When using characters from a String object as property keys, objects can have duplicate keys
+- **Example**: `var s = Object("ab"); var o = {}; o["a"] = 1; o[s[0]] = 2;` creates an object with two "a" properties
+- **Root cause**: The internal string representation from `s[0]` differs from a literal `"a"` string, even though they compare equal with `===`
+- **Complexity**: High - fundamental issue in object property key comparison/storage
