@@ -122,7 +122,8 @@ export const __Array_from = (arg: any, mapFn: any): any[] => {
 
 // 23.1.2.1 Array.fromAsync (asyncItems [, mapFn [, thisArg]])
 // https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.fromasync
-export const __Array_fromAsync = async (asyncItems: any, mapFn: any) => {
+// mapFn has default value so length property is 1
+export const __Array_fromAsync = async (asyncItems: any, mapFn: any = undefined) => {
   if (asyncItems == null) throw new TypeError('Argument cannot be nullish');
 
   const hasMapFn: boolean = Porffor.type(mapFn) != Porffor.TYPES.undefined;
