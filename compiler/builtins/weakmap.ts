@@ -9,7 +9,9 @@ export const __WeakMap_prototype_get = (_this: WeakMap, key: any) => {
 };
 
 export const __WeakMap_prototype_set = (_this: WeakMap, key: any, value: any) => {
-  if (!Porffor.object.isObjectOrSymbol(key)) throw new TypeError('Value in WeakSet needs to be an object or symbol');
+  if (!Porffor.object.isObjectOrSymbol(key)) throw new TypeError('WeakMap key must be an object or symbol');
+  if (Porffor.type(key) == Porffor.TYPES.symbol && Symbol.keyFor(key) !== undefined)
+    throw new TypeError('WeakMap key must not be a registered symbol');
 
   __Map_prototype_set(_this as Map, key, value);
   return _this;
