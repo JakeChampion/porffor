@@ -95,3 +95,6 @@ When implementing methods that accept "set-like" objects:
 
 ## Important: File Writing
 NEVER use `cat` with heredocs or redirects to write files. Always use the Write tool instead.
+
+## Important: Reading Files
+NEVER use `cat` to read files. Always use the Read tool instead.
