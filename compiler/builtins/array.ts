@@ -120,6 +120,72 @@ export const __Array_from = (arg: any, mapFn: any): any[] => {
   return out;
 };
 
+// 23.1.2.1 Array.fromAsync (asyncItems [, mapFn [, thisArg]])
+// https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.fromasync
+export const __Array_fromAsync = async (asyncItems: any, mapFn: any) => {
+  if (asyncItems == null) throw new TypeError('Argument cannot be nullish');
+
+  const hasMapFn: boolean = Porffor.type(mapFn) != Porffor.TYPES.undefined;
+  if (hasMapFn && Porffor.type(mapFn) != Porffor.TYPES.function) {
+    throw new TypeError('mapFn is not a function');
+  }
+
+  const out: any[] = Porffor.malloc();
+  let i: i32 = 0;
+
+  // Handle iterables (arrays, strings, sets, typed arrays, generators, wrapper iterators)
+  if (Porffor.fastOr(
+    Porffor.type(asyncItems) == Porffor.TYPES.array,
+    (Porffor.type(asyncItems) | 0b10000000) == Porffor.TYPES.bytestring,
+    Porffor.type(asyncItems) == Porffor.TYPES.set,
+    Porffor.fastAnd(Porffor.type(asyncItems) >= Porffor.TYPES.uint8clampedarray, Porffor.type(asyncItems) <= Porffor.TYPES.float64array),
+    Porffor.type(asyncItems) == Porffor.TYPES.__porffor_generator,
+    Porffor.type(asyncItems) == Porffor.TYPES.__porffor_wrapperiterator
+  )) {
+    if (hasMapFn) {
+      for (const x of asyncItems) {
+        const value: any = await x;
+        const mapped: any = await mapFn(value, i);
+        out[i] = mapped;
+        i++;
+      }
+    } else {
+      for (const x of asyncItems) {
+        const value: any = await x;
+        out[i++] = value;
+      }
+    }
+
+    out.length = i;
+    return out;
+  }
+
+  // Handle array-like objects
+  if (Porffor.type(asyncItems) == Porffor.TYPES.object) {
+    let len: i32 = ecma262.ToIntegerOrInfinity((asyncItems as object)['length']);
+    if (len > 4294967295) throw new RangeError('Invalid array length');
+    if (len < 0) len = 0;
+
+    if (hasMapFn) {
+      for (let j: i32 = 0; j < len; j++) {
+        const value: any = await (asyncItems as object)[j];
+        const mapped: any = await mapFn(value, j);
+        out[j] = mapped;
+      }
+    } else {
+      for (let j: i32 = 0; j < len; j++) {
+        const value: any = await (asyncItems as object)[j];
+        out[j] = value;
+      }
+    }
+
+    out.length = len;
+    return out;
+  }
+
+  return out;
+};
+
 // 23.1.3.1 Array.prototype.at (index)
 // https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.prototype.at
 export const __Array_prototype_at = (_this: any[], index: any) => {
