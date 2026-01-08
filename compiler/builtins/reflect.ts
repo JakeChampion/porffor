@@ -151,8 +151,15 @@ export const __Reflect_apply = (target: any, thisArgument: any, argumentsList: a
   return Porffor.call(target, args, thisArgument, null);
 };
 
-export const __Reflect_construct = (target: any, argumentsList: any, newTarget: any = target) => {
-  // todo: giving undefined/null to newTarget should not default
+export const __Reflect_construct = (target: any, argumentsList: any, newTarget: any = undefined) => {
+  // 1. If IsConstructor(target) is false, throw a TypeError exception.
+  if (!ecma262.IsConstructor(target)) throw new TypeError('Reflect.construct: target is not a constructor');
+
+  // 2. If newTarget is not present, let newTarget be target.
+  if (newTarget === undefined) newTarget = target;
+  // 3. Else, if IsConstructor(newTarget) is false, throw a TypeError exception.
+  else if (!ecma262.IsConstructor(newTarget)) throw new TypeError('Reflect.construct: newTarget is not a constructor');
+
   // Convert array-like to array using CreateListFromArrayLike logic
   const args: any[] = [];
   const len: i32 = argumentsList.length ?? 0;
