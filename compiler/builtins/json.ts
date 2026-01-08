@@ -53,6 +53,14 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     value = replacer(key, value);
   }
 
+  // Per spec 25.5.2.2: If value is Object, check for toJSON method first
+  if (value !== null && typeof value === 'object') {
+    const toJSON: any = value.toJSON;
+    if (typeof toJSON === 'function') {
+      value = toJSON.call(value, key);
+    }
+  }
+
   // somewhat modelled after 25.5.2.2 SerializeJSONProperty: https://tc39.es/ecma262/#sec-serializejsonproperty
   let buffer: i32 = Porffor.wasm`local.get ${_buffer}`;
   if (value === null) return __Porffor_bytestring_bufferStr(buffer, 'null');
