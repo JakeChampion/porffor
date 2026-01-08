@@ -782,12 +782,15 @@ export const parseInt = (input: any, radix: any): f64 => {
   input = ecma262.ToString(input).trim();
 
   let defaultRadix: boolean = false;
-  radix = ecma262.ToIntegerOrInfinity(radix);
-  if (!Number.isFinite(radix)) radix = 0; // infinity/NaN -> default
-
-  if (radix == 0) {
-    defaultRadix = true;
+  if (Porffor.type(radix) != Porffor.TYPES.number) {
     radix = 10;
+    defaultRadix = true;
+  } else {
+    radix |= 0;
+    if (radix == 0) {
+      defaultRadix = true;
+      radix = 10;
+    }
   }
   if (radix < 2 || radix > 36) return NaN;
 
