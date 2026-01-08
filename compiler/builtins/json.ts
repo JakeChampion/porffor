@@ -507,5 +507,11 @@ export const __JSON_parse = (_text: any) => {
     throw new SyntaxError('Unexpected token');
   };
 
-  return parseValue();
+  const result: any = parseValue();
+
+  // After parsing, ensure no trailing non-whitespace content
+  skipWhitespace();
+  if (pos < len) throw new SyntaxError('Unexpected non-whitespace character after JSON');
+
+  return result;
 };
