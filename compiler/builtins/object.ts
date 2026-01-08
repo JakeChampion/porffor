@@ -416,17 +416,18 @@ export const __Object_getOwnPropertyDescriptor = (obj: any, prop: any): object|u
 
   const tail: i32 = Porffor.wasm.i32.load16_u(entryPtr, 0, 16);
   const out: object = {};
-  out.configurable = !!(tail & 0b0010);
-  out.enumerable = !!(tail & 0b0100);
 
   if (tail & 0b0001) {
+    // accessor descriptor - spec order: get, set, enumerable, configurable
     out.get = Porffor.object.accessorGet(entryPtr);
     out.set = Porffor.object.accessorSet(entryPtr);
+    out.enumerable = !!(tail & 0b0100);
+    out.configurable = !!(tail & 0b0010);
 
     return out;
   }
 
-  // data descriptor
+  // data descriptor - spec order: value, writable, enumerable, configurable
   const value: any = Porffor.wasm.f64.load(entryPtr, 0, 8);
   Porffor.wasm`
 local.get ${tail}
@@ -435,8 +436,10 @@ i32.const 8
 i32.shr_u
 local.set ${value+1}`;
 
-  out.writable = !!(tail & 0b1000);
   out.value = value;
+  out.writable = !!(tail & 0b1000);
+  out.enumerable = !!(tail & 0b0100);
+  out.configurable = !!(tail & 0b0010);
 
   return out;
 };
