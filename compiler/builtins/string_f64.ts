@@ -476,3 +476,198 @@ export const __String_raw = (template: any, ...substitutions: any[]): string => 
     nextIndex += 1;
   }
 };
+
+// padStart/padEnd need to be in f64 file because padString can be any value (e.g. NaN)
+// which would be truncated to 0 in i32 mode
+export const __String_prototype_padStart = (_this: string, targetLength: number, padString: any = undefined) => {
+  // 3. Let intMaxLength be ToLength(maxLength).
+  targetLength = ecma262.ToLength(targetLength);
+
+  let out: string = Porffor.malloc();
+
+  let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+
+  const len: i32 = _this.length;
+
+  const todo: i32 = targetLength - len;
+  if (todo > 0) {
+    if (Porffor.type(padString) == Porffor.TYPES.undefined) {
+      for (let i: i32 = 0; i < todo; i++) {
+        Porffor.wasm.i32.store16(outPtr, 32, 0, 4);
+        outPtr += 2;
+      }
+
+      out.length = targetLength;
+    } else {
+      // Convert padString to string if not already
+      padString = ecma262.ToString(padString);
+      // Convert bytestring to string since we use UTF-16 memory access
+      if (Porffor.type(padString) == Porffor.TYPES.bytestring) {
+        padString = Porffor.bytestringToString(padString);
+      }
+      const padStringLen: i32 = padString.length;
+      if (padStringLen > 0) {
+        for (let i: i32 = 0; i < todo; i++) {
+          Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(Porffor.wasm`local.get ${padString}` + (i % padStringLen) * 2, 0, 4), 0, 4);
+          outPtr += 2;
+        }
+        out.length = targetLength;
+      } else out.length = len;
+    }
+  } else out.length = len;
+
+  const thisPtrEnd: i32 = thisPtr + len * 2;
+
+  while (thisPtr < thisPtrEnd) {
+    Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr, 0, 4), 0, 4);
+
+    thisPtr += 2;
+    outPtr += 2;
+  }
+
+  return out;
+};
+
+export const __ByteString_prototype_padStart = (_this: bytestring, targetLength: number, padString: any = undefined) => {
+  // 3. Let intMaxLength be ToLength(maxLength).
+  targetLength = ecma262.ToLength(targetLength);
+
+  let out: bytestring = Porffor.malloc();
+
+  let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+
+  const len: i32 = _this.length;
+
+  const todo: i32 = targetLength - len;
+  if (todo > 0) {
+    if (Porffor.type(padString) == Porffor.TYPES.undefined) {
+      for (let i: i32 = 0; i < todo; i++) {
+        Porffor.wasm.i32.store8(outPtr++, 32, 0, 4);
+      }
+
+      out.length = targetLength;
+    } else {
+      // Convert padString to string if not already
+      padString = ecma262.ToString(padString);
+      // If padString is non-bytestring, delegate to String version
+      if (Porffor.type(padString) != Porffor.TYPES.bytestring) {
+        return __String_prototype_padStart(Porffor.bytestringToString(_this), targetLength, padString);
+      }
+      const padStringLen: i32 = padString.length;
+      if (padStringLen > 0) {
+        for (let i: i32 = 0; i < todo; i++) {
+          Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(Porffor.wasm`local.get ${padString}` + (i % padStringLen), 0, 4), 0, 4);
+        }
+
+        out.length = targetLength;
+      } else out.length = len;
+    }
+  } else out.length = len;
+
+  const thisPtrEnd: i32 = thisPtr + len;
+
+  while (thisPtr < thisPtrEnd) {
+    Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(thisPtr++, 0, 4), 0, 4);
+  }
+
+  return out;
+};
+
+
+export const __String_prototype_padEnd = (_this: string, targetLength: number, padString: any = undefined) => {
+  // 3. Let intMaxLength be ToLength(maxLength).
+  targetLength = ecma262.ToLength(targetLength);
+
+  let out: string = Porffor.malloc();
+
+  let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+
+  const len: i32 = _this.length;
+
+  const thisPtrEnd: i32 = thisPtr + len * 2;
+
+  while (thisPtr < thisPtrEnd) {
+    Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr, 0, 4), 0, 4);
+
+    thisPtr += 2;
+    outPtr += 2;
+  }
+
+  const todo: i32 = targetLength - len;
+  if (todo > 0) {
+    if (Porffor.type(padString) == Porffor.TYPES.undefined) {
+      for (let i: i32 = 0; i < todo; i++) {
+        Porffor.wasm.i32.store16(outPtr, 32, 0, 4);
+        outPtr += 2;
+      }
+
+      out.length = targetLength;
+    } else {
+      // Convert padString to string if not already
+      padString = ecma262.ToString(padString);
+      // Convert bytestring to string since we use UTF-16 memory access
+      if (Porffor.type(padString) == Porffor.TYPES.bytestring) {
+        padString = Porffor.bytestringToString(padString);
+      }
+      const padStringLen: i32 = padString.length;
+      if (padStringLen > 0) {
+        for (let i: i32 = 0; i < todo; i++) {
+          Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(Porffor.wasm`local.get ${padString}` + (i % padStringLen) * 2, 0, 4), 0, 4);
+          outPtr += 2;
+        }
+        out.length = targetLength;
+      } else out.length = len;
+    }
+  } else out.length = len;
+
+  return out;
+};
+
+export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: number, padString: any = undefined) => {
+  // 3. Let intMaxLength be ToLength(maxLength).
+  targetLength = ecma262.ToLength(targetLength);
+
+  let out: bytestring = Porffor.malloc();
+
+  let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+
+  const len: i32 = _this.length;
+
+  const thisPtrEnd: i32 = thisPtr + len;
+
+  while (thisPtr < thisPtrEnd) {
+    Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(thisPtr++, 0, 4), 0, 4);
+  }
+
+  const todo: i32 = targetLength - len;
+  if (todo > 0) {
+    if (Porffor.type(padString) == Porffor.TYPES.undefined) {
+      for (let i: i32 = 0; i < todo; i++) {
+        Porffor.wasm.i32.store8(outPtr++, 32, 0, 4);
+      }
+
+      out.length = targetLength;
+    } else {
+      // Convert padString to string if not already
+      padString = ecma262.ToString(padString);
+      // If padString is non-bytestring, delegate to String version
+      if (Porffor.type(padString) != Porffor.TYPES.bytestring) {
+        return __String_prototype_padEnd(Porffor.bytestringToString(_this), targetLength, padString);
+      }
+      const padStringLen: i32 = padString.length;
+      if (padStringLen > 0) {
+        for (let i: i32 = 0; i < todo; i++) {
+          Porffor.wasm.i32.store8(outPtr++, Porffor.wasm.i32.load8_u(Porffor.wasm`local.get ${padString}` + (i % padStringLen), 0, 4), 0, 4);
+        }
+
+        out.length = targetLength;
+      } else out.length = len;
+    }
+  } else out.length = len;
+
+  return out;
+};
