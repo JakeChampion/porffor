@@ -283,13 +283,16 @@ export const encodeURI = (input: any): bytestring => {
       const chr: i32 = Porffor.wasm.i32.load8_u(i++, 0, 4);
 
       // Characters that should NOT be encoded for encodeURI
+      // uriReserved: ; / ? : @ & = + $ ,
+      // uriUnescaped: - _ . ! ~ * ' ( ) plus alphanumeric
+      // Also: # (for encodeURI only)
       if ((chr >= 48 && chr <= 57) ||  // 0-9
           (chr >= 65 && chr <= 90) ||  // A-Z
           (chr >= 97 && chr <= 122) || // a-z
           chr == 33 || chr == 35 || chr == 36 || chr == 38 || chr == 39 ||
           chr == 40 || chr == 41 || chr == 42 || chr == 43 || chr == 44 ||
           chr == 45 || chr == 46 || chr == 47 || chr == 58 || chr == 59 ||
-          chr == 61 || chr == 63 || chr == 64 || chr == 91 || chr == 93 ||
+          chr == 61 || chr == 63 || chr == 64 ||
           chr == 95 || chr == 126) {
         outLength += 1;
       } else {
@@ -313,7 +316,7 @@ export const encodeURI = (input: any): bytestring => {
           chr == 33 || chr == 35 || chr == 36 || chr == 38 || chr == 39 ||
           chr == 40 || chr == 41 || chr == 42 || chr == 43 || chr == 44 ||
           chr == 45 || chr == 46 || chr == 47 || chr == 58 || chr == 59 ||
-          chr == 61 || chr == 63 || chr == 64 || chr == 91 || chr == 93 ||
+          chr == 61 || chr == 63 || chr == 64 ||
           chr == 95 || chr == 126) {
         Porffor.wasm.i32.store8(j++, chr, 0, 4);
       } else {
@@ -354,7 +357,7 @@ export const encodeURI = (input: any): bytestring => {
         chr == 33 || chr == 35 || chr == 36 || chr == 38 || chr == 39 ||
         chr == 40 || chr == 41 || chr == 42 || chr == 43 || chr == 44 ||
         chr == 45 || chr == 46 || chr == 47 || chr == 58 || chr == 59 ||
-        chr == 61 || chr == 63 || chr == 64 || chr == 91 || chr == 93 ||
+        chr == 61 || chr == 63 || chr == 64 ||
         chr == 95 || chr == 126) {
       outLength += 1;
     } else if (chr < 128) {
@@ -397,7 +400,7 @@ export const encodeURI = (input: any): bytestring => {
         chr == 33 || chr == 35 || chr == 36 || chr == 38 || chr == 39 ||
         chr == 40 || chr == 41 || chr == 42 || chr == 43 || chr == 44 ||
         chr == 45 || chr == 46 || chr == 47 || chr == 58 || chr == 59 ||
-        chr == 61 || chr == 63 || chr == 64 || chr == 91 || chr == 93 ||
+        chr == 61 || chr == 63 || chr == 64 ||
         chr == 95 || chr == 126) {
       Porffor.wasm.i32.store8(j++, chr, 0, 4);
     } else if (chr < 128) {
@@ -868,7 +871,25 @@ export const encodeURIComponent = (input: any): bytestring => {
   return output;
 };
 
-export const decodeURI = (input: any): string => {
+// Helper to check if a byte is a reserved URI character (;/?:@&=+$,#)
+export const __Porffor_uri_isReserved = (byte: i32): boolean => {
+  return Porffor.fastOr(
+    byte == 35,  // #
+    byte == 36,  // $
+    byte == 38,  // &
+    byte == 43,  // +
+    byte == 44,  // ,
+    byte == 47,  // /
+    byte == 58,  // :
+    byte == 59,  // ;
+    byte == 61,  // =
+    byte == 63,  // ?
+    byte == 64   // @
+  );
+};
+
+// Internal decode function with option to preserve reserved characters
+export const __Porffor_decodeURI_impl = (input: any, preserveReserved: boolean): string => {
   input = __ecma262_ToString(input);
   const len: i32 = input.length;
   let outLength: i32 = 0;
@@ -899,7 +920,12 @@ export const decodeURI = (input: any): string => {
         const byte: i32 = (n1 << 4) | n2;
         // Skip continuation bytes
         if ((byte & 0x80) == 0) {
-          outLength += 1;
+          // Check if byte is a reserved character for decodeURI
+          if (preserveReserved && __Porffor_uri_isReserved(byte)) {
+            outLength += 3; // Keep %XX as-is
+          } else {
+            outLength += 1;
+          }
         } else if ((byte & 0xE0) == 0xC0) {
           outLength += 1;
         } else if ((byte & 0xF0) == 0xE0) {
@@ -952,9 +978,17 @@ export const decodeURI = (input: any): string => {
       const byte1: i32 = (n1 << 4) | n2;
 
       if ((byte1 & 0x80) == 0) {
-        // Single byte
-        Porffor.wasm.i32.store16(j, byte1, 0, 4);
-        j += 2;
+        // Single byte - check if reserved character for decodeURI
+        if (preserveReserved && __Porffor_uri_isReserved(byte1)) {
+          // Keep %XX as-is for reserved characters
+          Porffor.wasm.i32.store16(j, 37, 0, 4);     // %
+          Porffor.wasm.i32.store16(j + 2, h1, 0, 4); // first hex digit
+          Porffor.wasm.i32.store16(j + 4, h2, 0, 4); // second hex digit
+          j += 6;
+        } else {
+          Porffor.wasm.i32.store16(j, byte1, 0, 4);
+          j += 2;
+        }
       } else if ((byte1 & 0xE0) == 0xC0 && i + 2 < endPtr && Porffor.wasm.i32.load8_u(i, 0, 4) == 37) {
         // Two byte UTF-8
         const h3: i32 = Porffor.wasm.i32.load8_u(i + 1, 0, 4);
@@ -1058,8 +1092,10 @@ export const decodeURI = (input: any): string => {
   return output;
 };
 
+export const decodeURI = (input: any): string => {
+  return __Porffor_decodeURI_impl(input, true); // preserve reserved characters
+};
+
 export const decodeURIComponent = (input: any): string => {
-  // For now, decodeURIComponent is the same as decodeURI
-  // They differ only in error handling which we don't implement yet
-  return decodeURI(input);
+  return __Porffor_decodeURI_impl(input, false); // decode all characters
 };
