@@ -187,5 +187,15 @@ export const __Reflect_construct = (target: any, argumentsList: any, newTarget: 
   for (let i: i32 = 0; i < len; i++) {
     args.push(argumentsList[i]);
   }
-  return Porffor.call(target, args, null, newTarget);
+
+  // Create the this object with prototype from newTarget
+  // Per spec: OrdinaryCreateFromConstructor(newTarget, "%Object.prototype%")
+  // If newTarget.prototype is not an object, use default (Object.prototype)
+  const thisArg: object = {};
+  const proto: any = newTarget.prototype;
+  if (Porffor.object.isObject(proto)) {
+    Object.setPrototypeOf(thisArg, proto);
+  }
+
+  return Porffor.call(target, args, thisArg, newTarget);
 };

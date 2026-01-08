@@ -68,6 +68,15 @@ This file documents tests that were examined but skipped during debugging sessio
 - **Root cause**: Porffor implements `arguments` as a regular array, not an Arguments exotic object
 - **Complexity**: High - would require adding a new type and updating many places
 
+## Collection Iteration During Modification
+
+### Map/Set forEach Doesn't Handle Deletion During Iteration
+- **Tests affected**: `built-ins/Map/prototype/forEach/deleted-values-during-foreach.js` and similar
+- **Issue**: Deleting an entry during forEach still visits the deleted entry
+- **Root cause**: forEach caches size at start and doesn't check if entries are "empty" (deleted)
+- **Spec requirement**: Entries should be marked "empty" on delete, and forEach should skip empty entries
+- **Complexity**: Medium-High - requires changing Map/Set internal storage to mark deleted entries
+
 ## Generic Method Application
 
 ### Array Methods on Non-Array Objects
