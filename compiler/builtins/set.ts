@@ -79,6 +79,8 @@ export const __Set_prototype_clear = (_this: Set) => {
 };
 
 export const __Set_prototype_forEach = (_this: Set, callbackFn: any, thisArg: any = undefined) => {
+  if (typeof callbackFn !== 'function') throw new TypeError('callbackFn must be a function');
+
   for (const x of _this) {
     callbackFn.call(thisArg, x, x, _this);
   }
