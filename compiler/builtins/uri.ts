@@ -801,7 +801,19 @@ export const decodeURI = (input: any): string => {
 
         i += 3;
         const byte2: i32 = (n3 << 4) | n4;
+
+        // Validate continuation byte (must be 10xxxxxx)
+        if ((byte2 & 0xC0) != 0x80) {
+          throw new URIError('URI malformed');
+        }
+
         const codepoint: i32 = ((byte1 & 0x1F) << 6) | (byte2 & 0x3F);
+
+        // Reject overlong encoding (codepoint must be >= 0x80 for 2-byte)
+        if (codepoint < 0x80) {
+          throw new URIError('URI malformed');
+        }
+
         Porffor.wasm.i32.store16(j, codepoint, 0, 4);
         j += 2;
       } else if ((byte1 & 0xF0) == 0xE0 && i + 5 < endPtr && Porffor.wasm.i32.load8_u(i, 0, 4) == 37 && Porffor.wasm.i32.load8_u(i + 3, 0, 4) == 37) {
@@ -838,7 +850,24 @@ export const decodeURI = (input: any): string => {
         i += 6;
         const byte2: i32 = (n3 << 4) | n4;
         const byte3: i32 = (n5 << 4) | n6;
+
+        // Validate continuation bytes (must be 10xxxxxx)
+        if ((byte2 & 0xC0) != 0x80 || (byte3 & 0xC0) != 0x80) {
+          throw new URIError('URI malformed');
+        }
+
         const codepoint: i32 = ((byte1 & 0x0F) << 12) | ((byte2 & 0x3F) << 6) | (byte3 & 0x3F);
+
+        // Reject overlong encoding (codepoint must be >= 0x800 for 3-byte)
+        if (codepoint < 0x800) {
+          throw new URIError('URI malformed');
+        }
+
+        // Reject surrogate code points (U+D800-U+DFFF)
+        if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
+          throw new URIError('URI malformed');
+        }
+
         Porffor.wasm.i32.store16(j, codepoint, 0, 4);
         j += 2;
       } else {
