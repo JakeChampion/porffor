@@ -7678,17 +7678,19 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
   if (func.method) args.push({ name: '#this' });
 
   let jsLength = 0;
+  let stopCountingLength = false; // Stop counting once we hit a default param or rest element
   for (let i = 0; i < params.length; i++) {
     let name, def, destr;
     const x = params[i];
     switch (x.type) {
       case 'Identifier': {
         name = x.name;
-        jsLength++;
+        if (!stopCountingLength) jsLength++;
         break;
       }
 
       case 'AssignmentPattern': {
+        stopCountingLength = true; // Per spec: stop counting at first default param
         def = x.right;
         if (x.left.name) {
           name = x.left.name;
@@ -7701,6 +7703,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       }
 
       case 'RestElement': {
+        stopCountingLength = true; // Rest element also stops length counting
         name = x.argument.name;
         func.hasRestArgument = true;
         break;
@@ -7709,7 +7712,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       default:
         name = '#arg_dstr' + i;
         destr = x;
-        jsLength++;
+        if (!stopCountingLength) jsLength++;
         break;
     }
 
