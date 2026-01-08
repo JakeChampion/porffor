@@ -209,6 +209,9 @@ export const __Porffor_object_instanceof = (obj: any, constr: any, checkProto: a
 export const __Object_assign = (target: any, ...sources: any[]): any => {
   if (target == null) throw new TypeError('Argument is nullish, expected object');
 
+  // Per spec, ToObject(target) - convert primitives to wrapper objects
+  target = Object(target);
+
   for (const x of sources) {
     // Skip null/undefined sources per spec
     if (x == null) continue;
