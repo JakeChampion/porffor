@@ -1,10 +1,28 @@
 import type {} from './porffor.d.ts';
 
-// todo: support receiver
-export const __Reflect_get = (target: any, prop: any) => {
+export const __Reflect_get = (target: any, prop: any, receiver: any = undefined) => {
   if (!Porffor.object.isObject(target)) throw new TypeError('Target is a non-object');
 
-  return target[prop];
+  // If receiver is not present, let receiver be target
+  if (receiver === undefined) receiver = target;
+
+  // Walk prototype chain to find property
+  let obj: any = target;
+  while (obj !== null) {
+    const desc: any = Object.getOwnPropertyDescriptor(obj, prop);
+    if (desc !== undefined) {
+      // Check if accessor descriptor (has get property)
+      const getter: any = desc.get;
+      if (getter !== undefined) {
+        // Call getter with receiver as this
+        return getter.call(receiver);
+      }
+      // Data descriptor - return value
+      return desc.value;
+    }
+    obj = Object.getPrototypeOf(obj);
+  }
+  return undefined;
 };
 
 // todo: support receiver
