@@ -593,8 +593,26 @@ export const __Array_prototype_copyWithin = (_this: any[], _target: any, _start:
     if (end > len) end = len;
   }
 
-  while (start < end) {
-    _this[target++] = _this[start++];
+  // Calculate the count of elements to copy
+  let count: i32 = end - start;
+  if (count > len - target) count = len - target;
+  if (count <= 0) return _this;
+
+  // If regions overlap and destination is ahead of source, copy backward
+  if (start < target && target < start + count) {
+    // Copy backward
+    let from: i32 = start + count - 1;
+    let to: i32 = target + count - 1;
+    while (count > 0) {
+      _this[to--] = _this[from--];
+      count--;
+    }
+  } else {
+    // Copy forward
+    while (count > 0) {
+      _this[target++] = _this[start++];
+      count--;
+    }
   }
 
   return _this;
