@@ -753,7 +753,12 @@ export const decodeURI = (input: any): string => {
   while (i < endPtr) {
     const chr: i32 = Porffor.wasm.i32.load8_u(i++, 0, 4);
 
-    if (chr == 37 && i + 1 < endPtr) { // %
+    if (chr == 37) { // %
+      // Per spec: if k + 2 >= length, throw URIError
+      if (i + 1 >= endPtr) {
+        throw new URIError('URI malformed');
+      }
+
       const h1: i32 = Porffor.wasm.i32.load8_u(i, 0, 4);
       const h2: i32 = Porffor.wasm.i32.load8_u(i + 1, 0, 4);
 
