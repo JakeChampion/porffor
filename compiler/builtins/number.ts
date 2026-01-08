@@ -804,8 +804,13 @@ export const parseInt = (input: any, radix: any): f64 => {
     radix = 10;
     defaultRadix = true;
   } else {
-    // Per spec, ToInt32(radix)
-    radix = +radix | 0;
+    // Per spec, ToInt32(radix) - Infinity/NaN become 0
+    radix = +radix;
+    if (radix !== radix || radix === Infinity || radix === -Infinity) {
+      radix = 0;
+    } else {
+      radix = radix | 0;
+    }
     if (radix == 0) {
       defaultRadix = true;
       radix = 10;
