@@ -757,6 +757,116 @@ export const __Object_prototype_toString = (_this: any) => {
 
 export const __Object_prototype_toLocaleString = (_this: any) => __Object_prototype_toString(_this);
 
+// B.2.2.2 Object.prototype.__defineGetter__ ( P, getter )
+// https://tc39.es/ecma262/#sec-object.prototype.__defineGetter__
+export const __Object_prototype___defineGetter__ = (_this: any, prop: any, getter: any) => {
+  // 1. Let O be ? ToObject(this value).
+  if (_this == null) throw new TypeError('Cannot convert null or undefined to object');
+
+  // 2. If IsCallable(getter) is false, throw a TypeError exception.
+  if (typeof getter !== 'function') throw new TypeError('Getter must be a function');
+
+  // 3. Let desc be PropertyDescriptor { [[Get]]: getter, [[Enumerable]]: true, [[Configurable]]: true }.
+  const desc: object = {
+    get: getter,
+    enumerable: true,
+    configurable: true
+  };
+
+  // 4. Let key be ? ToPropertyKey(P).
+  // 5. Perform ? DefinePropertyOrThrow(O, key, desc).
+  __Object_defineProperty(_this, prop, desc);
+
+  // 6. Return undefined.
+  return undefined;
+};
+
+// B.2.2.3 Object.prototype.__defineSetter__ ( P, setter )
+// https://tc39.es/ecma262/#sec-object.prototype.__defineSetter__
+export const __Object_prototype___defineSetter__ = (_this: any, prop: any, setter: any) => {
+  // 1. Let O be ? ToObject(this value).
+  if (_this == null) throw new TypeError('Cannot convert null or undefined to object');
+
+  // 2. If IsCallable(setter) is false, throw a TypeError exception.
+  if (typeof setter !== 'function') throw new TypeError('Setter must be a function');
+
+  // 3. Let desc be PropertyDescriptor { [[Set]]: setter, [[Enumerable]]: true, [[Configurable]]: true }.
+  const desc: object = {
+    set: setter,
+    enumerable: true,
+    configurable: true
+  };
+
+  // 4. Let key be ? ToPropertyKey(P).
+  // 5. Perform ? DefinePropertyOrThrow(O, key, desc).
+  __Object_defineProperty(_this, prop, desc);
+
+  // 6. Return undefined.
+  return undefined;
+};
+
+// B.2.2.4 Object.prototype.__lookupGetter__ ( P )
+// https://tc39.es/ecma262/#sec-object.prototype.__lookupGetter__
+export const __Object_prototype___lookupGetter__ = (_this: any, prop: any) => {
+  // 1. Let O be ? ToObject(this value).
+  if (_this == null) throw new TypeError('Cannot convert null or undefined to object');
+
+  // 2. Let key be ? ToPropertyKey(P).
+  // 3. Repeat
+  let obj: any = _this;
+  while (obj != null) {
+    // a. Let desc be ? O.[[GetOwnProperty]](key).
+    const desc: any = __Object_getOwnPropertyDescriptor(obj, prop);
+
+    // b. If desc is not undefined, then
+    if (desc !== undefined) {
+      // i. If IsAccessorDescriptor(desc) is true, return desc.[[Get]].
+      if ('get' in desc || 'set' in desc) {
+        return desc.get;
+      }
+      // ii. Return undefined.
+      return undefined;
+    }
+
+    // c. Set O to ? O.[[GetPrototypeOf]]().
+    obj = __Object_getPrototypeOf(obj);
+  }
+
+  // d. If O is null, return undefined.
+  return undefined;
+};
+
+// B.2.2.5 Object.prototype.__lookupSetter__ ( P )
+// https://tc39.es/ecma262/#sec-object.prototype.__lookupSetter__
+export const __Object_prototype___lookupSetter__ = (_this: any, prop: any) => {
+  // 1. Let O be ? ToObject(this value).
+  if (_this == null) throw new TypeError('Cannot convert null or undefined to object');
+
+  // 2. Let key be ? ToPropertyKey(P).
+  // 3. Repeat
+  let obj: any = _this;
+  while (obj != null) {
+    // a. Let desc be ? O.[[GetOwnProperty]](key).
+    const desc: any = __Object_getOwnPropertyDescriptor(obj, prop);
+
+    // b. If desc is not undefined, then
+    if (desc !== undefined) {
+      // i. If IsAccessorDescriptor(desc) is true, return desc.[[Set]].
+      if ('get' in desc || 'set' in desc) {
+        return desc.set;
+      }
+      // ii. Return undefined.
+      return undefined;
+    }
+
+    // c. Set O to ? O.[[GetPrototypeOf]]().
+    obj = __Object_getPrototypeOf(obj);
+  }
+
+  // d. If O is null, return undefined.
+  return undefined;
+};
+
 export const __Object_prototype_valueOf = (_this: any) => {
   // todo: ToObject
   if (Porffor.type(_this) == Porffor.TYPES.object) {
