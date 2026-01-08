@@ -35,7 +35,8 @@
       "Bash(for test in \"built-ins/Array/prototype/flat/bound-function-call.js\" \"built-ins/Array/prototype/flatMap/proxy-access-count.js\" \"built-ins/Array/prototype/forEach/15.4.4.18-7-c-ii-1.js\")",
       "Bash(do)",
       "Bash(echo:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(node /tmp/analyze_fails.js:*)"
     ]
   }
 }

@@ -70,6 +70,8 @@ registerInternalType('SymbolObject');
 registerInternalType('__Porffor_Generator');
 registerInternalType('__Porffor_AsyncGenerator');
 
+registerInternalType('__Porffor_WrapperIterator');
+
 for (const x of [ '', 'Aggregate', 'Type', 'Reference', 'Syntax', 'Range', 'Eval', 'URI', 'Suppressed', 'Test262' ])
   registerInternalType(`${x}Error`);
 
