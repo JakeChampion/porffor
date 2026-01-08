@@ -456,6 +456,139 @@ export const __console_dir = (obj: any, options: any): void => {
 
 export const __console_dirxml = (obj: any): void => __console_dir(obj);
 
+export const __console_table = (data: any, columns: any): void => {
+  __Porffor_consoleIndent();
+
+  // Handle non-object data by falling back to log
+  if (data == null || typeof data !== 'object') {
+    __Porffor_print(data, true);
+    Porffor.printStatic('\n');
+    return;
+  }
+
+  const isArray: boolean = Array.isArray(data);
+
+  if (isArray) {
+    // Handle arrays
+    const arr: any[] = data;
+    const len: i32 = arr.length;
+
+    if (len === 0) {
+      __Porffor_print(data, true);
+      Porffor.printStatic('\n');
+      return;
+    }
+
+    // Check if array contains objects to get column names
+    let colNames: any[];
+    if (columns !== undefined && Array.isArray(columns)) {
+      colNames = columns;
+    } else {
+      const colSet: Set = new Set();
+      for (let i: i32 = 0; i < len; i++) {
+        const val: any = arr[i];
+        if (val != null && typeof val === 'object') {
+          const valKeys: any[] = Object.keys(val);
+          for (let j: i32 = 0; j < valKeys.length; j++) {
+            colSet.add(valKeys[j]);
+          }
+        }
+      }
+      colNames = Array.from(colSet);
+      if (colNames.length === 0) {
+        colNames = Porffor.malloc();
+        colNames[0] = 'Values';
+        colNames.length = 1;
+      }
+    }
+
+    // Print header
+    Porffor.printStatic('(index)');
+    for (let i: i32 = 0; i < colNames.length; i++) {
+      Porffor.printStatic('\t');
+      __Porffor_printString(colNames[i]);
+    }
+    Porffor.printStatic('\n');
+
+    // Print rows
+    for (let i: i32 = 0; i < len; i++) {
+      __Porffor_consoleIndent();
+      print(i);
+      const row: any = arr[i];
+
+      for (let j: i32 = 0; j < colNames.length; j++) {
+        Porffor.printStatic('\t');
+        const col: any = colNames[j];
+        if (row != null && typeof row === 'object') {
+          __Porffor_print(row[col], true);
+        } else if (col === 'Values') {
+          __Porffor_print(row, true);
+        }
+      }
+      Porffor.printStatic('\n');
+    }
+  } else {
+    // Handle objects
+    const keys: any[] = Object.keys(data);
+    const keysLen: i32 = keys.length;
+
+    if (keysLen === 0) {
+      __Porffor_print(data, true);
+      Porffor.printStatic('\n');
+      return;
+    }
+
+    // Check if values are objects to determine columns
+    let colNames: any[];
+    if (columns !== undefined && Array.isArray(columns)) {
+      colNames = columns;
+    } else {
+      const colSet: Set = new Set();
+      for (let i: i32 = 0; i < keysLen; i++) {
+        const val: any = Porffor.object.get(data, keys[i]);
+        if (val != null && typeof val === 'object') {
+          const valKeys: any[] = Object.keys(val);
+          for (let j: i32 = 0; j < valKeys.length; j++) {
+            colSet.add(valKeys[j]);
+          }
+        }
+      }
+      colNames = Array.from(colSet);
+      if (colNames.length === 0) {
+        colNames = Porffor.malloc();
+        colNames[0] = 'Values';
+        colNames.length = 1;
+      }
+    }
+
+    // Print header
+    Porffor.printStatic('(index)');
+    for (let i: i32 = 0; i < colNames.length; i++) {
+      Porffor.printStatic('\t');
+      __Porffor_printString(colNames[i]);
+    }
+    Porffor.printStatic('\n');
+
+    // Print rows
+    for (let i: i32 = 0; i < keysLen; i++) {
+      __Porffor_consoleIndent();
+      __Porffor_printString(keys[i]);
+      const row: any = Porffor.object.get(data, keys[i]);
+
+      for (let j: i32 = 0; j < colNames.length; j++) {
+        Porffor.printStatic('\t');
+        const col: any = colNames[j];
+        if (row != null && typeof row === 'object') {
+          __Porffor_print(row[col], true);
+        } else if (col === 'Values') {
+          __Porffor_print(row, true);
+        }
+      }
+      Porffor.printStatic('\n');
+    }
+  }
+};
+
 const countMap = new Map();
 export const __console_count = (label: any): void => {
   label ??= 'default';
