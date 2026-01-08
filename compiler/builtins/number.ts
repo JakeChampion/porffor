@@ -59,7 +59,14 @@ export const __Number_isSafeInteger = (number: any): boolean => {
 };
 
 // radix: number|any for type check
-export const __Number_prototype_toString = (_this: number, radix: number|any) => {
+export const __Number_prototype_toString = (_this: any, radix: number|any) => {
+  // thisNumberValue: check if this is a Number
+  if (!Porffor.fastOr(
+    Porffor.type(_this) == Porffor.TYPES.number,
+    Porffor.type(_this) == Porffor.TYPES.numberobject)) {
+    throw new TypeError('Number.prototype.toString requires this to be a Number');
+  }
+
   // If radix is undefined, default to 10; otherwise convert to integer
   if (radix === undefined) {
     radix = 10;
@@ -769,8 +776,13 @@ export const __Number_prototype_toExponential = (_this: number, fractionDigits: 
 
 // 21.1.3.7 Number.prototype.valueOf ()
 // https://tc39.es/ecma262/#sec-number.prototype.valueof
-export const __Number_prototype_valueOf = (_this: number) => {
+export const __Number_prototype_valueOf = (_this: any) => {
   // 1. Return ? ThisNumberValue(this value).
+  if (!Porffor.fastOr(
+    Porffor.type(_this) == Porffor.TYPES.number,
+    Porffor.type(_this) == Porffor.TYPES.numberobject)) {
+    throw new TypeError('Number.prototype.valueOf requires this to be a Number');
+  }
   return _this;
 };
 
