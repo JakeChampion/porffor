@@ -60,12 +60,13 @@ export const __Number_isSafeInteger = (number: any): boolean => {
 
 // radix: number|any for type check
 export const __Number_prototype_toString = (_this: number, radix: number|any) => {
-  if (Porffor.type(radix) != Porffor.TYPES.number) {
-    // todo: string to number
+  // If radix is undefined, default to 10; otherwise convert to integer
+  if (radix === undefined) {
     radix = 10;
+  } else {
+    radix = ecma262.ToIntegerOrInfinity(radix);
   }
 
-  radix |= 0;
   if (radix < 2 || radix > 36) {
     throw new RangeError('toString() radix argument must be between 2 and 36');
   }
