@@ -14,6 +14,19 @@ const f64ifyBitwise = op => (_1, _2, { left, right }) => [
   [ Opcodes.f64_convert_i32_s ]
 ];
 
+// ToUint32: same as ToInt32 but result is converted as unsigned for >>>
+// The >>> operator always returns a non-negative value (0 to 2^32-1)
+const f64ifyBitwiseUnsigned = op => (_1, _2, { left, right }) => [
+  ...left,
+  Opcodes.i64_trunc_sat_f64_s,
+  [ Opcodes.i32_wrap_i64 ],
+  ...right,
+  Opcodes.i64_trunc_sat_f64_s,
+  [ Opcodes.i32_wrap_i64 ],
+  [ op ],
+  [ Opcodes.f64_convert_i32_u ]
+];
+
 export const operatorOpcode = {
   i32: {
     '+': Opcodes.i32_add,
@@ -96,6 +109,6 @@ export const operatorOpcode = {
     '^': f64ifyBitwise(Opcodes.i32_xor),
     '<<': f64ifyBitwise(Opcodes.i32_shl),
     '>>': f64ifyBitwise(Opcodes.i32_shr_s),
-    '>>>': f64ifyBitwise(Opcodes.i32_shr_u)
+    '>>>': f64ifyBitwiseUnsigned(Opcodes.i32_shr_u)
   }
 };
