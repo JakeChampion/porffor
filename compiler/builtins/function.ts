@@ -21,7 +21,14 @@ export const __Function_prototype_toString = (_this: Function) => {
 export const __Function_prototype_toLocaleString = (_this: Function) => __Function_prototype_toString(_this);
 
 export const __Function_prototype_apply = (_this: Function, thisArg: any, argsArray: any) => {
-  argsArray = Array.from(argsArray ?? []);
+  // If argsArray is null or undefined, use empty array
+  if (argsArray == null) {
+    argsArray = [];
+  } else {
+    // CreateListFromArrayLike: If Type(argsArray) is not Object, throw a TypeError
+    if (!Porffor.object.isObject(argsArray)) throw new TypeError('CreateListFromArrayLike called on non-object');
+    argsArray = Array.from(argsArray);
+  }
   return Porffor.call(_this, argsArray, thisArg, null);
 };
 
