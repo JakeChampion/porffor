@@ -1860,14 +1860,17 @@ const generateBinaryExp = (scope, decl) => {
 
   // + operator: if neither operand is a string, convert both to numbers
   // (string concatenation is handled by performOp when either is a string)
+  // IMPORTANT: Don't wrap unknown types (null) with ToNumber - let performOp handle
+  // runtime string checking. Only wrap types that are KNOWN to not be strings.
   if (decl.operator === '+') {
     const leftIsStr = leftKnown === TYPES.string || leftKnown === TYPES.bytestring;
     const rightIsStr = rightKnown === TYPES.string || rightKnown === TYPES.bytestring;
     if (!leftIsStr && !rightIsStr) {
       // neither is known to be string, wrap with ToNumber for correct semantics
       // (e.g., undefined + 0 should be NaN, not 0)
-      if (leftKnown !== TYPES.number) leftNode = wrapToNumber(decl.left);
-      if (rightKnown !== TYPES.number) rightNode = wrapToNumber(decl.right);
+      // BUT: if type is unknown (null), don't wrap - could be string at runtime
+      if (leftKnown != null && leftKnown !== TYPES.number) leftNode = wrapToNumber(decl.left);
+      if (rightKnown != null && rightKnown !== TYPES.number) rightNode = wrapToNumber(decl.right);
     }
   }
 
