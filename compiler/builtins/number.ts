@@ -937,7 +937,8 @@ export const parseFloat = (input: any): f64 => {
   input = ecma262.ToString(input).trim();
 
   let n: f64 = NaN;
-  let dec: i32 = 0;
+  let decimalPlaces: i32 = 0;
+  let seenDecimal: boolean = false;
   let negative: boolean = false;
 
   let i: i32 = 0;
@@ -974,25 +975,24 @@ export const parseFloat = (input: any): f64 => {
     }
   }
 
+  // Parse exponent separately
+  let exp: i32 = 0;
+  let expNegative: boolean = false;
+  let hasExpDigit: boolean = false;
+
   while (i < len) {
     const chr: i32 = input.charCodeAt(i++);
 
     if (chr >= 48 && chr <= 57) { // 0-9
       if (Number.isNaN(n)) n = 0;
-      if (dec) {
-        dec *= 10;
-        n += (chr - 48) / dec;
-      } else n = (n * 10) + chr - 48;
+      n = (n * 10) + chr - 48;
+      if (seenDecimal) decimalPlaces++;
     } else if (chr == 46) { // .
-      if (dec) break;
-      dec = 1;
+      if (seenDecimal) break;
+      seenDecimal = true;
     } else if (chr == 101 || chr == 69) { // e or E
       // Handle exponent
       if (Number.isNaN(n)) break; // No mantissa before exponent
-
-      let expNegative: boolean = false;
-      let exp: i32 = 0;
-      let hasExpDigit: boolean = false;
 
       if (i < len) {
         const expSign: i32 = input.charCodeAt(i);
@@ -1014,17 +1014,29 @@ export const parseFloat = (input: any): f64 => {
           break;
         }
       }
-
-      if (hasExpDigit) {
-        if (expNegative) {
-          n = n / (10 ** exp);
-        } else {
-          n = n * (10 ** exp);
-        }
-      }
       break;
     } else {
       break;
+    }
+  }
+
+  // Apply decimal places and exponent together
+  if (!Number.isNaN(n)) {
+    // Combine exponent with decimal places
+    let totalExp: i32 = -decimalPlaces;
+    if (hasExpDigit) {
+      if (expNegative) {
+        totalExp -= exp;
+      } else {
+        totalExp += exp;
+      }
+    }
+
+    // Apply the combined exponent
+    if (totalExp > 0) {
+      n = n * (10 ** totalExp);
+    } else if (totalExp < 0) {
+      n = n / (10 ** (-totalExp));
     }
   }
 
