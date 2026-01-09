@@ -338,7 +338,6 @@ if (cluster.isPrimary) {
         join(__dirname, 'results.json'),
         JSON.stringify(
           {
-            passes: passFiles,
             fails: failFiles,
             compileErrors: compileErrorFiles,
             wasmErrors: wasmErrorFiles,
