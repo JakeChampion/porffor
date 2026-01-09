@@ -1,6 +1,6 @@
 # Test262 Failure Analysis
 
-**Current Status**: 30,553 / 51,946 passing (58.82%)
+**Current Status**: 20,655 / 27,380 passing (75.44%)
 
 ## Failure Categories by Complexity
 
@@ -148,6 +148,49 @@ NumberFormat, DateTimeFormat, Locale, etc.
 ---
 
 ### 8. COMPILER BUGS - Type Tracking Issues
+
+#### Loose equality with undefined/null inside functions (~20+ tests)
+
+**Pattern**: `undefined == 0` and `null == 0` return `true` inside functions when they should return `false`
+
+**Example**:
+```javascript
+function test(x) {
+  console.log(x == 0);  // Returns true for undefined, should be false
+}
+test(undefined);  // Incorrectly prints true
+```
+
+**Root cause**: When comparing `any` typed parameters with numbers using loose equality, the type conversion isn't correct.
+
+**Workaround**: Use explicit type checks before comparisons:
+```typescript
+if (Porffor.type(x) == Porffor.TYPES.number && x == 0) { ... }
+```
+
+**Fixed in**: `Object.is` was fixed using this workaround.
+
+---
+
+#### Static method dispatch ignores reassigned prototype methods (~30+ tests)
+
+**Pattern**: Calling `obj.method()` uses static dispatch based on type, ignoring reassigned methods
+
+**Example**:
+```javascript
+const s = new String('hello');
+s.toString = Boolean.prototype.toString;
+s.toString();     // Returns 'hello' - uses String's toString!
+s['toString']();  // Correctly throws TypeError
+```
+
+**Root cause**: Porffor optimizes method calls by static dispatch based on the known type, bypassing property lookup.
+
+**Affected test patterns**:
+- `Boolean.prototype.toString` transferred to other objects
+- Any test that reassigns prototype methods and expects them to be called
+
+---
 
 #### ecma262.ToString type not preserved through function returns (~50+ tests)
 

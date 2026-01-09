@@ -309,8 +309,8 @@ export const __Object_prototype_propertyIsEnumerable = (_this: any, prop: any) =
 
 export const __Object_is = (x: any, y: any): boolean => {
   if (x === y) {
-    if (x == 0) {
-      // check +0 vs -0
+    // check +0 vs -0 (only for numbers)
+    if (Porffor.type(x) == Porffor.TYPES.number && x == 0) {
       return 1 / x == 1 / y;
     }
 
