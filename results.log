@@ -7005,7 +7005,7 @@ Test262Error: Actual [a, 1, c, 2] and expected [1, 2, a, c] should have the same
 fail: language/expressions/addition/bigint-and-number.js
 Test262Error: assert.throws failed: no exception was thrown
 fail: language/expressions/addition/coerce-bigint-to-string.js
-Test262Error: Expected SameValue(«98880», «-1») to be true
+Test262Error: Expected SameValue(«1.23456789000000040000000e+23», «123456789000000000000000») to be true
 fail: language/expressions/addition/coerce-symbol-to-prim-err.js
 Test262Error: assert.throws failed: no exception was thrown
 wasm compile error: language/expressions/addition/coerce-symbol-to-prim-invocation.js

@@ -147,6 +147,41 @@ NumberFormat, DateTimeFormat, Locale, etc.
 
 ---
 
+### 8. COMPILER BUGS - Type Tracking Issues
+
+#### ecma262.ToString type not preserved through function returns (~50+ tests)
+
+**Pattern**: String methods fail when argument needs ToString conversion
+
+**Affected methods**:
+- `String.prototype.indexOf(Infinity)` returns -1 instead of correct index
+- `String.prototype.includes(Infinity)` returns false instead of true
+- `String.prototype.startsWith(Infinity)` returns false instead of true
+- Similar issues with `NaN`, `-Infinity`, and other non-string inputs
+
+**Root cause**: When `ecma262.ToString()` is called on a number and returns a bytestring (e.g., `'Infinity'`), the type tag is not correctly propagated back to the caller. The variable's type slot (`local+1`) still contains the original type (number) instead of the new type (bytestring).
+
+**Example**:
+```typescript
+// In indexOf:
+searchString = ecma262.ToString(searchString);  // Returns 'Infinity' as bytestring
+// But Porffor.wasm`local.get ${searchString+1}` still returns TYPES.number
+// So the type check fails and search doesn't work
+```
+
+**Workaround attempted**: Using `Porffor.type()` instead of direct wasm local.get, but this also fails.
+
+**Fix required**: Compiler-level fix to ensure function return types are properly stored in the type slot when reassigning variables.
+
+**Affected test files**:
+```
+built-ins/String/prototype/indexOf/searchstring-tostring.js
+built-ins/String/prototype/includes/*
+built-ins/String/prototype/startsWith/*
+```
+
+---
+
 ## Recommended Priority Order
 
 ### Phase 1: Quick Wins (Est. +200-300 tests)

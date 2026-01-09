@@ -45,7 +45,8 @@
       "Bash(node /tmp/test_uri.js:*)",
       "Bash(node /tmp/test_parseint.js:*)",
       "Bash(timeout 3:*)",
-      "Bash(node /tmp/test_decimal.js:*)"
+      "Bash(node /tmp/test_decimal.js:*)",
+      "Bash(shuf:*)"
     ]
   }
 }
