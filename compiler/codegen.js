@@ -4344,6 +4344,39 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
     const newValueTmp = !valueUnused && localTmp(scope, '__length_setter_tmp');
     let pointerTmp = op !== '=' && localTmp(scope, '__member_setter_ptr_tmp', Valtype.i32);
 
+    const objectType = getNodeType(scope, decl.left.object);
+    const known = knownType(scope, objectType);
+
+    // For arrays, use the validating setter function (but not in precompile/builtins)
+    if (known === TYPES.array && !globalThis.precompile && !scope.name?.startsWith('__')) {
+      // Generate the new value (handle compound assignment like +=)
+      const newValue = op === '=' ? decl.right : {
+        type: 'BinaryExpression',
+        operator: op.slice(0, -1),
+        left: { type: 'MemberExpression', object: decl.left.object, property: { type: 'Identifier', name: 'length' }, computed: false },
+        right: decl.right
+      };
+
+      const objWasm = generate(scope, decl.left.object);
+      const objTypeWasm = getNodeType(scope, decl.left.object);
+      const valWasm = generate(scope, newValue);
+      const valTypeWasm = getNodeType(scope, newValue);
+
+      const out = [
+        ...objWasm,
+        ...objTypeWasm,
+        ...valWasm,
+        ...valTypeWasm,
+        [ Opcodes.call, includeBuiltin(scope, '__Porffor_array_setLength').index ],
+        ...setLastType(scope, TYPES.number),
+        // When valueUnused, drop the returned value and push UNDEFINED instead
+        // (generateBlock adds drops between statements, so we need a value on stack)
+        ...(valueUnused ? [ [ Opcodes.drop ], number(UNDEFINED) ] : [])
+      ];
+
+      return out;
+    }
+
     const out = [
       ...generate(scope, decl.left.object),
       Opcodes.i32_to_u
@@ -4363,8 +4396,6 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
       ...optional([ Opcodes.local_get, newValueTmp ])
     ];
 
-    const type = getNodeType(scope, decl.left.object);
-    const known = knownType(scope, type);
     if (known != null && (known & TYPE_FLAGS.length) !== 0) return [
       ...out,
       ...optional([ Opcodes.local_tee, pointerTmp ]),
@@ -4381,11 +4412,51 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
     });
     if (valueUnused) slow.push([ Opcodes.drop ]);
 
+    // For unknown types, check at runtime if it's an array (but skip in precompile/builtins)
+    if (!globalThis.precompile && !scope.name?.startsWith('__')) {
+      const arrayLengthSetter = [
+        ...generate(scope, decl.left.object),
+        ...objectType,
+        ...(op === '=' ? generate(scope, decl.right) : performOp(scope, op, [
+          [ Opcodes.local_get, pointerTmp ],
+          [ Opcodes.i32_load, Math.log2(ValtypeSize.i32) - 1, 0 ],
+          Opcodes.i32_from_u
+        ], generate(scope, decl.right), [ number(TYPES.number, Valtype.i32) ], getNodeType(scope, decl.right))),
+        ...getNodeType(scope, decl.right),
+        [ Opcodes.call, includeBuiltin(scope, '__Porffor_array_setLength').index ],
+        ...setLastType(scope, TYPES.number),
+        ...optional([ Opcodes.drop ], valueUnused)
+      ];
+
+      return [
+        ...out,
+        [ Opcodes.local_set, pointerTmp ],
+
+        ...objectType,
+        number(TYPES.array, Valtype.i32),
+        [ Opcodes.i32_eq ],
+        [ Opcodes.if, valueUnused ? Blocktype.void : valtypeBinary ],
+          ...arrayLengthSetter,
+        [ Opcodes.else ],
+          ...objectType,
+          number(TYPE_FLAGS.length, Valtype.i32),
+          [ Opcodes.i32_and ],
+          [ Opcodes.if, valueUnused ? Blocktype.void : valtypeBinary ],
+            [ Opcodes.local_get, pointerTmp ],
+            ...lengthTypeWasm,
+          [ Opcodes.else ],
+            ...slow,
+          [ Opcodes.end ],
+        [ Opcodes.end ],
+        ...optional(number(UNDEFINED), valueUnused)
+      ];
+    }
+
     return [
       ...out,
       [ Opcodes.local_set, pointerTmp ],
 
-      ...type,
+      ...objectType,
       number(TYPE_FLAGS.length, Valtype.i32),
       [ Opcodes.i32_and ],
       [ Opcodes.if, valueUnused ? Blocktype.void : valtypeBinary ],
@@ -6624,23 +6695,48 @@ const generateMember = (scope, decl, _global, _name) => {
 
   const out = typeSwitch(scope, type, {
     ...(decl.computed && !isSymbolProperty ? {
-      [TYPES.array]: () => [
-        propertyGet,
-        Opcodes.i32_to_u,
-        number(ValtypeSize[valtype] + 1, Valtype.i32),
-        [ Opcodes.i32_mul ],
+      [TYPES.array]: () => {
+        const idxTmp = localTmp(scope, '#array_idx_tmp', Valtype.i32);
+        const objTmp = localTmp(scope, '#array_obj_tmp', Valtype.i32);
 
-        objectGet,
-        Opcodes.i32_to_u,
-        [ Opcodes.i32_add ],
-        [ Opcodes.local_tee, localTmp(scope, '#loadArray_offset', Valtype.i32) ],
-        [ Opcodes.load, 0, ValtypeSize.i32 ],
+        return [
+          // Store index
+          propertyGet,
+          Opcodes.i32_to_u,
+          [ Opcodes.local_set, idxTmp ],
 
-        ...setLastType(scope, [
-          [ Opcodes.local_get, localTmp(scope, '#loadArray_offset', Valtype.i32) ],
-          [ Opcodes.i32_load8_u, 0, ValtypeSize.i32 + ValtypeSize[valtype] ],
-        ])
-      ],
+          // Store object pointer
+          objectGet,
+          Opcodes.i32_to_u,
+          [ Opcodes.local_tee, objTmp ],
+
+          // Load length (at offset 0 of the array)
+          [ Opcodes.i32_load, Math.log2(ValtypeSize.i32) - 1, 0 ],
+
+          // Check: length > index (i.e., index < length)
+          [ Opcodes.local_get, idxTmp ],
+          [ Opcodes.i32_gt_u ],
+
+          [ Opcodes.if, valtypeBinary ],
+            // In bounds - load the element
+            [ Opcodes.local_get, idxTmp ],
+            number(ValtypeSize[valtype] + 1, Valtype.i32),
+            [ Opcodes.i32_mul ],
+            [ Opcodes.local_get, objTmp ],
+            [ Opcodes.i32_add ],
+            [ Opcodes.local_tee, localTmp(scope, '#loadArray_offset', Valtype.i32) ],
+            [ Opcodes.load, 0, ValtypeSize.i32 ],
+            ...setLastType(scope, [
+              [ Opcodes.local_get, localTmp(scope, '#loadArray_offset', Valtype.i32) ],
+              [ Opcodes.i32_load8_u, 0, ValtypeSize.i32 + ValtypeSize[valtype] ],
+            ]),
+          [ Opcodes.else ],
+            // Out of bounds - return undefined
+            number(UNDEFINED),
+            ...setLastType(scope, TYPES.undefined),
+          [ Opcodes.end ],
+        ];
+      },
 
       [TYPES.string]: () => [
         // allocate out string

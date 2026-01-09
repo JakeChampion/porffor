@@ -1102,6 +1102,31 @@ export const __Array_prototype_flat = (_this: any[], _depth: any) => {
 };
 
 
+// Set array length with proper validation per ES spec
+// Returns the new length value for assignment expressions
+export const __Porffor_array_setLength = (arr: any[], value: any): number => {
+  // Convert to number using ToNumber
+  const n: number = ecma262.ToNumber(value);
+
+  // Validate: must be a valid Uint32 array length
+  // Check: 0 <= n <= 2^32-1 and n is an integer
+  if (Porffor.fastOr(
+    n < 0,
+    n > 4294967295,
+    !Number.isInteger(n)
+  )) throw new RangeError('Invalid array length');
+
+  // Set the length directly via wasm (store i32 at offset 0)
+  Porffor.wasm`
+local.get ${arr}
+i32.to_u
+local.get ${n}
+i32.to_u
+i32.store 0 0`;
+
+  return n;
+};
+
 export const __Porffor_array_fastPush = (arr: any[], el: any): i32 => {
   let len: i32 = arr.length;
   arr[len] = el;
