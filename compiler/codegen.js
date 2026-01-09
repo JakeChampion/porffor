@@ -1827,6 +1827,47 @@ const generateBinaryExp = (scope, decl) => {
     }
   }
 
+  // loose equality: convert booleans to numbers per spec
+  // (spec: if x is Boolean, return ToNumber(x) == y)
+  if (decl.operator === '==' || decl.operator === '!=') {
+    const leftBool = leftKnown === TYPES.boolean;
+    const rightBool = rightKnown === TYPES.boolean;
+    if (leftBool && !rightBool) {
+      leftNode = wrapToNumber(decl.left);
+    }
+    if (rightBool && !leftBool) {
+      rightNode = wrapToNumber(decl.right);
+    }
+
+    // also handle mixed string/number comparisons for loose equality
+    // recalculate types after potential boolean conversion
+    const leftNodeKnown = leftNode === decl.left ? leftKnown : TYPES.number;
+    const rightNodeKnown = rightNode === decl.right ? rightKnown : TYPES.number;
+    const leftNodeStr = leftNodeKnown === TYPES.string || leftNodeKnown === TYPES.bytestring;
+    const rightNodeStr = rightNodeKnown === TYPES.string || rightNodeKnown === TYPES.bytestring;
+    const leftNodeNum = leftNodeKnown === TYPES.number;
+    const rightNodeNum = rightNodeKnown === TYPES.number;
+
+    if ((leftNodeStr && rightNodeNum) || (leftNodeNum && rightNodeStr)) {
+      // convert string to number for loose equality
+      if (leftNodeStr) leftNode = wrapToNumber(leftNode === decl.left ? decl.left : leftNode);
+      if (rightNodeStr) rightNode = wrapToNumber(rightNode === decl.right ? decl.right : rightNode);
+    }
+  }
+
+  // + operator: if neither operand is a string, convert both to numbers
+  // (string concatenation is handled by performOp when either is a string)
+  if (decl.operator === '+') {
+    const leftIsStr = leftKnown === TYPES.string || leftKnown === TYPES.bytestring;
+    const rightIsStr = rightKnown === TYPES.string || rightKnown === TYPES.bytestring;
+    if (!leftIsStr && !rightIsStr) {
+      // neither is known to be string, wrap with ToNumber for correct semantics
+      // (e.g., undefined + 0 should be NaN, not 0)
+      if (leftKnown !== TYPES.number) leftNode = wrapToNumber(decl.left);
+      if (rightKnown !== TYPES.number) rightNode = wrapToNumber(decl.right);
+    }
+  }
+
   const out = performOp(scope, decl.operator, generate(scope, leftNode), generate(scope, rightNode), getNodeType(scope, leftNode), getNodeType(scope, rightNode));
   if (valtype !== 'i32' && ['==', '===', '!=', '!==', '>', '>=', '<', '<='].includes(decl.operator)) out.push(Opcodes.i32_from_u);
 
