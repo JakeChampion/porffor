@@ -1813,17 +1813,20 @@ const generateBinaryExp = (scope, decl) => {
     if (rightKnown !== TYPES.number) rightNode = wrapToNumber(decl.right);
   }
 
-  // relational operators: if one is string and one is not, convert both to numbers
+  // relational operators: convert non-number/non-string operands to numbers
   // (if both are strings, performOp handles string comparison)
   // (exclude BigInt which has its own comparison semantics)
   if (relationalOps.includes(decl.operator)) {
     const leftStr = leftKnown === TYPES.string || leftKnown === TYPES.bytestring;
     const rightStr = rightKnown === TYPES.string || rightKnown === TYPES.bytestring;
     const hasBigInt = leftKnown === TYPES.bigint || rightKnown === TYPES.bigint;
-    if ((leftStr || rightStr) && !(leftStr && rightStr) && !hasBigInt) {
-      // mixed string/non-string (excluding BigInt): convert both to numbers
-      if (leftKnown !== TYPES.number) leftNode = wrapToNumber(decl.left);
-      if (rightKnown !== TYPES.number) rightNode = wrapToNumber(decl.right);
+    // if both are strings, skip (string comparison handled by performOp)
+    // if either has BigInt, skip (BigInt has its own semantics)
+    if (!(leftStr && rightStr) && !hasBigInt) {
+      // convert non-number operands to numbers for correct semantics
+      // (e.g., 1 >= undefined should be false because NaN comparisons are false)
+      if (leftKnown !== TYPES.number && !leftStr) leftNode = wrapToNumber(decl.left);
+      if (rightKnown !== TYPES.number && !rightStr) rightNode = wrapToNumber(decl.right);
     }
   }
 

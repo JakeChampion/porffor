@@ -22,6 +22,12 @@
 **Fix**: Added ToNumber wrapping for non-string operands in `+` when neither is a known string
 **Impact**: Addition tests improved (e.g., S11.6.1_A3.1_T1.3.js now passes)
 
+### Relational operators with undefined/null ✅ FIXED
+**Issue**: `1 >= undefined` returned `true` instead of `false`
+**Root cause**: Relational operators only converted strings to numbers, not undefined/null/boolean
+**Fix**: Extended ToNumber wrapping to all non-number, non-string operands for relational ops
+**Impact**: Relational operator tests improved (e.g., S11.8.4_A3.1_T2.4.js now passes)
+
 ## Failure Categories by Complexity
 
 ### 1. TRIVIAL - Missing Static Methods/Properties (Est. +50-100 tests each)
