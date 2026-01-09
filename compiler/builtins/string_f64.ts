@@ -1,5 +1,52 @@
 import type {} from './porffor.d.ts';
 
+// Relational string comparison: returns -1 if a < b, 0 if a == b, 1 if a > b
+export const __Porffor_strcmp_rel = (a: any, b: any): number => {
+  // Convert non-strings to strings
+  if ((Porffor.type(a) | 0b10000000) != Porffor.TYPES.bytestring) {
+    a = ecma262.ToString(a);
+  }
+  if ((Porffor.type(b) | 0b10000000) != Porffor.TYPES.bytestring) {
+    b = ecma262.ToString(b);
+  }
+
+  const aLen: i32 = a.length;
+  const bLen: i32 = b.length;
+  const minLen: i32 = aLen < bLen ? aLen : bLen;
+
+  let aPtr: i32 = Porffor.wasm`local.get ${a}`;
+  let bPtr: i32 = Porffor.wasm`local.get ${b}`;
+
+  const aIsBytestring: boolean = Porffor.type(a) == Porffor.TYPES.bytestring;
+  const bIsBytestring: boolean = Porffor.type(b) == Porffor.TYPES.bytestring;
+
+  // Compare character by character using direct memory access
+  for (let i: i32 = 0; i < minLen; i++) {
+    let ca: i32;
+    let cb: i32;
+
+    if (aIsBytestring) {
+      ca = Porffor.wasm.i32.load8_u(aPtr + i, 0, 4);
+    } else {
+      ca = Porffor.wasm.i32.load16_u(aPtr + i * 2, 0, 4);
+    }
+
+    if (bIsBytestring) {
+      cb = Porffor.wasm.i32.load8_u(bPtr + i, 0, 4);
+    } else {
+      cb = Porffor.wasm.i32.load16_u(bPtr + i * 2, 0, 4);
+    }
+
+    if (ca < cb) return -1;
+    if (ca > cb) return 1;
+  }
+
+  // All compared characters are equal, compare by length
+  if (aLen < bLen) return -1;
+  if (aLen > bLen) return 1;
+  return 0;
+};
+
 export const __Porffor_compareStrings = (a: any, b: any): boolean => {
   if ((Porffor.type(a) | 0b10000000) != Porffor.TYPES.bytestring) {
     // a is not string or bytestring

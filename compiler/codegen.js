@@ -1564,7 +1564,35 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
       ]);
     }
 
-    // todo: proper >|>=|<|<=
+    // string relational comparison: >, >=, <, <=
+    // Only do string comparison if both operands are strings (not mixed string/BigInt)
+    const knownLeftBigInt = knownLeft === TYPES.bigint;
+    const knownRightBigInt = knownRight === TYPES.bigint;
+    if ((op === '>' || op === '>=' || op === '<' || op === '<=') && knownLeftStr && knownRightStr && !knownLeftBigInt && !knownRightBigInt) {
+      // __Porffor_strcmp_rel returns -1 if a < b, 0 if a == b, 1 if a > b
+      const comparisonOp = {
+        '>': Opcodes.f64_gt,
+        '>=': Opcodes.f64_ge,
+        '<': Opcodes.f64_lt,
+        '<=': Opcodes.f64_le
+      }[op];
+
+      return finalize([
+        ...left,
+        ...(valtypeBinary === Valtype.i32 ? [ [ Opcodes.f64_convert_i32_s ] ] : []),
+        ...leftType,
+
+        ...right,
+        ...(valtypeBinary === Valtype.i32 ? [ [ Opcodes.f64_convert_i32_s ] ] : []),
+        ...rightType,
+
+        [ Opcodes.call, includeBuiltin(scope, '__Porffor_strcmp_rel').index ],
+
+        // Compare result with 0: > 0 for >, >= 0 for >=, < 0 for <, <= 0 for <=
+        [ Opcodes.f64_const, 0 ],
+        [ comparisonOp ],
+      ]);
+    }
   }
 
   // BigInt equality comparison
