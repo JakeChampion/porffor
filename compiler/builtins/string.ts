@@ -3233,6 +3233,96 @@ export const __ByteString_prototype_valueOf = (_this: bytestring) => {
   return _this;
 };
 
+// Helper: Calculate the length of a substituted replacement string at a given match position
+// This handles $$, $&, $`, $' patterns
+export const __Porffor_getSubstitutionLength = (
+  replaceString: string, replaceLen: i32,
+  searchLen: i32, position: i32, tailPos: i32, stringLen: i32
+): i32 => {
+  let length: i32 = 0;
+  const replacePtr: i32 = Porffor.wasm`local.get ${replaceString}`;
+
+  let r: i32 = 0;
+  while (r < replaceLen) {
+    const chr: i32 = Porffor.wasm.i32.load16_u(replacePtr + r * 2, 0, 4);
+    if (chr == 36 && r + 1 < replaceLen) { // $
+      const next: i32 = Porffor.wasm.i32.load16_u(replacePtr + (r + 1) * 2, 0, 4);
+      if (next == 36) { // $$
+        length++;
+        r += 2;
+      } else if (next == 38) { // $&
+        length += searchLen;
+        r += 2;
+      } else if (next == 96) { // $`
+        length += position;
+        r += 2;
+      } else if (next == 39) { // $'
+        length += stringLen - tailPos;
+        r += 2;
+      } else {
+        // Not a recognized pattern, keep the $
+        length++;
+        r++;
+      }
+    } else {
+      length++;
+      r++;
+    }
+  }
+  return length;
+};
+
+// Helper: Perform substitution and write to output, returning new output pointer
+export const __Porffor_doSubstitution = (
+  outPtr: i32, replaceString: string, replaceLen: i32,
+  _this: string, searchString: string, searchLen: i32,
+  position: i32, tailPos: i32, stringLen: i32
+): i32 => {
+  const replacePtr: i32 = Porffor.wasm`local.get ${replaceString}`;
+  const thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+  const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
+
+  let r: i32 = 0;
+  while (r < replaceLen) {
+    const chr: i32 = Porffor.wasm.i32.load16_u(replacePtr + r * 2, 0, 4);
+    if (chr == 36 && r + 1 < replaceLen) { // $
+      const next: i32 = Porffor.wasm.i32.load16_u(replacePtr + (r + 1) * 2, 0, 4);
+      if (next == 36) { // $$ -> $
+        Porffor.wasm.i32.store16(outPtr, 36, 0, 4);
+        outPtr += 2;
+        r += 2;
+      } else if (next == 38) { // $& -> matched string
+        for (let s: i32 = 0; s < searchLen; s++) {
+          Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(searchPtr + s * 2, 0, 4), 0, 4);
+          outPtr += 2;
+        }
+        r += 2;
+      } else if (next == 96) { // $` -> portion before match
+        for (let s: i32 = 0; s < position; s++) {
+          Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr + s * 2, 0, 4), 0, 4);
+          outPtr += 2;
+        }
+        r += 2;
+      } else if (next == 39) { // $' -> portion after match
+        for (let s: i32 = tailPos; s < stringLen; s++) {
+          Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr + s * 2, 0, 4), 0, 4);
+          outPtr += 2;
+        }
+        r += 2;
+      } else {
+        // Not a recognized pattern, keep the $
+        Porffor.wasm.i32.store16(outPtr, chr, 0, 4);
+        outPtr += 2;
+        r++;
+      }
+    } else {
+      Porffor.wasm.i32.store16(outPtr, chr, 0, 4);
+      outPtr += 2;
+      r++;
+    }
+  }
+  return outPtr;
+};
 
 // 22.1.3.19 String.prototype.replaceAll ( searchValue, replaceValue )
 // https://tc39.es/ecma262/#sec-string.prototype.replaceall
@@ -3283,14 +3373,15 @@ export const __String_prototype_replaceAll = (_this: string, searchString: any, 
     return out;
   }
 
-  // Count occurrences first to allocate correct size
+  // First pass: count occurrences and calculate output length with substitutions
   let count: i32 = 0;
   let pos: i32 = 0;
+  let outLen: i32 = 0;
   let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
   const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
-  const replacePtr: i32 = Porffor.wasm`local.get ${replaceString}`;
   const searchLenX2: i32 = searchLen * 2;
 
+  let lastMatchEnd: i32 = 0;
   while (pos <= thisLen - searchLen) {
     let match: boolean = true;
     for (let j: i32 = 0; j < searchLenX2; j += 2) {
@@ -3300,22 +3391,28 @@ export const __String_prototype_replaceAll = (_this: string, searchString: any, 
       }
     }
     if (match) {
+      // Add length of non-matched portion before this match
+      outLen += pos - lastMatchEnd;
+      // Add substituted replacement length
+      const tailPos: i32 = pos + searchLen;
+      outLen += __Porffor_getSubstitutionLength(replaceString, replaceLen, searchLen, pos, tailPos, thisLen);
+      lastMatchEnd = tailPos;
       count++;
       pos += searchLen;
     } else {
       pos++;
     }
   }
+  // Add remaining portion after last match
+  outLen += thisLen - lastMatchEnd;
 
   // If no matches, return original string
   if (count == 0) return _this;
 
   // Allocate output string
-  const outLen: i32 = thisLen + count * (replaceLen - searchLen);
   let out: string = Porffor.malloc();
 
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
-  const replaceLenX2: i32 = replaceLen * 2;
 
   pos = 0;
   while (pos < thisLen) {
@@ -3333,11 +3430,9 @@ export const __String_prototype_replaceAll = (_this: string, searchString: any, 
     }
 
     if (match) {
-      // Copy replacement string
-      for (let r: i32 = 0; r < replaceLenX2; r += 2) {
-        Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(replacePtr + r, 0, 4), 0, 4);
-        outPtr += 2;
-      }
+      // Perform substitution
+      const tailPos: i32 = pos + searchLen;
+      outPtr = __Porffor_doSubstitution(outPtr, replaceString, replaceLen, _this, searchString, searchLen, pos, tailPos, thisLen);
       pos += searchLen;
     } else {
       // Copy original character
