@@ -1116,6 +1116,23 @@ export const __Porffor_array_setLength = (arr: any[], value: any): number => {
     !Number.isInteger(n)
   )) throw new RangeError('Invalid array length');
 
+  // Get current length
+  const oldLen: i32 = arr.length;
+  const newLen: i32 = n;
+
+  // If extending, mark new elements as "empty" (holes)
+  // Array layout: 4-byte length header + 9 bytes per element (8 value + 1 type)
+  // Type byte is at offset 4 + i * 9 + 8 = 12 + i * 9
+  if (newLen > oldLen) {
+    const arrPtr: i32 = Porffor.wasm`local.get ${arr}`;
+    let ptr: i32 = arrPtr + 4 + oldLen * 9;
+    const endPtr: i32 = arrPtr + 4 + newLen * 9;
+    for (; ptr < endPtr; ptr += 9) {
+      // Set type byte to 0x80 (empty/hole type)
+      Porffor.wasm.i32.store8(ptr, 0x80, 0, 8);
+    }
+  }
+
   // Set the length directly via wasm (store i32 at offset 0)
   Porffor.wasm`
 local.get ${arr}

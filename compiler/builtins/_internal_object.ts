@@ -203,12 +203,19 @@ local.set ${obj}`;
     }
 
     if (Porffor.type(_obj) == Porffor.TYPES.array) {
-      const len: i32 = Porffor.wasm.i32.load(obj, 0, 0);
+      // Get the raw pointer to the array
+      const arrPtr: i32 = Porffor.wasm`local.get ${_obj}
+i32.trunc_sat_f64_u`;
+      const len: i32 = Porffor.wasm.i32.load(arrPtr, 0, 0);
       __Porffor_object_fastAdd(underlying, 'length', len, 0b1000);
 
       // todo: this should somehow be kept in sync?
       for (let i: i32 = 0; i < len; i++) {
-        let ptr: i32 = obj + i * 9;
+        let ptr: i32 = arrPtr + i * 9;
+        // Check if element is a hole (empty type 0x80)
+        const elementType: i32 = Porffor.wasm.i32.load8_u(ptr, 0, 12);
+        if (elementType == 0x80) continue; // Skip holes - they're not own properties
+
         Porffor.wasm`
 local x f64
 local x#type i32

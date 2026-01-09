@@ -6,6 +6,7 @@ export const TYPE_FLAGS = {
 };
 
 export const TYPES = {
+  empty: 0x80, // Special type for array holes (unset elements) - must be checked before treating as own property
   undefined: 0x00,
   number: 0x01,
   boolean: 0x02,
