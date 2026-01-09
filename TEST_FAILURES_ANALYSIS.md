@@ -1,6 +1,6 @@
 # Test262 Failure Analysis
 
-**Current Status**: ~20,610 / 27,380 passing (~75.27%)
+**Current Status**: 20,757 / 27,380 passing (75.81%)
 
 ## Recent Fixes
 
@@ -27,6 +27,12 @@
 **Root cause**: Relational operators only converted strings to numbers, not undefined/null/boolean
 **Fix**: Extended ToNumber wrapping to all non-number, non-string operands for relational ops
 **Impact**: Relational operator tests improved (e.g., S11.8.4_A3.1_T2.4.js now passes)
+
+### String.prototype.replaceAll wasm compile errors ✅ FIXED
+**Issue**: Calling `.charCodeAt()` on `any` typed variables caused wasm compile error: `call[0] expected type f64, found local.get of type i32`
+**Root cause**: Compiler doesn't properly handle method dispatch on `any` typed strings
+**Fix**: Use raw wasm memory access (`Porffor.wasm.i32.load16_u`) instead of `.charCodeAt()` for `any` typed variables
+**Impact**: Eliminated all 1029 wasm compile errors, improved pass rate from 75.27% to 75.81% (+147 tests)
 
 ## Failure Categories by Complexity
 
@@ -174,6 +180,31 @@ NumberFormat, DateTimeFormat, Locale, etc.
 ---
 
 ### 8. COMPILER BUGS - Type Tracking Issues
+
+#### `.charCodeAt()` on `any` typed variables causes wasm compile errors - FIXED
+
+**Pattern**: `call[0] expected type f64, found local.get of type i32`
+
+**Root cause**: Calling `.charCodeAt()` on a variable typed as `any` generates incorrect wasm bytecode. The compiler doesn't properly handle method dispatch on `any` typed strings.
+
+**Example of broken code**:
+```typescript
+let searchString: any = ecma262.ToString(searchValue);
+if (_this.charCodeAt(0) != searchString.charCodeAt(0)) { ... }  // FAILS
+```
+
+**Fix**: Use raw wasm memory access instead of `.charCodeAt()`:
+```typescript
+let searchString: any = ecma262.ToString(searchValue);
+const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
+if (Porffor.wasm.i32.load16_u(thisPtr, 0, 4) != Porffor.wasm.i32.load16_u(searchPtr, 0, 4)) { ... }  // WORKS
+```
+
+**Impact**: Fixed 1029 wasm compile errors, improved pass rate from ~75.27% to 75.81%
+
+**Fixed in**: `String.prototype.replaceAll` implementation
+
+---
 
 #### Loose equality with undefined/null inside functions (~20+ tests)
 
