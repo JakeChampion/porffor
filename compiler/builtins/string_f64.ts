@@ -141,7 +141,7 @@ export const __String_fromCharCode = (...codes: any[]): bytestring|string => {
       v = Math.trunc(n) % 65536;
       if (v < 0) v += 65536;
     }
-    if (v > 0xFF) bytestringable = false;
+    if (v > 0x7F) bytestringable = false;
 
     Porffor.wasm.i32.store16(Porffor.wasm`local.get ${out}` + i * 2, v, 0, 4);
   }
