@@ -2233,14 +2233,17 @@ const getNodeType = (scope, node) => {
       const knownLeft = knownTypeWithGuess(scope, leftType);
       const knownRight = knownTypeWithGuess(scope, rightType);
 
-      if (knownLeft === TYPES.bigint || knownRight === TYPES.bigint) return TYPES.bigint;
+      // For +, strings take precedence over BigInt (BigInt + String = String)
+      const hasString = (knownLeft === TYPES.string || knownRight === TYPES.string) ||
+        (knownLeft === TYPES.bytestring || knownRight === TYPES.bytestring) ||
+        (knownLeft === TYPES.stringobject || knownRight === TYPES.stringobject);
+
+      // BigInt result only if not mixing with string for +
+      if ((knownLeft === TYPES.bigint || knownRight === TYPES.bigint) &&
+          !(node.operator === '+' && hasString)) return TYPES.bigint;
       if (node.operator !== '+') return TYPES.number;
 
-      if ((knownLeft != null || knownRight != null) && !(
-        (knownLeft === TYPES.string || knownRight === TYPES.string) ||
-        (knownLeft === TYPES.bytestring || knownRight === TYPES.bytestring) ||
-        (knownLeft === TYPES.stringobject || knownRight === TYPES.stringobject)
-      )) return TYPES.number;
+      if ((knownLeft != null || knownRight != null) && !hasString) return TYPES.number;
 
       if (
         (knownLeft === TYPES.string || knownRight === TYPES.string) ||
