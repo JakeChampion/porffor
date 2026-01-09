@@ -1567,6 +1567,20 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
     // todo: proper >|>=|<|<=
   }
 
+  // BigInt equality comparison
+  if ((op === '===' || op === '==' || op === '!==' || op === '!=') && knownLeft === TYPES.bigint && knownRight === TYPES.bigint) {
+    return finalize([
+      ...left,
+      number(TYPES.bigint, Valtype.i32),
+      ...right,
+      number(TYPES.bigint, Valtype.i32),
+      [ Opcodes.call, includeBuiltin(scope, '__Porffor_bigint_eq').index ],
+      // convert f64 result to i32 for comparison result
+      Opcodes.i32_trunc_sat_f64_u,
+      ...(op === '!==' || op === '!=' ? [ [ Opcodes.i32_eqz ] ] : [])
+    ]);
+  }
+
   let ops = operatorOpcode[valtype][op];
 
   // some complex ops are implemented in funcs
@@ -1625,6 +1639,25 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
       ...eitherStringType(leftType, rightType),
       [ Opcodes.if, Blocktype.void ],
       ...compareStrings(scope, [ [ Opcodes.local_get, tmpLeft ] ], [ [ Opcodes.local_get, tmpRight ] ], leftType, rightType),
+      ...(op === '!==' || op === '!=' ? [ [ Opcodes.i32_eqz ] ] : []),
+      [ Opcodes.br, 1 ],
+      [ Opcodes.end ],
+
+      // if both are bigint
+      ...leftType,
+      number(TYPES.bigint, Valtype.i32),
+      [ Opcodes.i32_eq ],
+      ...rightType,
+      number(TYPES.bigint, Valtype.i32),
+      [ Opcodes.i32_eq ],
+      [ Opcodes.i32_and ],
+      [ Opcodes.if, Blocktype.void ],
+      [ Opcodes.local_get, tmpLeft ],
+      number(TYPES.bigint, Valtype.i32),
+      [ Opcodes.local_get, tmpRight ],
+      number(TYPES.bigint, Valtype.i32),
+      [ Opcodes.call, includeBuiltin(scope, '__Porffor_bigint_eq').index ],
+      Opcodes.i32_trunc_sat_f64_u,
       ...(op === '!==' || op === '!=' ? [ [ Opcodes.i32_eqz ] ] : []),
       [ Opcodes.br, 1 ],
       [ Opcodes.end ]
@@ -4810,7 +4843,17 @@ const generateUnary = (scope, decl) => {
         });
       }
 
-      // todo: proper bigint support
+      // Check if argument is BigInt - use proper BigInt negation
+      generate(scope, decl.argument); // hack: fix last type not being defined for getNodeType before generation
+      const knownNeg = knownType(scope, getNodeType(scope, decl.argument));
+      if (knownNeg === TYPES.bigint) {
+        return generate(scope, {
+          type: 'CallExpression',
+          callee: { type: 'Identifier', name: '__Porffor_bigint_negate' },
+          arguments: [ decl.argument ]
+        });
+      }
+
       return [
         ...toNumeric(),
         ...(valtype === 'f64' ? [ [ Opcodes.f64_neg ] ] : [ number(-1), [ Opcodes.mul ] ])

@@ -1,9 +1,25 @@
 import type {} from './porffor.d.ts';
 
 // digits is an array of u32s as digits in base 2^32
-export const __Porffor_bigint_fromDigits = (negative: boolean, digits: i32[]): bigint => {
+// Use number[] to avoid i32 clamping of values > 2^31-1
+export const __Porffor_bigint_fromDigits = (negative: boolean, digits: number[]): bigint => {
   const len: i32 = digits.length;
   if (len > 16383) throw new RangeError('Maximum BigInt size exceeded'); // (65536 - 4) / 4
+
+  // Read all digits FIRST before overwriting the array header
+  // Use number type to avoid i32 clamping of values > 2^31-1
+  let allZero: boolean = true;
+  const tempDigits: number[] = Porffor.malloc();
+  for (let i: i32 = 0; i < len; i++) {
+    // Read as number to preserve full 32-bit unsigned value
+    const d: number = digits[i];
+    tempDigits[i] = d;
+    if (d != 0) allZero = false;
+  }
+
+  if (allZero) {
+    return 0 as bigint;
+  }
 
   // use digits pointer as bigint pointer, as only used here
   let ptr: i32 = Porffor.wasm`local.get ${digits}`;
@@ -11,17 +27,13 @@ export const __Porffor_bigint_fromDigits = (negative: boolean, digits: i32[]): b
   Porffor.wasm.i32.store8(ptr, negative ? 1 : 0, 0, 0); // sign
   Porffor.wasm.i32.store16(ptr, len, 0, 2); // digit count
 
-  let allZero: boolean = true;
+  // Now write the digits from our temp copy
   for (let i: i32 = 0; i < len; i++) {
-    const d: i32 = digits[i];
-    if (d != 0) allZero = false;
-
+    // Convert to signed i32 for storage - this preserves bit pattern
+    let d: number = tempDigits[i];
+    // Convert unsigned (0 to 2^32-1) to signed (-2^31 to 2^31-1) for i32.store
+    if (d >= 2147483648) d = d - 4294967296;
     Porffor.wasm.i32.store(ptr + i * 4, d, 0, 4);
-  }
-
-  if (allZero) {
-    // todo: free ptr
-    return 0 as bigint;
   }
 
   return (ptr + 0x8000000000000) as bigint;
@@ -38,6 +50,33 @@ export const __Porffor_bigint_inlineToDigitForm = (n: number): number => {
   return ptr;
 };
 
+// Negate a BigInt value (creates a new BigInt, does not mutate)
+export const __Porffor_bigint_negate = (x: number): bigint => {
+  // For inline (small) values, just negate
+  if (Math.abs(x) < 0x8000000000000) {
+    return (-x) as bigint;
+  }
+
+  // For memory-based BigInts, copy and flip the sign bit
+  const srcPtr: i32 = x - 0x8000000000000;
+  const currentSign: i32 = Porffor.wasm.i32.load8_u(srcPtr, 0, 0);
+  const len: i32 = Porffor.wasm.i32.load16_u(srcPtr, 0, 2);
+
+  // Allocate new memory: 4 bytes header + len*4 bytes for digits
+  const dstPtr: i32 = Porffor.malloc(4 + len * 4);
+
+  // Copy and flip sign
+  Porffor.wasm.i32.store8(dstPtr, currentSign == 0 ? 1 : 0, 0, 0);
+  Porffor.wasm.i32.store16(dstPtr, len, 0, 2);
+
+  // Copy digits
+  for (let i: i32 = 0; i < len; i++) {
+    const digit: i32 = Porffor.wasm.i32.load(srcPtr + i * 4, 0, 4);
+    Porffor.wasm.i32.store(dstPtr + i * 4, digit, 0, 4);
+  }
+
+  return (dstPtr + 0x8000000000000) as bigint;
+};
 
 export const __Porffor_bigint_fromNumber = (n: number): bigint => {
   if (!Number.isInteger(n) || !Number.isFinite(n)) throw new RangeError('Cannot use non-integer as BigInt');
@@ -65,7 +104,9 @@ export const __Porffor_bigint_toNumber = (x: number): number => {
   let out: number = 0;
   for (let i: i32 = 0; i < len; i++) {
     const d: i32 = Porffor.wasm.i32.load(x + i * 4, 0, 4);
-    out = out * 0x100000000 + d;
+    // Convert signed i32 to unsigned
+    const dUnsigned: number = d < 0 ? d + 4294967296 : d;
+    out = out * 0x100000000 + dUnsigned;
   }
 
   if (negative) out = -out;
@@ -139,40 +180,85 @@ export const __Porffor_bigint_fromString = (n: string|bytestring): bigint => {
 
   if (offset >= end) throw new SyntaxError('Cannot convert empty string to BigInt');
 
-  // Parse digits according to radix
-  let acc: number = 0;
+  // Parse digits into base 2^32 representation
+  // Start with a single digit of 0
+  // Use number[] to avoid i32 clamping of values > 2^31-1
+  const digits: number[] = Porffor.malloc();
+  digits[0] = 0;
+  let digitCount: i32 = 1;
+
   let i: i32 = offset;
   while (i < end) {
     const char: i32 = n.charCodeAt(i);
-    let digit: i32 = -1;
+    let inputDigit: i32 = -1;
 
     if (char >= 48 && char <= 57) { // '0'-'9'
-      digit = char - 48;
+      inputDigit = char - 48;
     } else if (char >= 65 && char <= 90) { // 'A'-'Z'
-      digit = char - 65 + 10;
+      inputDigit = char - 65 + 10;
     } else if (char >= 97 && char <= 122) { // 'a'-'z'
-      digit = char - 97 + 10;
+      inputDigit = char - 97 + 10;
     }
 
-    if (Porffor.fastOr(digit < 0, digit >= radix)) {
+    if (Porffor.fastOr(inputDigit < 0, inputDigit >= radix)) {
       throw new SyntaxError('Invalid character in BigInt string');
     }
 
-    acc = acc * radix + digit;
+    // Multiply existing digits by radix and add inputDigit
+    // Use i64 for intermediate calculations to avoid overflow
+    let carry: number = inputDigit;
+    for (let j: i32 = digitCount - 1; j >= 0; j--) {
+      const product: number = digits[j] * radix + carry;
+      digits[j] = product % 0x100000000;
+      carry = Math.trunc(product / 0x100000000);
+    }
+
+    // If there's remaining carry, add a new most significant digit
+    if (carry > 0) {
+      // Shift all digits right and add new digit at front
+      for (let j: i32 = digitCount; j > 0; j--) {
+        digits[j] = digits[j - 1];
+      }
+      digits[0] = carry;
+      digitCount++;
+    }
+
     i++;
   }
 
-  // Handle negative
-  if (negative) acc = -acc;
+  // Check if result is zero
+  let allZero: boolean = true;
+  for (let j: i32 = 0; j < digitCount; j++) {
+    if (digits[j] != 0) {
+      allZero = false;
+      break;
+    }
+  }
+  if (allZero) return 0n;
 
-  // For small values, return inline
-  if (Math.abs(acc) < 0x8000000000000) {
-    return acc as bigint;
+  // Remove leading zeros
+  while (digitCount > 1 && digits[0] == 0) {
+    for (let j: i32 = 0; j < digitCount - 1; j++) {
+      digits[j] = digits[j + 1];
+    }
+    digitCount--;
   }
 
-  // For larger values, need to use digit representation
-  // This is a simplified path - for very large strings we'd need proper arbitrary precision
-  return __Porffor_bigint_fromNumber(acc);
+  // Check if small enough to be inline
+  if (digitCount == 1 && digits[0] < 0x8000000000000) {
+    const val: number = negative ? -digits[0] : digits[0];
+    return val as bigint;
+  }
+  if (digitCount == 2) {
+    const val: number = digits[0] * 0x100000000 + digits[1];
+    if (val < 0x8000000000000) {
+      return (negative ? -val : val) as bigint;
+    }
+  }
+
+  // Build memory-based BigInt
+  digits.length = digitCount;
+  return __Porffor_bigint_fromDigits(negative, digits);
 };
 
 export const __Porffor_bigint_toString = (x: number, radix: any): string|bytestring => {
@@ -294,8 +380,42 @@ export const __Porffor_bigint_rem = (a: i32, b: i32): bigint => {
   // todo
 };
 
-export const __Porffor_bigint_eq = (a: i32, b: i32): boolean => {
-  // todo
+export const __Porffor_bigint_eq = (a: number, b: number): boolean => {
+  // Both inline (small) - direct comparison
+  if (Math.abs(a) < 0x8000000000000 && Math.abs(b) < 0x8000000000000) {
+    return a == b;
+  }
+
+  // One inline, one memory-based - convert inline to memory form for comparison
+  if (Math.abs(a) < 0x8000000000000) {
+    a = __Porffor_bigint_inlineToDigitForm(a) + 0x8000000000000;
+  }
+  if (Math.abs(b) < 0x8000000000000) {
+    b = __Porffor_bigint_inlineToDigitForm(b) + 0x8000000000000;
+  }
+
+  // Both memory-based now
+  const ptrA: i32 = a - 0x8000000000000;
+  const ptrB: i32 = b - 0x8000000000000;
+
+  // Compare signs
+  const signA: i32 = Porffor.wasm.i32.load8_u(ptrA, 0, 0);
+  const signB: i32 = Porffor.wasm.i32.load8_u(ptrB, 0, 0);
+  if (signA != signB) return false;
+
+  // Compare lengths
+  const lenA: i32 = Porffor.wasm.i32.load16_u(ptrA, 0, 2);
+  const lenB: i32 = Porffor.wasm.i32.load16_u(ptrB, 0, 2);
+  if (lenA != lenB) return false;
+
+  // Compare all digits
+  for (let i: i32 = 0; i < lenA; i++) {
+    const digitA: i32 = Porffor.wasm.i32.load(ptrA + i * 4, 0, 4);
+    const digitB: i32 = Porffor.wasm.i32.load(ptrB + i * 4, 0, 4);
+    if (digitA != digitB) return false;
+  }
+
+  return true;
 };
 
 export const __Porffor_bigint_ne = (a: i32, b: i32): boolean => {

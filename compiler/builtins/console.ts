@@ -58,6 +58,13 @@ export const __Porffor_print = (arg: any, colors: boolean = true, depth: number 
       if (colors) Porffor.printStatic('\x1b[0m');
       return;
 
+    case Porffor.TYPES.bigint:
+      if (colors) Porffor.printStatic('\x1b[33m'); // yellow
+      __Porffor_printString(__Porffor_bigint_toString(arg, 10));
+      Porffor.printStatic('n');
+      if (colors) Porffor.printStatic('\x1b[0m');
+      return;
+
     case Porffor.TYPES.boolean:
       if (colors) Porffor.printStatic('\x1b[33m'); // yellow
       if (arg) {
