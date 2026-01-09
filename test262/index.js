@@ -29,8 +29,8 @@ if (cluster.isPrimary) {
   if (Number.isNaN(threads)) try {
     threads = parseInt(fs.readFileSync(join(__dirname, '.threads'), 'utf8'));
   } catch {
-    threads = Math.min(12, os.cpus().length) - 4;
-    log.warning('test262', `no --threads=n arg or .threads file found, using ${threads} as cautious default (min(12, threads) - 4)`);
+    threads = Math.max(1, Math.min(12, os.cpus().length) - 4);
+    log.warning('test262', `no --threads=n arg or .threads file found, using ${threads} as cautious default (max(1, min(12, threads) - 4))`);
     log.warning('test262', 'please specify via either method to make test262 runs potentially much faster! (ask for tuning advice)');
   }
 
@@ -42,7 +42,7 @@ if (cluster.isPrimary) {
 
   let lastCommitResults = [];
   if (!minimal) {
-    const foundLine = execSync(`git log -200 --pretty=%B`).toString().split('\n').find(x => x.startsWith('test262: 1') || x.startsWith('test262: 2') || x.startsWith('test262: 3') || x.startsWith('test262: 4') || x.startsWith('test262: 5') || x.startsWith('test262: 6'));
+    const foundLine = execSync(`git log -200 --pretty=%B`).toString().split('\n').find(x => /^test262: \d/.test(x));
     if (foundLine) {
       lastCommitResults = foundLine.split('|').map(x => parseFloat(x.split('(')[0].trim().split(' ').pop().trim().replace('%', '')));
     }
@@ -221,6 +221,10 @@ if (cluster.isPrimary) {
       if (pass) {
         passes++;
         if (!resultOnly) passFiles.push(file);
+      } else if (result === 1) {
+        // todo - currently unused but reserved
+        passes++;
+        if (!resultOnly) passFiles.push(file);
       } else if (result === 2) {
         wasmErrors++;
         if (!resultOnly) wasmErrorFiles.push(file);
@@ -233,7 +237,11 @@ if (cluster.isPrimary) {
       } else if (result === 5) {
         timeouts++;
         if (!resultOnly) timeoutFiles.push(file);
+      } else if (result === 6) {
+        runtimeErrors++;
+        if (!resultOnly) runtimeErrorFiles.push(file);
       } else {
+        // Unknown result code
         runtimeErrors++;
         if (!resultOnly) runtimeErrorFiles.push(file);
       }
@@ -290,7 +298,7 @@ if (cluster.isPrimary) {
   }
 
   if (allTests) process.stdout.write('');
-    else console.log();
+  else console.log();
 
   const nextMinorPercent = parseFloat(((Math.floor(percent * 10) / 10) + 0.1).toFixed(1));
   const nextMajorPercent = Math.floor(percent) + 1;
@@ -338,6 +346,7 @@ if (cluster.isPrimary) {
         join(__dirname, 'results.json'),
         JSON.stringify(
           {
+            passes: passFiles,
             fails: failFiles,
             compileErrors: compileErrorFiles,
             wasmErrors: wasmErrorFiles,
