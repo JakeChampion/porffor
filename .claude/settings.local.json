@@ -50,7 +50,9 @@
       "Bash(shuf:*)",
       "Bash(for test in \"built-ins/AggregateError/prop-desc.js\" \"built-ins/Array/from/Array.from_forwards-length-for-array-likes.js\" \"built-ins/Array/of/sets-length.js\")",
       "Bash(timeout 60 node:*)",
-      "Bash(timeout 120 node:*)"
+      "Bash(timeout 120 node:*)",
+      "Bash(node /tmp/test_hasown.js:*)",
+      "Bash(git cherry-pick:*)"
     ]
   }
 }

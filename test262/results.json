@@ -1314,8 +1314,6 @@
     "built-ins/NativeErrors/URIError/proto.js",
     "built-ins/NativeErrors/URIError/prototype/not-error-object.js",
     "built-ins/NativeErrors/URIError/prototype/proto.js",
-    "built-ins/Number/parseFloat.js",
-    "built-ins/Number/parseInt.js",
     "built-ins/Number/prototype/S15.7.3.1_A2_T1.js",
     "built-ins/Number/prototype/S15.7.3.1_A2_T2.js",
     "built-ins/Number/prototype/S15.7.3.1_A3.js",

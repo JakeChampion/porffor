@@ -7484,8 +7484,16 @@ const objectHack = node => {
 
       if (objectName !== 'Object_prototype' && (node.property.name === 'propertyIsEnumerable' || node.property.name === 'hasOwnProperty' || node.property.name === 'isPrototypeOf')) return abortOut;
 
-      const name = '__' + objectName + '_' + node.property.name;
+      let name = '__' + objectName + '_' + node.property.name;
       if ((!hasFuncWithName(name) && !(name in builtinVars) && !hasFuncWithName(name + '$get')) && (hasFuncWithName(objectName) || objectName in builtinVars || hasFuncWithName('__' + objectName) || ('__' + objectName) in builtinVars)) return abortOut;
+
+      // Per spec, Number.parseInt === parseInt and Number.parseFloat === parseFloat
+      // They must be the exact same function object
+      const builtinAliases = {
+        '__Number_parseInt': 'parseInt',
+        '__Number_parseFloat': 'parseFloat'
+      };
+      if (builtinAliases[name]) name = builtinAliases[name];
 
       if (Prefs.codeLog) log('codegen', `object hack! ${node.object.name}.${node.property.name} -> ${name}`);
 
