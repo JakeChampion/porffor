@@ -894,10 +894,197 @@ export const __Porffor_decodeURI_impl = (input: any, preserveReserved: boolean):
   const len: i32 = input.length;
   let outLength: i32 = 0;
 
-  // First pass: calculate output length
   let i: i32 = Porffor.wasm`local.get ${input}`;
+
+  // Check if input is string (16-bit) or bytestring (8-bit)
+  if (Porffor.wasm`local.get ${input+1}` == Porffor.TYPES.string) {
+    // Handle 16-bit string input - iterate through 16-bit chars
+    const endPtr: i32 = i + len * 2;
+
+    // First pass: calculate output length
+    while (i < endPtr) {
+      const chr: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
+      i += 2;
+      if (chr == 37 && i + 2 < endPtr) { // %
+        const h1: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
+        const h2: i32 = Porffor.wasm.i32.load16_u(i + 2, 0, 4);
+
+        // Validate hex digits (must be ASCII)
+        let n1: i32 = -1;
+        if (h1 >= 48 && h1 <= 57) n1 = h1 - 48;
+        else if (h1 >= 65 && h1 <= 70) n1 = h1 - 55;
+        else if (h1 >= 97 && h1 <= 102) n1 = h1 - 87;
+
+        let n2: i32 = -1;
+        if (h2 >= 48 && h2 <= 57) n2 = h2 - 48;
+        else if (h2 >= 65 && h2 <= 70) n2 = h2 - 55;
+        else if (h2 >= 97 && h2 <= 102) n2 = h2 - 87;
+
+        if (n1 >= 0 && n2 >= 0) {
+          i += 4;
+          const byte: i32 = (n1 << 4) | n2;
+          if ((byte & 0x80) == 0) {
+            if (preserveReserved && __Porffor_uri_isReserved(byte)) {
+              outLength += 3;
+            } else {
+              outLength += 1;
+            }
+          } else if ((byte & 0xE0) == 0xC0) {
+            outLength += 1;
+          } else if ((byte & 0xF0) == 0xE0) {
+            outLength += 1;
+          }
+        } else {
+          outLength += 1;
+        }
+      } else {
+        outLength += 1;
+      }
+    }
+
+    // Second pass: decode
+    let output: string = Porffor.malloc();
+    output.length = outLength;
+
+    i = Porffor.wasm`local.get ${input}`;
+    let j: i32 = Porffor.wasm`local.get ${output}`;
+
+    while (i < endPtr) {
+      const chr: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
+      i += 2;
+
+      if (chr == 37) { // %
+        if (i + 3 >= endPtr) {
+          throw new URIError('URI malformed');
+        }
+
+        const h1: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
+        const h2: i32 = Porffor.wasm.i32.load16_u(i + 2, 0, 4);
+
+        let n1: i32 = -1;
+        if (h1 >= 48 && h1 <= 57) n1 = h1 - 48;
+        else if (h1 >= 65 && h1 <= 70) n1 = h1 - 55;
+        else if (h1 >= 97 && h1 <= 102) n1 = h1 - 87;
+
+        let n2: i32 = -1;
+        if (h2 >= 48 && h2 <= 57) n2 = h2 - 48;
+        else if (h2 >= 65 && h2 <= 70) n2 = h2 - 55;
+        else if (h2 >= 97 && h2 <= 102) n2 = h2 - 87;
+
+        if (n1 < 0 || n2 < 0) {
+          throw new URIError('URI malformed');
+        }
+
+        i += 4;
+        const byte1: i32 = (n1 << 4) | n2;
+
+        if ((byte1 & 0x80) == 0) {
+          if (preserveReserved && __Porffor_uri_isReserved(byte1)) {
+            Porffor.wasm.i32.store16(j, 37, 0, 4);
+            Porffor.wasm.i32.store16(j + 2, h1, 0, 4);
+            Porffor.wasm.i32.store16(j + 4, h2, 0, 4);
+            j += 6;
+          } else {
+            Porffor.wasm.i32.store16(j, byte1, 0, 4);
+            j += 2;
+          }
+        } else if ((byte1 & 0xE0) == 0xC0 && i + 5 < endPtr && Porffor.wasm.i32.load16_u(i, 0, 4) == 37) {
+          const h3: i32 = Porffor.wasm.i32.load16_u(i + 2, 0, 4);
+          const h4: i32 = Porffor.wasm.i32.load16_u(i + 4, 0, 4);
+
+          let n3: i32 = -1;
+          if (h3 >= 48 && h3 <= 57) n3 = h3 - 48;
+          else if (h3 >= 65 && h3 <= 70) n3 = h3 - 55;
+          else if (h3 >= 97 && h3 <= 102) n3 = h3 - 87;
+
+          let n4: i32 = -1;
+          if (h4 >= 48 && h4 <= 57) n4 = h4 - 48;
+          else if (h4 >= 65 && h4 <= 70) n4 = h4 - 55;
+          else if (h4 >= 97 && h4 <= 102) n4 = h4 - 87;
+
+          if (n3 < 0 || n4 < 0) {
+            throw new URIError('URI malformed');
+          }
+
+          i += 6;
+          const byte2: i32 = (n3 << 4) | n4;
+
+          if ((byte2 & 0xC0) != 0x80) {
+            throw new URIError('URI malformed');
+          }
+
+          const codepoint: i32 = ((byte1 & 0x1F) << 6) | (byte2 & 0x3F);
+          if (codepoint < 0x80) {
+            throw new URIError('URI malformed');
+          }
+
+          Porffor.wasm.i32.store16(j, codepoint, 0, 4);
+          j += 2;
+        } else if ((byte1 & 0xF0) == 0xE0 && i + 11 < endPtr && Porffor.wasm.i32.load16_u(i, 0, 4) == 37 && Porffor.wasm.i32.load16_u(i + 6, 0, 4) == 37) {
+          const h3: i32 = Porffor.wasm.i32.load16_u(i + 2, 0, 4);
+          const h4: i32 = Porffor.wasm.i32.load16_u(i + 4, 0, 4);
+          const h5: i32 = Porffor.wasm.i32.load16_u(i + 8, 0, 4);
+          const h6: i32 = Porffor.wasm.i32.load16_u(i + 10, 0, 4);
+
+          let n3: i32 = -1;
+          if (h3 >= 48 && h3 <= 57) n3 = h3 - 48;
+          else if (h3 >= 65 && h3 <= 70) n3 = h3 - 55;
+          else if (h3 >= 97 && h3 <= 102) n3 = h3 - 87;
+
+          let n4: i32 = -1;
+          if (h4 >= 48 && h4 <= 57) n4 = h4 - 48;
+          else if (h4 >= 65 && h4 <= 70) n4 = h4 - 55;
+          else if (h4 >= 97 && h4 <= 102) n4 = h4 - 87;
+
+          let n5: i32 = -1;
+          if (h5 >= 48 && h5 <= 57) n5 = h5 - 48;
+          else if (h5 >= 65 && h5 <= 70) n5 = h5 - 55;
+          else if (h5 >= 97 && h5 <= 102) n5 = h5 - 87;
+
+          let n6: i32 = -1;
+          if (h6 >= 48 && h6 <= 57) n6 = h6 - 48;
+          else if (h6 >= 65 && h6 <= 70) n6 = h6 - 55;
+          else if (h6 >= 97 && h6 <= 102) n6 = h6 - 87;
+
+          if (n3 < 0 || n4 < 0 || n5 < 0 || n6 < 0) {
+            throw new URIError('URI malformed');
+          }
+
+          i += 12;
+          const byte2: i32 = (n3 << 4) | n4;
+          const byte3: i32 = (n5 << 4) | n6;
+
+          if ((byte2 & 0xC0) != 0x80 || (byte3 & 0xC0) != 0x80) {
+            throw new URIError('URI malformed');
+          }
+
+          const codepoint: i32 = ((byte1 & 0x0F) << 12) | ((byte2 & 0x3F) << 6) | (byte3 & 0x3F);
+          if (codepoint < 0x800) {
+            throw new URIError('URI malformed');
+          }
+          if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
+            throw new URIError('URI malformed');
+          }
+
+          Porffor.wasm.i32.store16(j, codepoint, 0, 4);
+          j += 2;
+        } else {
+          throw new URIError('URI malformed');
+        }
+      } else {
+        // Non-% character - copy directly
+        Porffor.wasm.i32.store16(j, chr, 0, 4);
+        j += 2;
+      }
+    }
+
+    return output;
+  }
+
+  // Handle bytestring input (8-bit characters)
   const endPtr: i32 = i + len;
 
+  // First pass: calculate output length
   while (i < endPtr) {
     const chr: i32 = Porffor.wasm.i32.load8_u(i++, 0, 4);
     if (chr == 37 && i + 1 < endPtr) { // %
