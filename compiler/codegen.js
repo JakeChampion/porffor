@@ -6495,7 +6495,8 @@ const generateObject = (scope, decl, global = false, name = '$undeclared') => {
           name: key.value
         };
 
-        value = { ...value, id };
+        // Mark as object method so it doesn't pollute global funcIndex
+        value = { ...value, id, _objectMethod: true };
       }
 
       out.push(
@@ -7899,7 +7900,10 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     }
   };
 
-  funcIndex[name] = func.index;
+  // Don't add object methods to funcIndex to avoid polluting global namespace
+  if (!decl._objectMethod) {
+    funcIndex[name] = func.index;
+  }
   funcs.push(func);
 
   if (typedInput && decl.returnType) {
