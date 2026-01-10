@@ -912,7 +912,11 @@ export const __Porffor_regex_compile = (patternStr: bytestring, flagsStr: bytest
 };
 
 
-export const __Porffor_regex_interpret = (regexp: RegExp, input: i32, isTest: boolean): any => {
+export const __Porffor_regex_interpret = (regexpAny: any, inputAny: any, isTest: boolean): any => {
+  // Extract the raw pointers from the any-typed parameters
+  const regexp: i32 = Porffor.wasm`local.get ${regexpAny}`;
+  const input: i32 = Porffor.wasm`local.get ${inputAny}`;
+
   const bcBase: i32 = regexp + 10;
   const flags: i32 = Porffor.wasm.i32.load16_u(regexp, 0, 4);
   const totalCaptures: i32 = Porffor.wasm.i32.load16_u(regexp, 0, 6);
