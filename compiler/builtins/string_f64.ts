@@ -690,7 +690,7 @@ export const __String_prototype_trimStart = (_this: any) => {
     let scanPtr: i32 = strPtr;
     while (scanPtr < strPtrEnd) {
       const chr: i32 = Porffor.wasm.i32.load8_u(scanPtr++, 0, 4);
-      if (Porffor.fastOr(chr == 0x9, chr == 0xb, chr == 0xc, chr == 0x20, chr == 0xa, chr == 0xd)) { n++; }
+      if (Porffor.fastOr(chr == 0x9, chr == 0xb, chr == 0xc, chr == 0x20, chr == 0xa, chr == 0xd, chr == 0xa0)) { n++; }
       else break;
     }
     // Fast path: no trimming needed
@@ -787,7 +787,7 @@ export const __String_prototype_trimEnd = (_this: any) => {
     const strPtr: i32 = Porffor.wasm`local.get ${str}`;
     while (scanPtr >= strPtr) {
       const chr: i32 = Porffor.wasm.i32.load8_u(scanPtr--, 0, 4);
-      if (Porffor.fastOr(chr == 0x9, chr == 0xb, chr == 0xc, chr == 0x20, chr == 0xa, chr == 0xd)) { endPos--; }
+      if (Porffor.fastOr(chr == 0x9, chr == 0xb, chr == 0xc, chr == 0x20, chr == 0xa, chr == 0xd, chr == 0xa0)) { endPos--; }
       else break;
     }
     // Fast path: no trimming needed
