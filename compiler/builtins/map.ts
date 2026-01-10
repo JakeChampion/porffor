@@ -179,6 +179,9 @@ export const __Map_prototype_getOrInsert = (_this: Map, key: any, value: any) =>
 export const __Map_prototype_getOrInsertComputed = (_this: Map, key: any, callbackFn: any) => {
   if (typeof callbackFn !== 'function') throw new TypeError('callbackFn must be a function');
 
+  // CanonicalizeKeyedCollectionKey: -0 becomes +0
+  if (key === 0 && 1 / key === -Infinity) key = 0;
+
   if (!__Map_prototype_has(_this, key)) {
     __Map_prototype_set(_this, key, callbackFn(key));
   }
