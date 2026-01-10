@@ -1575,6 +1575,34 @@ export const __RegExp_prototype_test = (_this: any, input: any) => {
 };
 
 
+// RegExp.prototype[Symbol.search]
+export const __RegExp_prototype_Symbol_search = (_this: any, string: any) => {
+  // Type check: this must be a RegExp
+  if (Porffor.type(_this) != Porffor.TYPES.regexp) {
+    throw new TypeError('RegExp.prototype[Symbol.search] requires that this be a RegExp');
+  }
+
+  const t: i32 = Porffor.type(string);
+  if (t != Porffor.TYPES.bytestring && t != Porffor.TYPES.string) {
+    string = ecma262.ToString(string);
+  }
+
+  // If it's a regular string (2-byte chars), convert to bytestring (1-byte chars)
+  if (Porffor.type(string) == Porffor.TYPES.string) {
+    const len: i32 = (string as string).length;
+    const bs: bytestring = Porffor.malloc();
+    for (let i: i32 = 0; i < len; i++) {
+      Porffor.bytestring.appendChar(bs, (string as string).charCodeAt(i));
+    }
+    string = bs;
+  }
+
+  const result: any = __Porffor_regex_interpret(_this, string, false);
+  if (result == null) return -1;
+  return result.index;
+};
+
+
 export const __Porffor_regex_match = (regexp: any, input: any) => {
   if (Porffor.type(regexp) !== Porffor.TYPES.regexp) regexp = new RegExp(regexp);
 

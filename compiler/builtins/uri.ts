@@ -905,7 +905,7 @@ export const __Porffor_decodeURI_impl = (input: any, preserveReserved: boolean):
     while (i < endPtr) {
       const chr: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
       i += 2;
-      if (chr == 37 && i + 2 < endPtr) { // %
+      if (chr == 37 && i + 4 <= endPtr) { // %
         const h1: i32 = Porffor.wasm.i32.load16_u(i, 0, 4);
         const h2: i32 = Porffor.wasm.i32.load16_u(i + 2, 0, 4);
 
@@ -954,7 +954,7 @@ export const __Porffor_decodeURI_impl = (input: any, preserveReserved: boolean):
       i += 2;
 
       if (chr == 37) { // %
-        if (i + 3 >= endPtr) {
+        if (i + 4 > endPtr) {
           throw new URIError('URI malformed');
         }
 
