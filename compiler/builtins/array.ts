@@ -67,7 +67,7 @@ export const Array = function (...args: any[]): any[] {
 export const __Array_isArray = (x: unknown): boolean =>
   Porffor.type(x) == Porffor.TYPES.array || x === Array.prototype;
 
-export const __Array_from = (arg: any, mapFn: any): any[] => {
+export const __Array_from = (arg: any, mapFn: any, thisArg: any): any[] => {
   if (arg == null) throw new TypeError('Argument cannot be nullish');
 
   let out: any[] = Porffor.malloc();
@@ -83,7 +83,7 @@ export const __Array_from = (arg: any, mapFn: any): any[] => {
       if (Porffor.type(mapFn) != Porffor.TYPES.function) throw new TypeError('Called Array.from with a non-function mapFn');
 
       for (const x of arg) {
-        out[i] = mapFn(x, i);
+        out[i] = mapFn.call(thisArg, x, i);
         i++;
       }
     } else {
@@ -105,7 +105,7 @@ export const __Array_from = (arg: any, mapFn: any): any[] => {
       if (Porffor.type(mapFn) != Porffor.TYPES.function) throw new TypeError('Called Array.from with a non-function mapFn');
 
       for (let i: i32 = 0; i < len; i++) {
-        out[i] = mapFn((arg as object)[i], i);
+        out[i] = mapFn.call(thisArg, (arg as object)[i], i);
       }
     } else {
       for (let i: i32 = 0; i < len; i++) {
