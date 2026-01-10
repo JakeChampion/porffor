@@ -29,6 +29,23 @@ export const __Set_prototype_keys = (_this: Set) => {
   return __Set_prototype_values(_this);
 };
 
+export const __Set_prototype_entries = (_this: Set) => {
+  // For Sets, entries() returns [value, value] pairs
+  const size: number = Porffor.wasm.i32.load(_this, 0, 0);
+  const out: any[] = Porffor.malloc();
+
+  for (let i: number = 0; i < size; i++) {
+    const value: any = (_this as any[])[i];
+    const entry: any[] = Porffor.malloc();
+    entry[0] = value;
+    entry[1] = value;
+    entry.length = 2;
+    Porffor.array.fastPush(out, entry);
+  }
+
+  return out;
+};
+
 export const __Set_prototype_has = (_this: Set, value: any) => {
   const size: number = Porffor.wasm.i32.load(_this, 0, 0);
 

@@ -162,6 +162,23 @@ export const __Map_prototype_values = (_this: Map) => {
   return out;
 };
 
+export const __Map_prototype_entries = (_this: Map) => {
+  const keys: any[] = Porffor.wasm.i32.load(_this, 0, 0);
+  const vals: any[] = Porffor.wasm.i32.load(_this, 0, 4);
+  const size: i32 = Porffor.wasm.i32.load(keys, 0, 0);
+  const out: any[] = Porffor.malloc();
+
+  for (let i: i32 = 0; i < size; i++) {
+    const entry: any[] = Porffor.malloc();
+    entry[0] = keys[i];
+    entry[1] = vals[i];
+    entry.length = 2;
+    Porffor.array.fastPush(out, entry);
+  }
+
+  return out;
+};
+
 export const __Map_prototype_toString = (_this: Map) => '[object Map]';
 export const __Map_prototype_toLocaleString = (_this: Map) => __Map_prototype_toString(_this);
 
