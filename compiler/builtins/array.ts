@@ -903,9 +903,29 @@ export const __Array_prototype_sort = (_this: any, callbackFn: any) => {
 };
 
 // @porf-typed-array
-export const __Array_prototype_toString = (_this: any[]) => {
-  // todo: this is bytestring only!
+export const __Array_prototype_toString = (_this: any) => {
+  // Per spec: if this doesn't have a callable join, fall back to Object.prototype.toString
+  // Check if _this is an array-like type that has the join method
+  const type: i32 = Porffor.type(_this);
+  if (Porffor.fastAnd(
+    type != Porffor.TYPES.array,
+    type != Porffor.TYPES.uint8array,
+    type != Porffor.TYPES.int8array,
+    type != Porffor.TYPES.uint8clampedarray,
+    type != Porffor.TYPES.uint16array,
+    type != Porffor.TYPES.int16array,
+    type != Porffor.TYPES.uint32array,
+    type != Porffor.TYPES.int32array,
+    type != Porffor.TYPES.float32array,
+    type != Porffor.TYPES.float64array,
+    type != Porffor.TYPES.biguint64array,
+    type != Porffor.TYPES.bigint64array
+  )) {
+    // Fall back to Object.prototype.toString for non-array types
+    return __Object_prototype_toString(_this);
+  }
 
+  // todo: this is bytestring only!
   let out: bytestring = Porffor.malloc();
   const len: i32 = _this.length;
   let i: i32 = 0;
