@@ -52,7 +52,14 @@
       "Bash(timeout 60 node:*)",
       "Bash(timeout 120 node:*)",
       "Bash(node /tmp/test_hasown.js:*)",
-      "Bash(git cherry-pick:*)"
+      "Bash(git cherry-pick:*)",
+      "Bash(node test262:*)",
+      "Bash(timeout 90 node:*)",
+      "Bash(timeout 30 node:*)",
+      "Bash(cat:*)",
+      "Bash(node test.js:*)",
+      "Bash(kill %1)",
+      "Bash(timeout 30 ./porf test.js:*)"
     ]
   }
 }
