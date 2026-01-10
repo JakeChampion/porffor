@@ -4505,36 +4505,55 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
       // todo: review last type usage here
       ...typeSwitch(scope, getNodeType(scope, object), {
         ...(decl.left.computed && !isSetterSymbolProperty ? {
-          [TYPES.array]: () => [
-            objectGet,
-            Opcodes.i32_to_u,
+          [TYPES.array]: () => {
+            const indexTmp = localTmp(scope, '#array_set_index', Valtype.i32);
+            const arrPtrTmp = localTmp(scope, '#array_set_ptr', Valtype.i32);
+            return [
+              objectGet,
+              Opcodes.i32_to_u,
+              [ Opcodes.local_tee, arrPtrTmp ],
 
-            // get index as valtype
-            propertyGet,
-            Opcodes.i32_to_u,
+              // get index as valtype
+              propertyGet,
+              Opcodes.i32_to_u,
+              [ Opcodes.local_tee, indexTmp ],
 
-            // turn into byte offset by * valtypeSize + 1
-            number(ValtypeSize[valtype] + 1, Valtype.i32),
-            [ Opcodes.i32_mul ],
-            [ Opcodes.i32_add ],
-            [ Opcodes.local_tee, pointerTmp ],
+              // turn into byte offset by * valtypeSize + 1
+              number(ValtypeSize[valtype] + 1, Valtype.i32),
+              [ Opcodes.i32_mul ],
+              [ Opcodes.i32_add ],
+              [ Opcodes.local_tee, pointerTmp ],
 
-            ...(op === '=' ? generate(scope, decl.right) : performOp(scope, op, [
+              ...(op === '=' ? generate(scope, decl.right) : performOp(scope, op, [
+                [ Opcodes.local_get, pointerTmp ],
+                [ Opcodes.load, 0, ValtypeSize.i32 ]
+              ], generate(scope, decl.right), [
+                [ Opcodes.local_get, pointerTmp ],
+                [ Opcodes.i32_load8_u, 0, ValtypeSize.i32 + ValtypeSize[valtype] ]
+              ], getNodeType(scope, decl.right))),
+              ...optional([ Opcodes.local_tee, newValueTmp ]),
+              [ Opcodes.store, 0, ValtypeSize.i32 ],
+
               [ Opcodes.local_get, pointerTmp ],
-              [ Opcodes.load, 0, ValtypeSize.i32 ]
-            ], generate(scope, decl.right), [
-              [ Opcodes.local_get, pointerTmp ],
-              [ Opcodes.i32_load8_u, 0, ValtypeSize.i32 + ValtypeSize[valtype] ]
-            ], getNodeType(scope, decl.right))),
-            ...optional([ Opcodes.local_tee, newValueTmp ]),
-            [ Opcodes.store, 0, ValtypeSize.i32 ],
+              ...getNodeType(scope, decl),
+              [ Opcodes.i32_store8, 0, ValtypeSize.i32 + ValtypeSize[valtype] ],
 
-            [ Opcodes.local_get, pointerTmp ],
-            ...getNodeType(scope, decl),
-            [ Opcodes.i32_store8, 0, ValtypeSize.i32 + ValtypeSize[valtype] ],
+              // Update length if index >= current length
+              [ Opcodes.local_get, indexTmp ],
+              [ Opcodes.local_get, arrPtrTmp ],
+              [ Opcodes.i32_load, Math.log2(ValtypeSize.i32) - 1, 0 ],
+              [ Opcodes.i32_ge_u ],
+              [ Opcodes.if, Blocktype.void ],
+                [ Opcodes.local_get, arrPtrTmp ],
+                [ Opcodes.local_get, indexTmp ],
+                number(1, Valtype.i32),
+                [ Opcodes.i32_add ],
+                [ Opcodes.i32_store, Math.log2(ValtypeSize.i32) - 1, 0 ],
+              [ Opcodes.end ],
 
-            ...optional([ Opcodes.local_get, newValueTmp ])
-          ],
+              ...optional([ Opcodes.local_get, newValueTmp ])
+            ];
+          },
 
           ...wrapBC({
             [TYPES.uint8array]: () => [
