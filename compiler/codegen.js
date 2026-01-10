@@ -4936,6 +4936,46 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
     return out;
   }
 
+  // Arithmetic compound operators require ToNumber conversion of operands
+  // (excluding += which has special string concatenation handling)
+  const toNumberOps = ['-', '*', '/', '%', '**', '&', '|', '^', '<<', '>>', '>>>'];
+  if (toNumberOps.includes(op)) {
+    let leftNode = decl.left;
+    let leftType = getType(scope, name);
+    let rightNode = decl.right;
+    let rightType = getNodeType(scope, decl.right);
+    const leftKnown = knownType(scope, leftType);
+    const rightKnown = knownType(scope, rightType);
+    if (leftKnown !== TYPES.number) {
+      leftNode = {
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: '__ecma262_ToNumber' },
+        arguments: [ decl.left ]
+      };
+      leftType = TYPES.number;
+    }
+    if (rightKnown !== TYPES.number) {
+      rightNode = {
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: '__ecma262_ToNumber' },
+        arguments: [ decl.right ]
+      };
+      rightType = TYPES.number;
+    }
+
+    const out = setLocalWithType(
+      scope, name, isGlobal,
+      performOp(scope, op, generate(scope, leftNode), generate(scope, rightNode), leftType, rightType),
+      !valueUnused,
+      getNodeType(scope, decl)
+    );
+
+    setInferred(scope, name, knownType(scope, getNodeType(scope, decl)), isGlobal);
+
+    if (valueUnused) out.push(number(UNDEFINED));
+    return out;
+  }
+
   const out = setLocalWithType(
     scope, name, isGlobal,
     performOp(scope, op, [
