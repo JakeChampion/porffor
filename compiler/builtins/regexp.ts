@@ -1488,8 +1488,37 @@ export const RegExp = function (pattern: any, flags: any): RegExp {
   if (patternSrc === undefined) patternSrc = '';
   if (flagsSrc === undefined) flagsSrc = '';
 
-  if (Porffor.type(patternSrc) !== Porffor.TYPES.bytestring || Porffor.type(flagsSrc) !== Porffor.TYPES.bytestring) {
-    throw new TypeError('Invalid regular expression');
+  // Convert pattern to string if it isn't already
+  let patternType: i32 = Porffor.type(patternSrc);
+  if (patternType !== Porffor.TYPES.bytestring && patternType !== Porffor.TYPES.string) {
+    patternSrc = ecma262.ToString(patternSrc);
+    patternType = Porffor.type(patternSrc);
+  }
+
+  // Convert flags to string if it isn't already
+  let flagsType: i32 = Porffor.type(flagsSrc);
+  if (flagsType !== Porffor.TYPES.bytestring && flagsType !== Porffor.TYPES.string) {
+    flagsSrc = ecma262.ToString(flagsSrc);
+    flagsType = Porffor.type(flagsSrc);
+  }
+
+  // Convert 2-byte strings to bytestrings for the regex compiler
+  if (patternType === Porffor.TYPES.string) {
+    const len: i32 = (patternSrc as string).length;
+    const bs: bytestring = Porffor.malloc();
+    for (let i: i32 = 0; i < len; i++) {
+      Porffor.bytestring.appendChar(bs, (patternSrc as string).charCodeAt(i));
+    }
+    patternSrc = bs;
+  }
+
+  if (flagsType === Porffor.TYPES.string) {
+    const len: i32 = (flagsSrc as string).length;
+    const bs: bytestring = Porffor.malloc();
+    for (let i: i32 = 0; i < len; i++) {
+      Porffor.bytestring.appendChar(bs, (flagsSrc as string).charCodeAt(i));
+    }
+    flagsSrc = bs;
   }
 
   return __Porffor_regex_compile(patternSrc, flagsSrc);
