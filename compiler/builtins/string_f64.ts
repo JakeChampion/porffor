@@ -909,3 +909,89 @@ export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: n
 
   return out;
 };
+
+// indexOf implementations - in f64 file for proper NaN/Infinity support in ecma262.ToString
+export const __String_prototype_indexOf = (_this: string, searchString: any, position: any = 0) => {
+  searchString = ecma262.ToString(searchString);
+  if (Porffor.type(searchString) == Porffor.TYPES.bytestring) {
+    searchString = Porffor.bytestringToString(searchString);
+  }
+  position = ecma262.ToIntegerOrInfinity(position);
+
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+  const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
+
+  const searchLenX2: i32 = searchString.length * 2;
+
+  const len: i32 = _this.length;
+  if (position > 0) {
+    if (position > len) position = len;
+  } else position = 0;
+
+  const thisPtrEnd: i32 = thisPtr + (len * 2) - searchLenX2;
+
+  thisPtr += position * 2;
+
+  while (thisPtr <= thisPtrEnd) {
+    let match: boolean = true;
+    for (let i: i32 = 0; i < searchLenX2; i += 2) {
+      let chr: i32 = Porffor.wasm.i32.load16_u(thisPtr + i, 0, 4);
+      let expected: i32 = Porffor.wasm.i32.load16_u(searchPtr + i, 0, 4);
+
+      if (chr != expected) {
+        match = false;
+        break;
+      }
+    }
+
+    if (match) return (thisPtr - Porffor.wasm`local.get ${_this}`) / 2;
+
+    thisPtr += 2;
+  }
+
+  return -1;
+};
+
+export const __ByteString_prototype_indexOf = (_this: bytestring, searchString: any, position: any = 0) => {
+  searchString = ecma262.ToString(searchString);
+
+  // If result is not a bytestring, convert _this to string and use String version
+  if (Porffor.type(searchString) != Porffor.TYPES.bytestring) {
+    return __String_prototype_indexOf(Porffor.bytestringToString(_this), searchString, position);
+  }
+
+  position = ecma262.ToIntegerOrInfinity(position);
+
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+  const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
+
+  const searchLen: i32 = searchString.length;
+
+  const len: i32 = _this.length;
+  if (position > 0) {
+    if (position > len) position = len;
+  } else position = 0;
+
+  const thisPtrEnd: i32 = thisPtr + len - searchLen;
+
+  thisPtr += position;
+
+  while (thisPtr <= thisPtrEnd) {
+    let match: boolean = true;
+    for (let i: i32 = 0; i < searchLen; i++) {
+      let chr: i32 = Porffor.wasm.i32.load8_u(thisPtr + i, 0, 4);
+      let expected: i32 = Porffor.wasm.i32.load8_u(searchPtr + i, 0, 4);
+
+      if (chr != expected) {
+        match = false;
+        break;
+      }
+    }
+
+    if (match) return thisPtr - Porffor.wasm`local.get ${_this}`;
+
+    thisPtr++;
+  }
+
+  return -1;
+};
