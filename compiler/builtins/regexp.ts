@@ -144,7 +144,9 @@ export const __Porffor_regex_compile = (patternStr: bytestring, flagsStr: bytest
   // todo: free all at the end (or statically allocate but = [] causes memory corruption)
   const groupStack: i32[] = Porffor.malloc(6144);
   const altDepth: i32[] = Porffor.malloc(6144); // number of |s so far at each depth
-  const altStack: i32[] = Porffor.malloc(6144);
+  const altStack: i32[] = Porffor.malloc(6144); // stack for jump targets (push/pop)
+  const altStartPos: i32[] = Porffor.malloc(6144); // start position of current alternative at each depth
+  const altScopeStart: i32[] = Porffor.malloc(6144); // scope start position at each depth (indexed by groupDepth)
 
   while (patternPtr < patternEndPtr) {
     let char: i32 = Porffor.wasm.i32.load8_u(patternPtr, 0, 4);
@@ -392,12 +394,11 @@ export const __Porffor_regex_compile = (patternStr: bytestring, flagsStr: bytest
           Porffor.array.fastPushI32(groupStack, lookaheadJumpPtr);
           Porffor.array.fastPushI32(groupStack, isNegativeLookahead ? -2 : -3);
           groupDepth += 1;
+          // Initialize alternation positions for this depth
+          altStartPos[groupDepth] = bcPtr;
+          altScopeStart[groupDepth] = bcPtr;
         } else {
           groupDepth += 1;
-          // Store the alternation scope start for this group depth in altStack
-          // We'll use even indices for jump targets and odd indices for scope starts
-          const scopeStackIdx = groupDepth * 2 + 1;
-          if (scopeStackIdx < 6144) altStack[scopeStackIdx] = bcPtr;
           if (!ncg) {
             Porffor.wasm.i32.store8(bcPtr, 0x30, 0, 0); // start capture
             Porffor.wasm.i32.store8(bcPtr, captureIndex, 0, 1);
@@ -408,6 +409,9 @@ export const __Porffor_regex_compile = (patternStr: bytestring, flagsStr: bytest
           } else {
             Porffor.array.fastPushI32(groupStack, -1);
           }
+          // Initialize alternation positions AFTER capture start (so capture wraps around fork)
+          altStartPos[groupDepth] = bcPtr;
+          altScopeStart[groupDepth] = bcPtr;
         }
 
         lastWasAtom = false;
@@ -453,19 +457,19 @@ export const __Porffor_regex_compile = (patternStr: bytestring, flagsStr: bytest
       if (char == 124) { // '|'
         altDepth[groupDepth] += 1;
 
-        let forkPos: i32 = lastAtomStart;
+        let forkPos: i32;
         if (altDepth[groupDepth] == 1) {
           // First alternation - go back to start of alternation scope
           if (groupDepth == 0) {
             // Top level alternation
             forkPos = bcStart;
           } else {
-            // Group alternation - get stored scope start
-            const scopeStackIdx = groupDepth * 2 + 1;
-            if (scopeStackIdx < 6144 && altStack[scopeStackIdx] > 0) {
-              forkPos = altStack[scopeStackIdx];
-            }
+            // Group alternation - use the scope start for this group depth
+            forkPos = altScopeStart[groupDepth];
           }
+        } else {
+          // Subsequent alternation - use the start of the current alternative
+          forkPos = altStartPos[groupDepth];
         }
 
         Porffor.wasm.memory.copy(forkPos + 5, forkPos, bcPtr - forkPos, 0, 0);
@@ -480,6 +484,8 @@ export const __Porffor_regex_compile = (patternStr: bytestring, flagsStr: bytest
 
         Porffor.wasm.i32.store16(forkPos, bcPtr - forkPos, 0, 3); // fork branch2: next alternative
 
+        // Save the start of the next alternative
+        altStartPos[groupDepth] = bcPtr;
         lastAtomStart = bcPtr;
         lastWasAtom = false;
         continue;
@@ -970,32 +976,44 @@ export const __Porffor_regex_interpret = (regexpAny: any, inputAny: any, isTest:
 
       switch (op) {
         case 0x10: { // accept
-          // Check if this is a lookahead accept
-          if (backtrackStack.length >= 4) {
-            const marker = backtrackStack[backtrackStack.length - 1];
-            if (marker == -2000 || marker == -3000) { // lookahead markers
-              // This is a lookahead accept
-              const isNegative = marker == -2000;
-
-              const savedMarker = Porffor.array.fastPopI32(backtrackStack);
-              const savedCapturesLen = Porffor.array.fastPopI32(backtrackStack);
-              const savedSp = Porffor.array.fastPopI32(backtrackStack);
-              const lookaheadEndPc = Porffor.array.fastPopI32(backtrackStack);
-
-              // Restore string position (lookaheads don't consume)
-              sp = savedSp;
-              captures.length = savedCapturesLen;
-
-              if (isNegative) {
-                // Negative lookahead: pattern matched, so fail completely
-                matched = false;
-                break interpreter;
-              } else {
-                // Positive lookahead: pattern matched, so continue after lookahead
-                pc = lookaheadEndPc;
-              }
+          // Scan backwards through backtrackStack to find any lookahead marker
+          // Each frame is 4 entries, marker is the 4th entry of each frame
+          let lookaheadFrameIdx: i32 = -1;
+          let stackLen: i32 = backtrackStack.length;
+          for (let scanIdx: i32 = stackLen - 1; scanIdx >= 3; scanIdx -= 4) {
+            const marker = backtrackStack[scanIdx];
+            if (marker == -2000 || marker == -3000) {
+              lookaheadFrameIdx = scanIdx - 3;
               break;
             }
+          }
+
+          if (lookaheadFrameIdx >= 0) {
+            // Found a lookahead frame - pop everything above it and the frame itself
+            const marker = backtrackStack[lookaheadFrameIdx + 3];
+            const isNegative = marker == -2000;
+
+            // Pop all frames on top of the lookahead frame
+            backtrackStack.length = lookaheadFrameIdx + 4;
+
+            const savedMarker = Porffor.array.fastPopI32(backtrackStack);
+            const savedCapturesLen = Porffor.array.fastPopI32(backtrackStack);
+            const savedSp = Porffor.array.fastPopI32(backtrackStack);
+            const lookaheadEndPc = Porffor.array.fastPopI32(backtrackStack);
+
+            // Restore string position (lookaheads don't consume)
+            sp = savedSp;
+            captures.length = savedCapturesLen;
+
+            if (isNegative) {
+              // Negative lookahead: pattern matched, so fail completely
+              matched = false;
+              break interpreter;
+            } else {
+              // Positive lookahead: pattern matched, so continue after lookahead
+              pc = lookaheadEndPc;
+            }
+            break;
           }
 
           // Normal accept
