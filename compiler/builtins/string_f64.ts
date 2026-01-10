@@ -995,3 +995,117 @@ export const __ByteString_prototype_indexOf = (_this: bytestring, searchString: 
 
   return -1;
 };
+
+// lastIndexOf implementations - in f64 file for proper NaN/Infinity support in ecma262.ToIntegerOrInfinity
+export const __String_prototype_lastIndexOf = (_this: string, searchString: any, position: any = undefined) => {
+  searchString = ecma262.ToString(searchString);
+  if (Porffor.type(searchString) == Porffor.TYPES.bytestring) {
+    searchString = Porffor.bytestringToString(searchString);
+  }
+
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+  const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
+
+  const searchLen: i32 = searchString.length;
+  const searchLenX2: i32 = searchLen * 2;
+
+  // todo/perf: make position oob handling optional (via pref or fast variant?)
+  const len: i32 = _this.length;
+
+  // Per spec: If position is undefined or NaN, search from end (+∞)
+  let pos: number;
+  if (Porffor.type(position) == Porffor.TYPES.undefined) {
+    pos = len - searchLen;
+  } else {
+    const numPos: number = ecma262.ToNumber(position);
+    if (Number.isNaN(numPos)) {
+      pos = len - searchLen; // NaN -> +∞, clamped to len - searchLen
+    } else {
+      pos = ecma262.ToIntegerOrInfinity(numPos);
+    }
+  }
+
+  if (pos > 0) {
+    const max: i32 = len - searchLen;
+    if (pos > max) pos = max;
+  } else pos = 0;
+
+  const thisPtrStart: i32 = thisPtr;
+
+  thisPtr += pos * 2;
+
+  while (thisPtr >= thisPtrStart) {
+    let match: boolean = true;
+    for (let i: i32 = 0; i < searchLenX2; i += 2) {
+      let chr: i32 = Porffor.wasm.i32.load8_u(thisPtr + i, 0, 4);
+      let expected: i32 = Porffor.wasm.i32.load8_u(searchPtr + i, 0, 4);
+
+      if (chr != expected) {
+        match = false;
+        break;
+      }
+    }
+
+    if (match) return (thisPtr - Porffor.wasm`local.get ${_this}`) / 2;
+
+    thisPtr -= 2;
+  }
+
+  return -1;
+};
+
+export const __ByteString_prototype_lastIndexOf = (_this: bytestring, searchString: any, position: any = undefined) => {
+  searchString = ecma262.ToString(searchString);
+  if (Porffor.type(searchString) != Porffor.TYPES.bytestring) {
+    return __String_prototype_lastIndexOf(Porffor.bytestringToString(_this), searchString, position);
+  }
+
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+  const searchPtr: i32 = Porffor.wasm`local.get ${searchString}`;
+
+  const searchLen: i32 = searchString.length;
+
+  // todo/perf: make position oob handling optional (via pref or fast variant?)
+  const len: i32 = _this.length;
+
+  // Per spec: If position is undefined or NaN, search from end (+∞)
+  let pos: number;
+  if (Porffor.type(position) == Porffor.TYPES.undefined) {
+    pos = len - searchLen;
+  } else {
+    const numPos: number = ecma262.ToNumber(position);
+    if (Number.isNaN(numPos)) {
+      pos = len - searchLen; // NaN -> +∞, clamped to len - searchLen
+    } else {
+      pos = ecma262.ToIntegerOrInfinity(numPos);
+    }
+  }
+
+  if (pos > 0) {
+    const max: i32 = len - searchLen;
+    if (pos > max) pos = max;
+  } else pos = 0;
+
+  const thisPtrStart: i32 = thisPtr;
+
+  thisPtr += pos;
+
+  while (thisPtr >= thisPtrStart) {
+    let match: boolean = true;
+    for (let i: i32 = 0; i < searchLen; i++) {
+      let chr: i32 = Porffor.wasm.i32.load8_u(thisPtr + i, 0, 4);
+      let expected: i32 = Porffor.wasm.i32.load8_u(searchPtr + i, 0, 4);
+
+      if (chr != expected) {
+        match = false;
+        break;
+      }
+    }
+
+    if (match) return thisPtr - Porffor.wasm`local.get ${_this}`;
+
+    thisPtr--;
+  }
+
+  return -1;
+};
