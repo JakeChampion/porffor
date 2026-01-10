@@ -359,22 +359,12 @@ export const __Math_log1p = (x: number): number => {
 
 
 export const __Math_sqrt = (y: number): number => {
-  if (y <= 0) {
-    if (y == 0) return y; // sqrt(±0) = ±0 (preserve sign)
-    return NaN;
-  }
-  if (!Number.isFinite(y)) return y;
-
-  // Babylonian method
-  let x: number = y;
-  let prev: number;
-
-  do {
-    prev = x;
-    x = 0.5 * (x + y / x);
-  } while (Math.abs(prev - x) > 1e-15);
-
-  return x;
+  // Use native wasm f64.sqrt instruction for IEEE 754 precision
+  Porffor.wasm`
+local.get ${y}
+f64.sqrt
+return`;
+  return 0; // unreachable
 };
 
 export const __Math_cbrt = (y: number): number => {
