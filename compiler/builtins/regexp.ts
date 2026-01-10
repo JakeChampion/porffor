@@ -1189,14 +1189,27 @@ export const __Porffor_regex_interpret = (regexpAny: any, inputAny: any, isTest:
           break;
         }
 
-        case 0x09: // dot
-          if (sp >= inputLen || (!dotAll && Porffor.wasm.i32.load8_u(input + sp, 0, 4) == 10)) {
+        case 0x09: { // dot
+          // dot matches any character except line terminators (\n, \r, \u2028, \u2029)
+          // unless dotAll flag is set
+          if (sp >= inputLen) {
             backtrack = true;
+          } else if (!dotAll) {
+            const chr: i32 = Porffor.wasm.i32.load8_u(input + sp, 0, 4);
+            // Check for line terminators: \n (10), \r (13)
+            // Note: \u2028 (8232) and \u2029 (8233) can't appear in bytestrings
+            if (chr == 10 || chr == 13) {
+              backtrack = true;
+            } else {
+              pc += 1;
+              sp += 1;
+            }
           } else {
             pc += 1;
             sp += 1;
           }
           break;
+        }
 
         case 0x0a: { // back reference
           const capIndex = Porffor.wasm.i32.load8_u(pc, 0, 1);
