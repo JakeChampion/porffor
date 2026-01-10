@@ -24,11 +24,9 @@ export const WeakSet = function (iterable: any): WeakSet {
 
   const out: WeakSet = Porffor.malloc();
   if (iterable != null) {
-    // 7a. Let adder be Get(set, "add").
-    // 7c. If IsCallable(adder) is false, throw a TypeError exception.
-    const adder: any = out.add;
-    if (typeof adder !== 'function') throw new TypeError('WeakSet.prototype.add is not a function');
-
+    // Note: Spec requires checking if "add" is callable (7a, 7c), but we skip this check
+    // because property lookup on builtin objects returns undefined due to architectural
+    // limitations. We call __WeakSet_prototype_add directly which always works.
     for (const x of iterable) {
       __WeakSet_prototype_add(out, x);
     }

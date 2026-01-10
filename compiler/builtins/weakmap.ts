@@ -32,11 +32,9 @@ export const WeakMap = function (iterable: any): WeakMap {
   Porffor.wasm.i32.store(out, vals, 0, 4);
 
   if (iterable != null) {
-    // 7a. Let adder be Get(map, "set").
-    // 7c. If IsCallable(adder) is false, throw a TypeError exception.
-    const adder: any = out.set;
-    if (typeof adder !== 'function') throw new TypeError('WeakMap.prototype.set is not a function');
-
+    // Note: Spec requires checking if "set" is callable (7a, 7c), but we skip this check
+    // because property lookup on builtin objects returns undefined due to architectural
+    // limitations. We call __WeakMap_prototype_set directly which always works.
     for (const x of iterable) {
       if (!Porffor.object.isObject(x)) throw new TypeError('Iterator contains non-object');
       __WeakMap_prototype_set(out, x[0], x[1]);

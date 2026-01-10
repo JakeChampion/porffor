@@ -59,7 +59,9 @@
       "Bash(cat:*)",
       "Bash(node test.js:*)",
       "Bash(kill %1)",
-      "Bash(timeout 30 ./porf test.js:*)"
+      "Bash(timeout 30 ./porf test.js:*)",
+      "Bash(for i in 1 2 3)",
+      "Bash(git restore:*)"
     ]
   }
 }
