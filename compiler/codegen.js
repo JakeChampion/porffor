@@ -1558,6 +1558,66 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
 
     // string comparison
     if (op === '===' || op === '==' || op === '!==' || op === '!=') {
+      // For strict equality with unknown types, we need to save types in locals
+      // because #last_type gets overwritten when evaluating the second operand
+      if (strictOp && (knownLeft == null || knownRight == null)) {
+        const leftTypeTmp = localTmp(scope, '#strict_eq_left_type', Valtype.i32);
+        const rightTypeTmp = localTmp(scope, '#strict_eq_right_type', Valtype.i32);
+
+        // Build comparison that saves types to locals
+        const noConv = knownLeftStr && knownRightStr;
+        const cmpOut = noConv ? [
+          ...left,
+          Opcodes.i32_to_u,
+          ...leftType,
+          [ Opcodes.local_tee, leftTypeTmp ],  // save left type
+
+          ...right,
+          Opcodes.i32_to_u,
+          ...rightType,
+          [ Opcodes.local_tee, rightTypeTmp ],  // save right type
+
+          [ Opcodes.call, includeBuiltin(scope, '__Porffor_strcmp').index ]
+        ] : [
+          ...left,
+          ...(valtypeBinary === Valtype.i32 ? [ [ Opcodes.f64_convert_i32_s ] ] : []),
+          ...leftType,
+          [ Opcodes.local_tee, leftTypeTmp ],  // save left type
+
+          ...right,
+          ...(valtypeBinary === Valtype.i32 ? [ [ Opcodes.f64_convert_i32_s ] ] : []),
+          ...rightType,
+          [ Opcodes.local_tee, rightTypeTmp ],  // save right type
+
+          [ Opcodes.call, includeBuiltin(scope, '__Porffor_compareStrings').index ],
+          Opcodes.i32_trunc_sat_f64_u
+        ];
+
+        // Type check using saved locals
+        const typeCheck = [
+          [ Opcodes.local_get, leftTypeTmp ],
+          number(TYPE_FLAGS.parity, Valtype.i32),
+          [ Opcodes.i32_or ],
+          [ Opcodes.local_get, rightTypeTmp ],
+          number(TYPE_FLAGS.parity, Valtype.i32),
+          [ Opcodes.i32_or ],
+          ...(op === '===' ? [
+            [ Opcodes.i32_eq ],
+            [ Opcodes.i32_and ]
+          ] : [
+            [ Opcodes.i32_ne ],
+            [ Opcodes.i32_or ]
+          ])
+        ];
+
+        return [
+          ...startOut,
+          ...cmpOut,
+          ...(op === '!==' || op === '!=' ? [ [ Opcodes.i32_eqz ] ] : []),
+          ...typeCheck
+        ];
+      }
+
       return finalize([
         ...compareStrings(scope, left, right, leftType, rightType, knownLeftStr && knownRightStr),
         ...(op === '!==' || op === '!=' ? [ [ Opcodes.i32_eqz ] ] : [])
