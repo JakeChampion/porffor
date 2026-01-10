@@ -673,6 +673,197 @@ export const __String_prototype_padEnd = (_this: string, targetLength: number, p
   return out;
 };
 
+// 22.1.3.32 String.prototype.trimStart ()
+export const __String_prototype_trimStart = (_this: any) => {
+  const t: i32 = Porffor.type(_this);
+  if (Porffor.fastOr(t == Porffor.TYPES.undefined, t == Porffor.TYPES.object && _this === null)) {
+    throw new TypeError('String.prototype.trimStart called on null or undefined');
+  }
+  const str: any = ecma262.ToString(_this);
+
+  const len: i32 = str.length;
+
+  if (Porffor.type(str) == Porffor.TYPES.bytestring) {
+    const strPtr: i32 = Porffor.wasm`local.get ${str}`;
+    const strPtrEnd: i32 = strPtr + len;
+    let n: i32 = 0;
+    let scanPtr: i32 = strPtr;
+    while (scanPtr < strPtrEnd) {
+      const chr: i32 = Porffor.wasm.i32.load8_u(scanPtr++, 0, 4);
+      if (Porffor.fastOr(chr == 0x9, chr == 0xb, chr == 0xc, chr == 0x20, chr == 0xa, chr == 0xd)) { n++; }
+      else break;
+    }
+    // Fast path: no trimming needed
+    if (n == 0) return str;
+
+    const outLen: i32 = len - n;
+    let out: bytestring = Porffor.malloc();
+    // Use memory.copy like repeat does
+    Porffor.wasm`
+;; dst = out + 4
+local.get ${out}
+i32.trunc_sat_f64_s
+i32.const 4
+i32.add
+
+;; src = str + 4 + n (skip whitespace)
+local.get ${str}
+i32.trunc_sat_f64_s
+i32.const 4
+i32.add
+local.get ${n}
+i32.trunc_sat_f64_s
+i32.add
+
+;; size = outLen
+local.get ${outLen}
+i32.trunc_sat_f64_s
+
+memory.copy 0 0`;
+    Porffor.wasm.i32.store(out, outLen, 0, 0);
+    return out;
+  }
+
+  const strPtr: i32 = Porffor.wasm`local.get ${str}`;
+  const strPtrEnd: i32 = strPtr + len * 2;
+  let n: i32 = 0;
+  let scanPtr: i32 = strPtr;
+  while (scanPtr < strPtrEnd) {
+    const chr: i32 = Porffor.wasm.i32.load16_u(scanPtr, 0, 4);
+    scanPtr += 2;
+    if (Porffor.fastOr(chr == 0x9, chr == 0xb, chr == 0xc, chr == 0xfeff, chr == 0x20, chr == 0xa0, chr == 0x1680, chr == 0x2000, chr == 0x2001, chr == 0x2002, chr == 0x2003, chr == 0x2004, chr == 0x2005, chr == 0x2006, chr == 0x2007, chr == 0x2008, chr == 0x2009, chr == 0x200a, chr == 0x202f, chr == 0x205f, chr == 0x3000, chr == 0xa, chr == 0xd, chr == 0x2028, chr == 0x2029)) { n++; }
+    else break;
+  }
+  // Fast path: no trimming needed
+  if (n == 0) return str;
+
+  const outLen: i32 = len - n;
+  let out: string = Porffor.malloc();
+  // Use memory.copy
+  Porffor.wasm`
+;; dst = out + 4
+local.get ${out}
+i32.trunc_sat_f64_s
+i32.const 4
+i32.add
+
+;; src = str + 4 + n * 2 (skip whitespace)
+local.get ${str}
+i32.trunc_sat_f64_s
+i32.const 4
+i32.add
+local.get ${n}
+i32.trunc_sat_f64_s
+i32.const 2
+i32.mul
+i32.add
+
+;; size = outLen * 2
+local.get ${outLen}
+i32.trunc_sat_f64_s
+i32.const 2
+i32.mul
+
+memory.copy 0 0`;
+  Porffor.wasm.i32.store(out, outLen, 0, 0);
+  return out;
+};
+
+export const __ByteString_prototype_trimStart = (_this: any) => __String_prototype_trimStart(_this);
+
+// 22.1.3.31 String.prototype.trimEnd ()
+export const __String_prototype_trimEnd = (_this: any) => {
+  const t: i32 = Porffor.type(_this);
+  if (Porffor.fastOr(t == Porffor.TYPES.undefined, t == Porffor.TYPES.object && _this === null)) {
+    throw new TypeError('String.prototype.trimEnd called on null or undefined');
+  }
+  const str: any = ecma262.ToString(_this);
+
+  const len: i32 = str.length;
+
+  if (Porffor.type(str) == Porffor.TYPES.bytestring) {
+    let endPos: i32 = len;
+    let scanPtr: i32 = Porffor.wasm`local.get ${str}` + len - 1;
+    const strPtr: i32 = Porffor.wasm`local.get ${str}`;
+    while (scanPtr >= strPtr) {
+      const chr: i32 = Porffor.wasm.i32.load8_u(scanPtr--, 0, 4);
+      if (Porffor.fastOr(chr == 0x9, chr == 0xb, chr == 0xc, chr == 0x20, chr == 0xa, chr == 0xd)) { endPos--; }
+      else break;
+    }
+    // Fast path: no trimming needed
+    if (endPos == len) return str;
+
+    let out: bytestring = Porffor.malloc();
+    // Use memory.copy like repeat does
+    Porffor.wasm`
+;; dst = out + 4
+local.get ${out}
+i32.trunc_sat_f64_s
+i32.const 4
+i32.add
+
+;; src = str + 4
+local.get ${str}
+i32.trunc_sat_f64_s
+i32.const 4
+i32.add
+
+;; size = endPos
+local.get ${endPos}
+i32.trunc_sat_f64_s
+
+memory.copy 0 0`;
+    Porffor.wasm.i32.store(out, endPos, 0, 0);
+    return out;
+  }
+
+  let endPos: i32 = len;
+  let scanPtr: i32 = Porffor.wasm`local.get ${str}` + len * 2 - 2;
+  const strPtr: i32 = Porffor.wasm`local.get ${str}`;
+  while (scanPtr >= strPtr) {
+    const chr: i32 = Porffor.wasm.i32.load16_u(scanPtr, 0, 4);
+    scanPtr -= 2;
+    if (Porffor.fastOr(chr == 0x9, chr == 0xb, chr == 0xc, chr == 0xfeff, chr == 0x20, chr == 0xa0, chr == 0x1680, chr == 0x2000, chr == 0x2001, chr == 0x2002, chr == 0x2003, chr == 0x2004, chr == 0x2005, chr == 0x2006, chr == 0x2007, chr == 0x2008, chr == 0x2009, chr == 0x200a, chr == 0x202f, chr == 0x205f, chr == 0x3000, chr == 0xa, chr == 0xd, chr == 0x2028, chr == 0x2029)) { endPos--; }
+    else break;
+  }
+  // Fast path: no trimming needed
+  if (endPos == len) return str;
+
+  let out: string = Porffor.malloc();
+  // Use memory.copy
+  Porffor.wasm`
+;; dst = out + 4
+local.get ${out}
+i32.trunc_sat_f64_s
+i32.const 4
+i32.add
+
+;; src = str + 4
+local.get ${str}
+i32.trunc_sat_f64_s
+i32.const 4
+i32.add
+
+;; size = endPos * 2
+local.get ${endPos}
+i32.trunc_sat_f64_s
+i32.const 2
+i32.mul
+
+memory.copy 0 0`;
+  Porffor.wasm.i32.store(out, endPos, 0, 0);
+  return out;
+};
+
+export const __ByteString_prototype_trimEnd = (_this: any) => __String_prototype_trimEnd(_this);
+
+// 22.1.3.30 String.prototype.trim ()
+export const __String_prototype_trim = (_this: any) => {
+  return __String_prototype_trimStart(__String_prototype_trimEnd(_this));
+};
+
+export const __ByteString_prototype_trim = (_this: any) => __String_prototype_trim(_this);
+
 export const __ByteString_prototype_padEnd = (_this: bytestring, targetLength: number, padString: any = undefined) => {
   // 3. Let intMaxLength be ToLength(maxLength).
   targetLength = ecma262.ToLength(targetLength);
