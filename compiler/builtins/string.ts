@@ -3297,3 +3297,104 @@ export const __ByteString_prototype_replaceAll = (_this: bytestring, searchStrin
   // Delegate to String version
   return __String_prototype_replaceAll(Porffor.bytestringToString(_this), ecma262.ToString(searchString), ecma262.ToString(replaceString));
 };
+
+export const __String_prototype_replace = (_this: string, searchValue: any, replaceValue: any) => {
+  // Convert replaceValue to string (TODO: support function replaceValue)
+  replaceValue = ecma262.ToString(replaceValue);
+
+  // Convert searchValue to string
+  searchValue = ecma262.ToString(searchValue);
+
+  // Convert to same string type for comparison
+  if (Porffor.wasm`local.get ${searchValue+1}` == Porffor.TYPES.bytestring) {
+    searchValue = Porffor.bytestringToString(searchValue);
+  }
+  if (Porffor.wasm`local.get ${replaceValue+1}` == Porffor.TYPES.bytestring) {
+    replaceValue = Porffor.bytestringToString(replaceValue);
+  }
+
+  const thisLen: i32 = _this.length;
+  const searchLen: i32 = searchValue.length;
+  const replaceLen: i32 = replaceValue.length;
+
+  // Empty search string: insert replacement at start
+  if (searchLen == 0) {
+    let out: string = Porffor.malloc();
+    let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+    let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+    const replacePtr: i32 = Porffor.wasm`local.get ${replaceValue}`;
+
+    // Insert replacement at start
+    for (let r: i32 = 0; r < replaceLen; r++) {
+      Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(replacePtr + r * 2, 0, 4), 0, 4);
+      outPtr += 2;
+    }
+
+    // Copy all characters
+    for (let i: i32 = 0; i < thisLen; i++) {
+      Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr, 0, 4), 0, 4);
+      outPtr += 2;
+      thisPtr += 2;
+    }
+
+    out.length = thisLen + replaceLen;
+    return out;
+  }
+
+  // Find first occurrence
+  let thisPtr: i32 = Porffor.wasm`local.get ${_this}`;
+  const searchPtr: i32 = Porffor.wasm`local.get ${searchValue}`;
+  const searchLenX2: i32 = searchLen * 2;
+
+  let matchPos: i32 = -1;
+  let pos: i32 = 0;
+  while (pos <= thisLen - searchLen) {
+    let match: boolean = true;
+    for (let j: i32 = 0; j < searchLenX2; j += 2) {
+      if (Porffor.wasm.i32.load16_u(thisPtr + pos * 2 + j, 0, 4) != Porffor.wasm.i32.load16_u(searchPtr + j, 0, 4)) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      matchPos = pos;
+      break;
+    }
+    pos++;
+  }
+
+  // If no match, return original string
+  if (matchPos == -1) return _this;
+
+  // Calculate output length
+  const tailPos: i32 = matchPos + searchLen;
+  const substLen: i32 = __Porffor_getSubstitutionLength(replaceValue, replaceLen, searchLen, matchPos, tailPos, thisLen);
+  const outLen: i32 = matchPos + substLen + (thisLen - tailPos);
+
+  // Allocate output string
+  let out: string = Porffor.malloc();
+  let outPtr: i32 = Porffor.wasm`local.get ${out}`;
+
+  // Copy characters before match
+  for (let i: i32 = 0; i < matchPos; i++) {
+    Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr + i * 2, 0, 4), 0, 4);
+    outPtr += 2;
+  }
+
+  // Perform substitution
+  outPtr = __Porffor_doSubstitution(outPtr, replaceValue, replaceLen, _this, searchValue, searchLen, matchPos, tailPos, thisLen);
+
+  // Copy characters after match
+  for (let i: i32 = tailPos; i < thisLen; i++) {
+    Porffor.wasm.i32.store16(outPtr, Porffor.wasm.i32.load16_u(thisPtr + i * 2, 0, 4), 0, 4);
+    outPtr += 2;
+  }
+
+  out.length = outLen;
+  return out;
+};
+
+export const __ByteString_prototype_replace = (_this: bytestring, searchValue: any, replaceValue: any) => {
+  // Delegate to String version
+  return __String_prototype_replace(Porffor.bytestringToString(_this), searchValue, replaceValue);
+};
