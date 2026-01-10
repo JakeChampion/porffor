@@ -291,12 +291,14 @@ export const __Math_pow = (base: number, exponent: number): number => {
   let result: number = 1;
   while (currentExponent > 0) {
     if (currentExponent >= 1) {
-      if (currentExponent & 1) {
+      // Use modulo instead of bitwise & to avoid i32 overflow with large exponents
+      if (currentExponent % 2 == 1) {
         result *= currentBase;
       }
 
       currentBase *= currentBase;
-      currentExponent >>= 1;
+      // Use floor division instead of bit shift to avoid i32 overflow
+      currentExponent = Math.floor(currentExponent / 2);
     } else {
       // Handle fractional part
       result *= Math.exp(currentExponent * Math.log(Math.abs(currentBase)));
