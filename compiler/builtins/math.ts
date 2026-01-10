@@ -385,11 +385,27 @@ export const __Math_cbrt = (y: number): number => {
 };
 
 
-// todo: varargs
-export const __Math_hypot = (x: number, y: number): number => {
+export const __Math_hypot = (...args: any[]): number => {
+  const len: i32 = args.length;
+  if (len == 0) return 0;
+
+  let hasInfinity: boolean = false;
+  let hasNaN: boolean = false;
+  let sum: number = 0;
+
+  for (let i: i32 = 0; i < len; i++) {
+    const v: number = ecma262.ToNumber(args[i]);
+    if (v == Infinity || v == -Infinity) hasInfinity = true;
+    else if (Number.isNaN(v)) hasNaN = true;
+    else sum += v * v;
+  }
+
   // If any argument is ±Infinity, return +Infinity (even if other args are NaN)
-  if (x == Infinity || x == -Infinity || y == Infinity || y == -Infinity) return Infinity;
-  return Math.sqrt(x * x + y * y);
+  if (hasInfinity) return Infinity;
+  // If any argument is NaN and no Infinity, return NaN
+  if (hasNaN) return NaN;
+
+  return Math.sqrt(sum);
 };
 
 export const __Math_sin = (x: number): number => {

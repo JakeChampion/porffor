@@ -8092,6 +8092,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
     jsLength = ({
       Array: 1,
       String: 1,
+      Number: 1,
       __Object_assign: 2,
       __String_fromCharCode: 1,
       __String_fromCodePoint: 1,
@@ -8134,6 +8135,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       // Math methods
       __Math_max: 2,
       __Math_min: 2,
+      __Math_hypot: 2,
 
       // JSON methods
       __JSON_parse: 2,
