@@ -1038,10 +1038,13 @@ export const __Porffor_strcmp = (a: any, b: any): boolean => {
       // bytestring, bytestring
       // this path is hyper-optimized as it is by far the most common and (perf) important
 
-      let ap32: i32 = a - 28;
-      let bp32: i32 = b - 28;
-      let ap8: i32 = a - 4;
-      let bp8: i32 = b - 4;
+      // Get raw pointer values from any-typed parameters (a - 4 on any type produces NaN)
+      let aPtr: i32 = Porffor.wasm`local.get ${a}`;
+      let bPtr: i32 = Porffor.wasm`local.get ${b}`;
+      let ap32: i32 = aPtr - 28;
+      let bp32: i32 = bPtr - 28;
+      let ap8: i32 = aPtr - 4;
+      let bp8: i32 = bPtr - 4;
       Porffor.wasm`
 ;; load in 2 i64x2 chunks while length >= 32
 local.get ${al}
@@ -1181,10 +1184,13 @@ end`;
       bl *= 2;
 
       // copied from bytestring, bytestring
-      let ap32: i32 = a - 28;
-      let bp32: i32 = b - 28;
-      let ap8: i32 = a - 4;
-      let bp8: i32 = b - 4;
+      // Get raw pointer values from any-typed parameters (a - 4 on any type produces NaN)
+      let aPtr: i32 = Porffor.wasm`local.get ${a}`;
+      let bPtr: i32 = Porffor.wasm`local.get ${b}`;
+      let ap32: i32 = aPtr - 28;
+      let bp32: i32 = bPtr - 28;
+      let ap8: i32 = aPtr - 4;
+      let bp8: i32 = bPtr - 4;
       Porffor.wasm`
 ;; load in 2 i64x2 chunks while length >= 32
 local.get ${al}
