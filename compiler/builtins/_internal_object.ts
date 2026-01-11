@@ -19,6 +19,7 @@ import type {} from './porffor.d.ts';
 //   writable - 0b1000
 
 // hash key for hashmap
+// Uses character code points to ensure bytestring and string hash symmetrically
 export const __Porffor_object_hash = (key: any): i32 => {
   if (Porffor.comptime.flag`hasType.symbol`) {
     if (Porffor.wasm`local.get ${key+1}` == Porffor.TYPES.symbol) {
@@ -27,21 +28,26 @@ export const __Porffor_object_hash = (key: any): i32 => {
     }
   }
 
-  // bytestring or string, xxh32-based hash
-  // todo/opt: custom wasm simd variant?
-  // todo: bytestring/string symmetric hashing
+  // bytestring or string, xxh32-based hash using character codes for symmetry
   let p: i32 = Porffor.wasm`local.get ${key}`;
-  let len: i32 = Porffor.wasm.i32.load(key, 0, 0);
-  if (Porffor.wasm`local.get ${key+1}` == Porffor.TYPES.string) len *= 2;
+  const len: i32 = Porffor.wasm.i32.load(key, 0, 0);
+  const isUtf16: boolean = Porffor.wasm`local.get ${key+1}` == Porffor.TYPES.string;
 
   let hash: i32 = 374761393 + len;
-  const end: i32 = p + len;
-  while (p + 4 <= end) {
-    // hash in chunks of i32 (4 bytes)
+
+  // Hash character by character using code points for symmetric hashing
+  // This ensures 'a' as bytestring (0x61) and 'a' as UTF-16 (0x61 0x00) hash the same
+  for (let i: i32 = 0; i < len; i++) {
+    let charCode: i32;
+    if (isUtf16) {
+      charCode = Porffor.wasm.i32.load16_u(p + i * 2, 0, 4);
+    } else {
+      charCode = Porffor.wasm.i32.load8_u(p + i, 0, 4);
+    }
+
     Porffor.wasm`
 local.get hash
-local.get p
-i32.load 0 4
+local.get ${charCode}
 i32.const 3266489917
 i32.mul
 i32.add
@@ -50,36 +56,11 @@ i32.rotl
 i32.const 668265263
 i32.mul
 local.set hash`;
-    p += 4;
   }
 
+  // final avalanche
   Porffor.wasm`
-;; hash final bytes up to 4 via shift depending on bytes remaining
 local.get hash
-local.get p
-i32.load 0 4
-
-i32.const 1
-local.get end
-local.get p
-i32.sub
-i32.const 8
-i32.mul
-i32.shl
-i32.const 1
-i32.sub
-i32.and
-
-i32.const 3266489917
-i32.mul
-i32.add
-i32.const 17
-i32.rotl
-i32.const 668265263
-i32.mul
-local.tee hash
-
-;; final avalanche
 local.get hash
 i32.const 15
 i32.shr_u

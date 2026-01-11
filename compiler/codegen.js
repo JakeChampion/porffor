@@ -4246,16 +4246,16 @@ const ctHash = prop => {
   prop = prop.property.name;
   if (!prop || prop === '__proto__' || !byteStringable(prop)) return null;
 
-  let i = 0;
   const len = prop.length;
   let hash = 374761393 + len;
 
   const rotl = (n, k) => (n << k) | (n >>> (32 - k));
-  const read = () => (prop.charCodeAt(i + 3) << 24 | prop.charCodeAt(i + 2) << 16 | prop.charCodeAt(i + 1) << 8 | prop.charCodeAt(i));
 
-  // hash in chunks of i32 (4 bytes)
-  for (; i <= len; i += 4) {
-    hash = Math.imul(rotl(hash + Math.imul(read(), 3266489917), 17), 668265263);
+  // hash character by character using code points
+  // matches __Porffor_object_hash's symmetric hashing
+  for (let i = 0; i < len; i++) {
+    const charCode = prop.charCodeAt(i);
+    hash = Math.imul(rotl(hash + Math.imul(charCode, 3266489917), 17), 668265263);
   }
 
   // final avalanche
