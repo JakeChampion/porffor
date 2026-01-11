@@ -275,7 +275,7 @@ export const encodeURI = (input: any): bytestring => {
 
   // Check if input is bytestring or string
   if (Porffor.wasm`local.get ${input+1}` == Porffor.TYPES.bytestring) {
-    // Handle bytestring input
+    // Handle bytestring input - treat each byte as a Unicode code point
     const endPtr: i32 = i + len;
 
     // First pass: calculate output length
@@ -295,8 +295,10 @@ export const encodeURI = (input: any): bytestring => {
           chr == 61 || chr == 63 || chr == 64 ||
           chr == 95 || chr == 126) {
         outLength += 1;
+      } else if (chr < 128) {
+        outLength += 3; // %XX for ASCII
       } else {
-        outLength += 3; // %XX
+        outLength += 6; // %XX%XX for 2-byte UTF-8 (code points 0x80-0xFF)
       }
     }
 
@@ -319,7 +321,8 @@ export const encodeURI = (input: any): bytestring => {
           chr == 61 || chr == 63 || chr == 64 ||
           chr == 95 || chr == 126) {
         Porffor.wasm.i32.store8(j++, chr, 0, 4);
-      } else {
+      } else if (chr < 128) {
+        // Single byte ASCII - encode as %XX
         Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
 
         let nibble: i32 = chr >> 4;
@@ -330,6 +333,38 @@ export const encodeURI = (input: any): bytestring => {
         }
 
         nibble = chr & 0x0F;
+        if (nibble < 10) {
+          Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+        }
+      } else {
+        // Code point 0x80-0xFF - encode as 2-byte UTF-8
+        const byte1: i32 = 0xC0 | (chr >> 6);
+        const byte2: i32 = 0x80 | (chr & 0x3F);
+
+        Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+        let nibble: i32 = byte1 >> 4;
+        if (nibble < 10) {
+          Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+        }
+        nibble = byte1 & 0x0F;
+        if (nibble < 10) {
+          Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+        }
+
+        Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+        nibble = byte2 >> 4;
+        if (nibble < 10) {
+          Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+        }
+        nibble = byte2 & 0x0F;
         if (nibble < 10) {
           Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
         } else {
@@ -585,7 +620,7 @@ export const encodeURIComponent = (input: any): bytestring => {
 
   // Check if input is bytestring or string
   if (Porffor.wasm`local.get ${input+1}` == Porffor.TYPES.bytestring) {
-    // Handle bytestring input
+    // Handle bytestring input - treat each byte as a Unicode code point
     const endPtr: i32 = i + len;
 
     // First pass: calculate output length
@@ -599,8 +634,10 @@ export const encodeURIComponent = (input: any): bytestring => {
           chr == 33 || chr == 39 || chr == 40 || chr == 41 || chr == 42 ||
           chr == 45 || chr == 46 || chr == 95 || chr == 126) {
         outLength += 1;
+      } else if (chr < 128) {
+        outLength += 3; // %XX for ASCII
       } else {
-        outLength += 3; // %XX
+        outLength += 6; // %XX%XX for 2-byte UTF-8 (code points 0x80-0xFF)
       }
     }
 
@@ -620,7 +657,8 @@ export const encodeURIComponent = (input: any): bytestring => {
           chr == 33 || chr == 39 || chr == 40 || chr == 41 || chr == 42 ||
           chr == 45 || chr == 46 || chr == 95 || chr == 126) {
         Porffor.wasm.i32.store8(j++, chr, 0, 4);
-      } else {
+      } else if (chr < 128) {
+        // Single byte ASCII - encode as %XX
         Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
 
         let nibble: i32 = chr >> 4;
@@ -631,6 +669,38 @@ export const encodeURIComponent = (input: any): bytestring => {
         }
 
         nibble = chr & 0x0F;
+        if (nibble < 10) {
+          Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+        }
+      } else {
+        // Code point 0x80-0xFF - encode as 2-byte UTF-8
+        const byte1: i32 = 0xC0 | (chr >> 6);
+        const byte2: i32 = 0x80 | (chr & 0x3F);
+
+        Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+        let nibble: i32 = byte1 >> 4;
+        if (nibble < 10) {
+          Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+        }
+        nibble = byte1 & 0x0F;
+        if (nibble < 10) {
+          Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+        }
+
+        Porffor.wasm.i32.store8(j++, 37, 0, 4); // %
+        nibble = byte2 >> 4;
+        if (nibble < 10) {
+          Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(j++, nibble + 55, 0, 4);
+        }
+        nibble = byte2 & 0x0F;
         if (nibble < 10) {
           Porffor.wasm.i32.store8(j++, nibble + 48, 0, 4);
         } else {
