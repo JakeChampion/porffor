@@ -21,16 +21,39 @@ export const __Porffor_bigint_fromDigits = (negative: boolean, digits: number[])
     return 0 as bigint;
   }
 
+  // Strip leading zeros from tempDigits and check for inline optimization
+  let firstNonZero: i32 = 0;
+  for (let i: i32 = 0; i < len; i++) {
+    if (tempDigits[i] != 0) {
+      firstNonZero = i;
+      break;
+    }
+  }
+  const effectiveLen: i32 = len - firstNonZero;
+
+  // Check if small enough to be inline (abs < 2^51)
+  if (effectiveLen == 1) {
+    const val: number = tempDigits[firstNonZero];
+    if (val < 0x8000000000000) {
+      return (negative ? -val : val) as bigint;
+    }
+  } else if (effectiveLen == 2) {
+    const val: number = tempDigits[firstNonZero] * 0x100000000 + tempDigits[firstNonZero + 1];
+    if (val < 0x8000000000000) {
+      return (negative ? -val : val) as bigint;
+    }
+  }
+
   // use digits pointer as bigint pointer, as only used here
   let ptr: i32 = Porffor.wasm`local.get ${digits}`;
 
   Porffor.wasm.i32.store8(ptr, negative ? 1 : 0, 0, 0); // sign
-  Porffor.wasm.i32.store16(ptr, len, 0, 2); // digit count
+  Porffor.wasm.i32.store16(ptr, effectiveLen, 0, 2); // digit count (excluding leading zeros)
 
-  // Now write the digits from our temp copy
-  for (let i: i32 = 0; i < len; i++) {
+  // Now write the non-zero digits from our temp copy
+  for (let i: i32 = 0; i < effectiveLen; i++) {
     // Convert to signed i32 for storage - this preserves bit pattern
-    let d: number = tempDigits[i];
+    let d: number = tempDigits[firstNonZero + i];
     // Convert unsigned (0 to 2^32-1) to signed (-2^31 to 2^31-1) for i32.store
     if (d >= 2147483648) d = d - 4294967296;
     Porffor.wasm.i32.store(ptr + i * 4, d, 0, 4);
@@ -42,10 +65,38 @@ export const __Porffor_bigint_fromDigits = (negative: boolean, digits: number[])
 // store small (abs(n) < 2^51 (0x8000000000000)) values inline (no allocation)
 // like a ~s52 (s53 exc 2^51+(0-2^32) for u32 as pointer) inside a f64
 export const __Porffor_bigint_inlineToDigitForm = (n: number): number => {
+  const negative: boolean = n < 0;
+  const absN: number = Math.abs(n);
+
+  // Check if value needs 2 digits (>= 2^32)
+  if (absN >= 4294967296) {
+    // Need 2 digits: high and low
+    const ptr: i32 = Porffor.malloc(12); // 4 meta + 2 digits (8 bytes)
+    Porffor.wasm.i32.store8(ptr, negative, 0, 0);
+    Porffor.wasm.i32.store16(ptr, 2, 0, 2);
+
+    // High digit: absN / 2^32
+    let high: number = Math.trunc(absN / 4294967296);
+    if (high >= 2147483648) high = high - 4294967296;
+    Porffor.wasm.i32.store(ptr, high, 0, 4);
+
+    // Low digit: absN % 2^32
+    let low: number = absN % 4294967296;
+    if (low >= 2147483648) low = low - 4294967296;
+    Porffor.wasm.i32.store(ptr + 4, low, 0, 4);
+
+    return ptr;
+  }
+
+  // Single digit (value < 2^32)
   const ptr: i32 = Porffor.malloc(8); // 4 meta + 1 digit (4 bytes)
-  Porffor.wasm.i32.store8(ptr, n < 0, 0, 0);
+  Porffor.wasm.i32.store8(ptr, negative, 0, 0);
   Porffor.wasm.i32.store16(ptr, 1, 0, 2);
-  Porffor.wasm.i32.store(ptr, Math.abs(n), 0, 4);
+  // Convert unsigned (0 to 2^32-1) to signed (-2^31 to 2^31-1) for i32.store
+  // This is needed because i32.store uses signed truncation from f64
+  let d: number = absN;
+  if (d >= 2147483648) d = d - 4294967296;
+  Porffor.wasm.i32.store(ptr, d, 0, 4);
 
   return ptr;
 };
@@ -375,39 +426,70 @@ export const __Porffor_bigint_add = (a: number, b: number, sub: boolean): bigint
       digits.unshift(sum);
     }
   } else {
-    let aLarger: i32 = 0;
-    for (let i: i32 = 0; i < maxLen; i++) {
-      let aDigit: i32 = 0;
-      const aOffset: i32 = aLen - i;
-      if (aOffset > 0) aDigit = Porffor.wasm.i32.load(a + aOffset * 4, 0, 0);
-
-      let bDigit: i32 = 0;
-      const bOffset: i32 = bLen - i;
-      if (bOffset > 0) bDigit = Porffor.wasm.i32.load(b + bOffset * 4, 0, 0);
-
-      let sum: i32 = carry;
-      if (aNegative) sum -= aDigit;
-        else sum += aDigit;
-      if (bNegative) sum -= bDigit;
-        else sum += bDigit;
-
-      if (aDigit != bDigit) aLarger = aDigit > bDigit ? 1 : -1;
-
-      if (sum >= 0x100000000) {
-        sum -= 0x100000000;
-        carry = 1;
-      } else if (sum < 0) {
-        sum += 0x100000000;
-        carry = -1;
-      } else {
-        carry = 0;
+    // Different signs: need to subtract magnitudes
+    // First, compare absolute magnitudes to determine which is larger
+    let cmp: i32 = 0; // 1 = |a| > |b|, -1 = |a| < |b|, 0 = equal
+    if (aLen != bLen) {
+      cmp = aLen > bLen ? 1 : -1;
+    } else {
+      // Same length, compare digit by digit from most significant
+      // Digits are stored at ptr+4, ptr+8, etc. (4-byte header)
+      for (let i: i32 = 1; i <= aLen; i++) {
+        const aDigit: i32 = Porffor.wasm.i32.load(a + i * 4, 0, 0);
+        const bDigit: i32 = Porffor.wasm.i32.load(b + i * 4, 0, 0);
+        // Convert to unsigned for comparison
+        const aU: number = aDigit < 0 ? aDigit + 0x100000000 : aDigit;
+        const bU: number = bDigit < 0 ? bDigit + 0x100000000 : bDigit;
+        if (aU != bU) {
+          cmp = aU > bU ? 1 : -1;
+          break;
+        }
       }
-
-      digits.unshift(sum);
     }
 
-    if (aLarger == 1) negative = aNegative;
-      else if (aLarger == -1) negative = bNegative;
+    if (cmp == 0) {
+      // Equal magnitudes, result is 0
+      return 0 as bigint;
+    }
+
+    // Subtract smaller from larger
+    let larger: i32, largerLen: i32, smaller: i32, smallerLen: i32;
+    if (cmp > 0) {
+      larger = a; largerLen = aLen;
+      smaller = b; smallerLen = bLen;
+      negative = aNegative;
+    } else {
+      larger = b; largerLen = bLen;
+      smaller = a; smallerLen = aLen;
+      negative = bNegative;
+    }
+
+    // Subtract: larger - smaller (from least significant digit)
+    // Use same offset pattern as same-sign branch: ptr + offset * 4 where offset goes from len down to 1
+    let borrow: i32 = 0;
+    for (let i: i32 = 0; i < largerLen; i++) {
+      const largerOffset: i32 = largerLen - i;
+      const smallerOffset: i32 = smallerLen - i;
+
+      const largerDigit: i32 = Porffor.wasm.i32.load(larger + largerOffset * 4, 0, 0);
+      const largerU: number = largerDigit < 0 ? largerDigit + 0x100000000 : largerDigit;
+
+      let smallerU: number = 0;
+      if (smallerOffset > 0) {
+        const smallerDigit: i32 = Porffor.wasm.i32.load(smaller + smallerOffset * 4, 0, 0);
+        smallerU = smallerDigit < 0 ? smallerDigit + 0x100000000 : smallerDigit;
+      }
+
+      let diff: number = largerU - smallerU - borrow;
+      if (diff < 0) {
+        diff += 0x100000000;
+        borrow = 1;
+      } else {
+        borrow = 0;
+      }
+
+      digits.unshift(diff);
+    }
   }
 
   if (carry != 0) {
@@ -572,62 +654,126 @@ export const __BigInt_asIntN = (bits: any, bigint: any): bigint => {
 
   if (bits == 0) return 0n;
 
-  // For bits > 32, use number-based approach (may lose precision for very large BigInts)
-  // For bits <= 32, we can extract the lowest digit directly for precise results
   const bigintNum: number = bigint as number;
 
-  if (bits > 32 || Math.abs(bigintNum) < 0x8000000000000) {
-    // Use number arithmetic for small BigInts or large bit counts
-    const n: number = __Porffor_bigint_toNumber(bigint);
+  // For inline BigInts (abs < 2^51), use number arithmetic
+  if (Math.abs(bigintNum) < 0x8000000000000) {
+    const n: number = bigintNum;
 
-    const mod2bits: number = 2 ** bits;
-    const mod2bitsm1: number = 2 ** (bits - 1);
+    // For bits <= 51, we can use direct number arithmetic
+    if (bits <= 51) {
+      const mod2bits: number = 2 ** bits;
+      const mod2bitsm1: number = 2 ** (bits - 1);
 
-    // Calculate mod (always positive in mathematical sense)
-    let mod: number = n % mod2bits;
-    if (mod < 0) mod += mod2bits;
+      let mod: number = n % mod2bits;
+      if (mod < 0) mod += mod2bits;
 
-    // If mod >= 2^(bits-1), return mod - 2^bits (make it negative)
-    if (mod >= mod2bitsm1) {
-      return __Porffor_bigint_fromNumber(mod - mod2bits);
+      if (mod >= mod2bitsm1) {
+        return (mod - mod2bits) as bigint;
+      }
+      return mod as bigint;
     }
 
-    return __Porffor_bigint_fromNumber(mod);
+    // For bits > 51, result is just the original value (can't overflow)
+    return bigint;
   }
 
-  // Memory-based BigInt with bits <= 32 - extract the lowest digit directly
+  // Memory-based BigInt - extract digits directly
   const ptr: i32 = bigintNum - 0x8000000000000;
   const negative: boolean = Porffor.wasm.i32.load8_u(ptr, 0, 0) != 0;
   const len: i32 = Porffor.wasm.i32.load16_u(ptr, 0, 2);
 
-  // Get lowest digit (last digit in big-endian storage)
-  const lowestDigit: i32 = Porffor.wasm.i32.load(ptr + (len - 1) * 4, 0, 4);
-  // Convert signed i32 to unsigned number
-  let lowBits: number = lowestDigit < 0 ? lowestDigit + 4294967296 : lowestDigit;
+  // Calculate how many 32-bit digits we need
+  const digitsNeeded: i32 = Math.ceil(bits / 32);
+  const extraBits: i32 = bits % 32;
 
-  const mod2bits: number = 2 ** bits;
-  const mod2bitsm1: number = 2 ** (bits - 1);
+  // Extract the lowest digitsNeeded digits (or all if len < digitsNeeded)
+  const actualDigits: i32 = len < digitsNeeded ? len : digitsNeeded;
 
-  let mod: number;
-  if (negative) {
-    // For negative numbers, compute two's complement
-    // -x mod 2^bits = 2^bits - (x mod 2^bits), unless x mod 2^bits is 0
-    const posMod: number = lowBits % mod2bits;
-    if (posMod == 0) {
-      mod = 0;
+  // Build the result in a temporary array
+  const tempDigits: number[] = Porffor.malloc();
+  for (let i: i32 = 0; i < digitsNeeded; i++) {
+    const srcIdx: i32 = len - actualDigits + i;
+    if (srcIdx >= 0 && i >= digitsNeeded - actualDigits) {
+      const digit: i32 = Porffor.wasm.i32.load(ptr + srcIdx * 4, 0, 4);
+      const digitU: number = digit < 0 ? digit + 4294967296 : digit;
+      tempDigits.push(digitU);
     } else {
-      mod = mod2bits - posMod;
+      tempDigits.push(0);
     }
-  } else {
-    mod = lowBits % mod2bits;
   }
 
-  // If mod >= 2^(bits-1), return mod - 2^bits (make it negative)
-  if (mod >= mod2bitsm1) {
-    return __Porffor_bigint_fromNumber(mod - mod2bits);
+  // Mask out extra bits from the most significant digit if needed
+  if (extraBits != 0 && tempDigits.length > 0) {
+    const mask: number = (1 << extraBits) - 1;
+    tempDigits[0] = tempDigits[0] & mask;
   }
 
-  return __Porffor_bigint_fromNumber(mod);
+  // For negative numbers, compute two's complement
+  if (negative) {
+    // Two's complement: invert all bits and add 1
+    let carry: i32 = 1;
+    for (let i: i32 = tempDigits.length - 1; i >= 0; i--) {
+      // Invert
+      let inverted: number = 4294967295 - tempDigits[i];
+      // Add carry
+      inverted = inverted + carry;
+      if (inverted >= 4294967296) {
+        inverted = inverted - 4294967296;
+        carry = 1;
+      } else {
+        carry = 0;
+      }
+      tempDigits[i] = inverted;
+    }
+
+    // Mask again after two's complement
+    if (extraBits != 0 && tempDigits.length > 0) {
+      const mask: number = (1 << extraBits) - 1;
+      tempDigits[0] = tempDigits[0] & mask;
+    }
+  }
+
+  // Check if the sign bit (bit bits-1) is set
+  const signBitDigit: i32 = Math.floor((bits - 1) / 32);
+  const signBitPos: i32 = (bits - 1) % 32;
+  let isNegativeResult: boolean = false;
+
+  if (signBitDigit < tempDigits.length) {
+    const digitIdx: i32 = tempDigits.length - 1 - signBitDigit;
+    if (digitIdx >= 0) {
+      const testDigit: number = tempDigits[digitIdx];
+      if ((testDigit & (1 << signBitPos)) != 0) {
+        isNegativeResult = true;
+      }
+    }
+  }
+
+  if (isNegativeResult) {
+    // Subtract 2^bits by computing two's complement of the result
+    let carry: i32 = 1;
+    for (let i: i32 = tempDigits.length - 1; i >= 0; i--) {
+      let inverted: number = 4294967295 - tempDigits[i];
+      inverted = inverted + carry;
+      if (inverted >= 4294967296) {
+        inverted = inverted - 4294967296;
+        carry = 1;
+      } else {
+        carry = 0;
+      }
+      tempDigits[i] = inverted;
+    }
+
+    // Mask again
+    if (extraBits != 0 && tempDigits.length > 0) {
+      const mask: number = (1 << extraBits) - 1;
+      tempDigits[0] = tempDigits[0] & mask;
+    }
+
+    return __Porffor_bigint_fromDigits(true, tempDigits);
+  }
+
+  return __Porffor_bigint_fromDigits(false, tempDigits);
 };
 
 // 21.2.2.2 BigInt.asUintN ( bits, bigint )
@@ -643,49 +789,86 @@ export const __BigInt_asUintN = (bits: any, bigint: any): bigint => {
 
   if (bits == 0) return 0n;
 
-  // For bits > 32, use number-based approach (may lose precision for very large BigInts)
-  // For bits <= 32, we can extract the lowest digit directly for precise results
   const bigintNum: number = bigint as number;
 
-  if (bits > 32 || Math.abs(bigintNum) < 0x8000000000000) {
-    // Use number arithmetic for small BigInts or large bit counts
-    const n: number = __Porffor_bigint_toNumber(bigint);
+  // For inline BigInts (abs < 2^51), use number arithmetic
+  if (Math.abs(bigintNum) < 0x8000000000000) {
+    const n: number = bigintNum;
 
-    const mod2bits: number = 2 ** bits;
+    // For bits <= 51, we can use direct number arithmetic
+    if (bits <= 51) {
+      const mod2bits: number = 2 ** bits;
 
-    // Calculate mod (always positive)
-    let mod: number = n % mod2bits;
-    if (mod < 0) mod += mod2bits;
+      let mod: number = n % mod2bits;
+      if (mod < 0) mod += mod2bits;
 
-    return __Porffor_bigint_fromNumber(mod);
+      return mod as bigint;
+    }
+
+    // For bits > 51, result is just the original value for positive, or needs adjustment for negative
+    if (n >= 0) return bigint;
+
+    // For negative inline values with bits > 51, compute 2^bits + n
+    // This would require larger representation, handled below
   }
 
-  // Memory-based BigInt with bits <= 32 - extract the lowest digit directly
+  // Memory-based BigInt - extract digits directly
   const ptr: i32 = bigintNum - 0x8000000000000;
   const negative: boolean = Porffor.wasm.i32.load8_u(ptr, 0, 0) != 0;
   const len: i32 = Porffor.wasm.i32.load16_u(ptr, 0, 2);
 
-  // Get lowest digit (last digit in big-endian storage)
-  const lowestDigit: i32 = Porffor.wasm.i32.load(ptr + (len - 1) * 4, 0, 4);
-  // Convert signed i32 to unsigned number
-  let lowBits: number = lowestDigit < 0 ? lowestDigit + 4294967296 : lowestDigit;
+  // Calculate how many 32-bit digits we need
+  const digitsNeeded: i32 = Math.ceil(bits / 32);
+  const extraBits: i32 = bits % 32;
 
-  const mod2bits: number = 2 ** bits;
+  // Extract the lowest digitsNeeded digits (or all if len < digitsNeeded)
+  const actualDigits: i32 = len < digitsNeeded ? len : digitsNeeded;
 
-  let mod: number;
-  if (negative) {
-    // For negative numbers, compute two's complement
-    // -x mod 2^bits = 2^bits - (x mod 2^bits), unless x mod 2^bits is 0
-    const posMod: number = lowBits % mod2bits;
-    if (posMod == 0) {
-      mod = 0;
+  // Build the result in a temporary array
+  const tempDigits: number[] = Porffor.malloc();
+  for (let i: i32 = 0; i < digitsNeeded; i++) {
+    const srcIdx: i32 = len - actualDigits + i;
+    if (srcIdx >= 0 && i >= digitsNeeded - actualDigits) {
+      const digit: i32 = Porffor.wasm.i32.load(ptr + srcIdx * 4, 0, 4);
+      const digitU: number = digit < 0 ? digit + 4294967296 : digit;
+      tempDigits.push(digitU);
     } else {
-      mod = mod2bits - posMod;
+      tempDigits.push(0);
     }
-  } else {
-    mod = lowBits % mod2bits;
   }
 
-  return __Porffor_bigint_fromNumber(mod);
+  // Mask out extra bits from the most significant digit if needed
+  if (extraBits != 0 && tempDigits.length > 0) {
+    const mask: number = (1 << extraBits) - 1;
+    tempDigits[0] = tempDigits[0] & mask;
+  }
+
+  // For negative numbers, compute two's complement
+  if (negative) {
+    // Two's complement: invert all bits and add 1
+    let carry: i32 = 1;
+    for (let i: i32 = tempDigits.length - 1; i >= 0; i--) {
+      // Invert
+      let inverted: number = 4294967295 - tempDigits[i];
+      // Add carry
+      inverted = inverted + carry;
+      if (inverted >= 4294967296) {
+        inverted = inverted - 4294967296;
+        carry = 1;
+      } else {
+        carry = 0;
+      }
+      tempDigits[i] = inverted;
+    }
+
+    // Mask again after two's complement
+    if (extraBits != 0 && tempDigits.length > 0) {
+      const mask: number = (1 << extraBits) - 1;
+      tempDigits[0] = tempDigits[0] & mask;
+    }
+  }
+
+  // asUintN always returns a non-negative result
+  return __Porffor_bigint_fromDigits(false, tempDigits);
 };
 
