@@ -60,6 +60,7 @@
       "Bash(node test.js:*)",
       "Bash(kill %1)",
       "Bash(timeout 30 ./porf test.js:*)",
+<<<<<<< HEAD
       "Bash(for i in 1 2 3)",
       "Bash(git restore:*)",
       "Bash(for commit in e47ca62d b89299fd c633ce12 a490024f 06a552f8 7a576f9b 7f273b18 a6d54e48 b3ae9e1b 6f0b0534 872a7e5d b77cdb97 6fd78025 019d433f 32748552 94150185 4c54e91a 8584d82b 8f3143c7 ff51d4b0 7daad19a)",
@@ -71,6 +72,19 @@
       "Bash(do git cherry-pick $c)",
       "Bash(1 git add . git cherry-pick --continue --no-edit } done git log --oneline HEAD~25..HEAD)",
       "Bash(/bin/bash -c 'remaining=\"\"b89299fd c633ce12 a490024f 06a552f8 7a576f9b 7f273b18 a6d54e48 b3ae9e1b 6f0b0534 872a7e5d b77cdb97 6fd78025 019d433f 32748552 94150185 4c54e91a 8584d82b 8f3143c7 ff51d4b0 7daad19a\"\"; for c in $remaining; do echo \"\"Picking $c\"\"; git cherry-pick $c 2>/dev/null || { git checkout --theirs compiler/builtins_precompiled.js test262/results.json 2>/dev/null; ./porf precompile >/dev/null 2>&1; git add . 2>/dev/null; git cherry-pick --continue --no-edit 2>/dev/null; }; done')"
+||||||| parent of a490024f (Add Math.hypot tests and improve failure reporting in find_failures.mjs)
+      "Bash(timeout 30 ./porf test.js:*)"
+=======
+      "Bash(node:*)",
+      "Bash(__NEW_LINE__ echo \"var str=''ABC'';\nvar strObj=new String\\(''ABC''\\);\nstr.toString;\nconsole.log\\(''str != strObj:'', str != strObj\\);\")",
+      "Bash(git restore:*)",
+      "Bash(./porf test.js:*)",
+      "Bash(node find_failures.mjs:*)",
+      "Bash(./porf precompile:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix substring with non-string this and toFixed for large numbers\n\n- Move String.prototype.substring to string_f64.ts to fix handling of\n  non-string this values \\(e.g., NumberObject containing NaN\\). The i32\n  valtype mode in string.ts was truncating NaN to 0.\n\n- Add spec step 9 to toFixed: return ToString\\(x\\) when |x| >= 10^21\n  instead of attempting fixed-point formatting.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(test:*)",
+      "Bash(node /tmp/test_builtin.mjs:*)"
+>>>>>>> a490024f (Add Math.hypot tests and improve failure reporting in find_failures.mjs)
     ]
   }
 }
