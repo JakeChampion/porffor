@@ -824,15 +824,21 @@ export const __Array_prototype_reduceRight = (_this: any[], callbackFn: any, ini
 
 // string less than <
 export const __Porffor_strlt = (a: string|bytestring, b: string|bytestring) => {
-  const maxLength: i32 = Math.max(a.length, b.length);
-  for (let i: i32 = 0; i < maxLength; i++) {
+  const aLen: i32 = a.length;
+  const bLen: i32 = b.length;
+  const minLength: i32 = aLen < bLen ? aLen : bLen;
+
+  for (let i: i32 = 0; i < minLength; i++) {
     const ac: i32 = a.charCodeAt(i);
     const bc: i32 = b.charCodeAt(i);
 
     if (ac < bc) return true;
+    if (ac > bc) return false;
   }
 
-  return false;
+  // If we get here, the strings are equal up to minLength
+  // The shorter string is "less than" the longer one
+  return aLen < bLen;
 };
 
 // @porf-typed-array
