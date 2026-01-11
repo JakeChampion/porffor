@@ -41,6 +41,7 @@ export const __Porffor_json_canSerialize = (value: any): boolean => {
     Porffor.type(value) == Porffor.TYPES.numberobject,
     Porffor.type(value) == Porffor.TYPES.booleanobject,
     Porffor.type(value) == Porffor.TYPES.array,
+    Porffor.type(value) == Porffor.TYPES.rawjson,
     Porffor.type(value) > Porffor.TYPES.function
   )) return true;
 
@@ -51,6 +52,12 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
   // Apply replacer if provided
   if (typeof replacer === 'function') {
     value = replacer(key, value);
+  }
+
+  // Handle RawJSON objects - output their rawJSON content directly
+  if (Porffor.type(value) == Porffor.TYPES.rawjson) {
+    const rawStr: bytestring = value.rawJSON;
+    return __Porffor_bytestring_bufferStr(Porffor.wasm`local.get ${_buffer}`, rawStr);
   }
 
   // Per spec 25.5.2.2: If value is Object, check for toJSON method first
@@ -73,10 +80,12 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     return __Porffor_bytestring_bufferStr(buffer, 'false');
   }
 
-  if (Porffor.fastOr(
-    (Porffor.type(value) | 0b10000000) == Porffor.TYPES.bytestring,
-    Porffor.type(value) == Porffor.TYPES.stringobject
-  )) { // string
+  // Handle String objects - convert to primitive using ToString (which calls toString method)
+  if (Porffor.type(value) == Porffor.TYPES.stringobject) {
+    value = ecma262.ToString(value);
+  }
+
+  if ((Porffor.type(value) | 0b10000000) == Porffor.TYPES.bytestring) { // string
     buffer = __Porffor_bytestring_bufferChar(buffer, 34); // start "
 
     const len: i32 = value.length;
@@ -135,14 +144,14 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     return __Porffor_bytestring_bufferChar(buffer, 34); // final "
   }
 
-  if (Porffor.fastOr(
-    Porffor.type(value) == Porffor.TYPES.number,
-    Porffor.type(value) == Porffor.TYPES.numberobject
-  )) { // number
-    // Convert NumberObject to primitive number for proper handling
-    const numValue: number = value - 0;
-    if (Number.isFinite(numValue)) {
-      return __Porffor_bytestring_bufferStr(buffer, __Number_prototype_toString(numValue, 10));
+  // Handle Number objects - convert to primitive using ToNumber (which calls valueOf method)
+  if (Porffor.type(value) == Porffor.TYPES.numberobject) {
+    value = ecma262.ToNumber(value);
+  }
+
+  if (Porffor.type(value) == Porffor.TYPES.number) { // number
+    if (Number.isFinite(value)) {
+      return __Porffor_bytestring_bufferStr(buffer, __Number_prototype_toString(value, 10));
     }
 
     return __Porffor_bytestring_bufferStr(buffer, 'null');
@@ -536,4 +545,159 @@ export const __JSON_parse = (_text: any) => {
   if (pos < len) throw new SyntaxError('Unexpected non-whitespace character after JSON');
 
   return result;
+};
+
+export const __JSON_isRawJSON = (value: any): boolean => {
+  return Porffor.type(value) == Porffor.TYPES.rawjson;
+};
+
+export const __JSON_rawJSON = (text: any): RawJSON => {
+  // Convert to string per spec
+  const str: bytestring = ecma262.ToString(text);
+  const len: i32 = str.length;
+
+  // Throw SyntaxError if empty
+  if (len == 0) throw new SyntaxError('JSON.rawJSON text cannot be empty');
+
+  // Check for leading/trailing whitespace (space, tab, newline, carriage return)
+  const first: i32 = str.charCodeAt(0);
+  const last: i32 = str.charCodeAt(len - 1);
+  if (first == 32 || first == 9 || first == 10 || first == 13 ||
+      last == 32 || last == 9 || last == 10 || last == 13) {
+    throw new SyntaxError('JSON.rawJSON text cannot have leading or trailing whitespace');
+  }
+
+  // Check that it's valid JSON and not an object or array
+  // First character determines the type
+  if (first == 123 || first == 91) { // { or [
+    throw new SyntaxError('JSON.rawJSON cannot be an object or array');
+  }
+
+  // Validate the JSON by parsing it
+  // We reuse the JSON.parse logic but just need to validate
+  if (first == 110) { // 'n' - null
+    if (len == 4 && str.charCodeAt(1) == 117 && str.charCodeAt(2) == 108 && str.charCodeAt(3) == 108) {
+      // valid null
+    } else {
+      throw new SyntaxError('Invalid JSON');
+    }
+  } else if (first == 116) { // 't' - true
+    if (len == 4 && str.charCodeAt(1) == 114 && str.charCodeAt(2) == 117 && str.charCodeAt(3) == 101) {
+      // valid true
+    } else {
+      throw new SyntaxError('Invalid JSON');
+    }
+  } else if (first == 102) { // 'f' - false
+    if (len == 5 && str.charCodeAt(1) == 97 && str.charCodeAt(2) == 108 && str.charCodeAt(3) == 115 && str.charCodeAt(4) == 101) {
+      // valid false
+    } else {
+      throw new SyntaxError('Invalid JSON');
+    }
+  } else if (first == 34) { // '"' - string
+    // Validate string: must end with unescaped quote
+    if (len < 2 || str.charCodeAt(len - 1) != 34) {
+      throw new SyntaxError('Unterminated string in JSON');
+    }
+    // Check for valid escape sequences and no unescaped control characters
+    let i: i32 = 1;
+    while (i < len - 1) {
+      const c: i32 = str.charCodeAt(i);
+      if (c >= 0 && c <= 0x1f) {
+        throw new SyntaxError('Unescaped control character in JSON string');
+      }
+      if (c == 92) { // backslash
+        i++;
+        if (i >= len - 1) throw new SyntaxError('Invalid escape in JSON string');
+        const esc: i32 = str.charCodeAt(i);
+        if (esc == 34 || esc == 92 || esc == 47 || esc == 98 || esc == 102 || esc == 110 || esc == 114 || esc == 116) {
+          // valid single-char escape
+        } else if (esc == 117) { // \u
+          if (i + 4 >= len - 1) throw new SyntaxError('Invalid unicode escape in JSON string');
+          for (let j: i32 = 1; j <= 4; j++) {
+            const hex: i32 = str.charCodeAt(i + j);
+            if (!((hex >= 48 && hex <= 57) || (hex >= 65 && hex <= 70) || (hex >= 97 && hex <= 102))) {
+              throw new SyntaxError('Invalid unicode escape in JSON string');
+            }
+          }
+          i += 4;
+        } else {
+          throw new SyntaxError('Invalid escape sequence in JSON string');
+        }
+      }
+      i++;
+    }
+  } else if ((first >= 48 && first <= 57) || first == 45) { // 0-9 or -
+    // Validate number
+    let i: i32 = 0;
+    if (first == 45) i++;
+    if (i >= len) throw new SyntaxError('Invalid number in JSON');
+
+    // Integer part
+    const intStart: i32 = str.charCodeAt(i);
+    if (intStart == 48) { // leading zero
+      i++;
+      // Leading zero must be followed by . or e/E or end
+      if (i < len) {
+        const afterZero: i32 = str.charCodeAt(i);
+        if (afterZero >= 48 && afterZero <= 57) {
+          throw new SyntaxError('Leading zeros not allowed in JSON numbers');
+        }
+      }
+    } else if (intStart >= 49 && intStart <= 57) {
+      i++;
+      while (i < len && str.charCodeAt(i) >= 48 && str.charCodeAt(i) <= 57) i++;
+    } else {
+      throw new SyntaxError('Invalid number in JSON');
+    }
+
+    // Fractional part
+    if (i < len && str.charCodeAt(i) == 46) { // .
+      i++;
+      if (i >= len || str.charCodeAt(i) < 48 || str.charCodeAt(i) > 57) {
+        throw new SyntaxError('Invalid number in JSON');
+      }
+      while (i < len && str.charCodeAt(i) >= 48 && str.charCodeAt(i) <= 57) i++;
+    }
+
+    // Exponent part
+    if (i < len && (str.charCodeAt(i) == 101 || str.charCodeAt(i) == 69)) { // e or E
+      i++;
+      if (i < len && (str.charCodeAt(i) == 43 || str.charCodeAt(i) == 45)) i++; // + or -
+      if (i >= len || str.charCodeAt(i) < 48 || str.charCodeAt(i) > 57) {
+        throw new SyntaxError('Invalid number in JSON');
+      }
+      while (i < len && str.charCodeAt(i) >= 48 && str.charCodeAt(i) <= 57) i++;
+    }
+
+    if (i != len) {
+      throw new SyntaxError('Invalid number in JSON');
+    }
+  } else {
+    throw new SyntaxError('Invalid JSON');
+  }
+
+  // Create the RawJSON object with null prototype (per spec step 5)
+  const obj: RawJSON = Porffor.malloc(8);
+
+  // Set prototype to null as per spec
+  Object.setPrototypeOf(obj, null);
+
+  // Store the rawJSON string in memory for internal access
+  Porffor.wasm.i32.store(obj, str, 0, 0);
+  Porffor.wasm.i32.store8(obj, Porffor.type(str), 0, 4);
+
+  // Define rawJSON as an own data property (per spec step 6)
+  Object.defineProperty(obj, 'rawJSON', {
+    value: str,
+    writable: false,
+    enumerable: true,
+    configurable: false
+  });
+
+  return obj;
+};
+
+// Symbol.toStringTag for JSON object
+export const __JSON_Symbol_toStringTag$get = (): bytestring => {
+  return 'JSON';
 };

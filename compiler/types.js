@@ -76,6 +76,8 @@ registerInternalType('__Porffor_WrapperIterator');
 for (const x of [ '', 'Aggregate', 'Type', 'Reference', 'Syntax', 'Range', 'Eval', 'URI', 'Suppressed', 'Test262' ])
   registerInternalType(`${x}Error`);
 
+registerInternalType('RawJSON');
+
 if (Prefs.largestTypes) {
   const typeKeys = Object.keys(TYPES);
   const typeVals = Object.values(TYPES);
