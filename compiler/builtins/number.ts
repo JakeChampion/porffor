@@ -615,7 +615,7 @@ export const __Number_prototype_toExponential = (_this: number, fractionDigits: 
 
   let i: f64 = _this;
 
-  let digits: bytestring = Porffor.malloc(64); // byte "array" scratch buffer
+  let digits: bytestring = Porffor.malloc(128); // byte "array" scratch buffer
 
   let l: i32 = 0;
   let e: i32 = 0;
@@ -701,50 +701,82 @@ export const __Number_prototype_toExponential = (_this: number, fractionDigits: 
           if (i - intPart < 1e-10) break;
         } else e++;
       }
-    } else {
-      // i = _this;
-      // if (e >= fractionDigits) {
-      //   for (let j: i32 = 0; j < e - fractionDigits; j++) {
-      //     i /= 10;
-      //   }
-      // } else {
-      //   for (let j: i32 = 0; j < fractionDigits - e; j++) {
-      //     i *= 10;
-      //   }
-      // }
 
-      // eg: 1.2345 -> 123.45, if fractionDigits = 2
-      for (let j: i32 = 0; j <= fractionDigits; j++) {
+      // eg: 123.45 -> 123
+      i = Math.round(i);
+
+      while (i > 0) {
+        const digit: f64 = i % 10;
+        i = Math.trunc(i / 10);
+
+        Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, digit, 0, 4);
+        l++;
+      }
+
+      digitsPtr = Porffor.wasm`local.get ${digits}` + l;
+      endPtr = outPtr + l;
+      let dotPlace: i32 = outPtr + 1;
+      while (outPtr < endPtr) {
+        if (outPtr == dotPlace) {
+          Porffor.wasm.i32.store8(outPtr++, 46, 0, 4); // .
+          endPtr++;
+        }
+
+        let digit: i32 = Porffor.wasm.i32.load8_u(--digitsPtr, 0, 4);
+
+        if (digit < 10) digit += 48; // 0-9
+          else digit += 87; // a-z
+
+        Porffor.wasm.i32.store8(outPtr++, digit, 0, 4);
+      }
+    } else {
+      // With fractionDigits specified: limit extraction to f64 precision, then pad with zeros
+      const neededDigits: i32 = fractionDigits + 1;
+      const maxPrecision: i32 = 17; // max significant digits for f64
+      const extractDigits: i32 = neededDigits < maxPrecision ? neededDigits : maxPrecision;
+
+      // Scale to extract significant digits
+      for (let j: i32 = 0; j < extractDigits; j++) {
         i *= 10;
       }
-    }
 
-    // eg: 123.45 -> 123
-    i = Math.round(i);
+      i = Math.round(i);
 
-    while (i > 0) {
-      const digit: f64 = i % 10;
-      i = Math.trunc(i / 10);
+      // Extract digits
+      while (i > 0) {
+        const digit: f64 = i % 10;
+        i = Math.trunc(i / 10);
 
-      Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, digit, 0, 4);
-      l++;
-    }
-
-    digitsPtr = Porffor.wasm`local.get ${digits}` + l;
-    endPtr = outPtr + l;
-    let dotPlace: i32 = outPtr + 1;
-    while (outPtr < endPtr) {
-      if (outPtr == dotPlace) {
-        Porffor.wasm.i32.store8(outPtr++, 46, 0, 4); // .
-        endPtr++;
+        Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, digit, 0, 4);
+        l++;
       }
 
+      // Pad with leading zeros if we got fewer digits than extractDigits
+      while (l < extractDigits) {
+        Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, 0, 0, 4);
+        l++;
+      }
+
+      // Output first digit
+      digitsPtr = Porffor.wasm`local.get ${digits}` + l;
       let digit: i32 = Porffor.wasm.i32.load8_u(--digitsPtr, 0, 4);
+      Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
 
-      if (digit < 10) digit += 48; // 0-9
-        else digit += 87; // a-z
+      if (fractionDigits > 0) {
+        Porffor.wasm.i32.store8(outPtr++, 46, 0, 4); // .
 
-      Porffor.wasm.i32.store8(outPtr++, digit, 0, 4);
+        // Output remaining extracted digits
+        for (let j: i32 = 1; j < l; j++) {
+          digit = Porffor.wasm.i32.load8_u(--digitsPtr, 0, 4);
+          Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
+        }
+
+        // Pad with zeros to reach fractionDigits
+        const zerosNeeded: i32 = fractionDigits - (l - 1);
+        for (let j: i32 = 0; j < zerosNeeded; j++) {
+          Porffor.wasm.i32.store8(outPtr++, 48, 0, 4); // 0
+        }
+      }
     }
 
     Porffor.wasm.i32.store8(outPtr++, 101, 0, 4); // e
