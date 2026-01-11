@@ -1530,7 +1530,16 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
     }
   }
 
-  if (!eqOp && (knownLeft === TYPES.bigint || knownRight === TYPES.bigint) && !(knownLeft === TYPES.bigint && knownRight === TYPES.bigint)) {
+  // Arithmetic operators cannot mix BigInt with non-BigInt
+  // But relational operators (<, >, <=, >=) CAN mix BigInt with Number per spec
+  // Only add the runtime check if one side is KNOWN BigInt and the other is KNOWN non-BigInt
+  // (if either side is unknown, skip - the unknown side might be BigInt at runtime)
+  const relationalOp = op === '<' || op === '>' || op === '<=' || op === '>=';
+  const leftKnownNotBigInt = knownLeft != null && knownLeft !== TYPES.bigint;
+  const rightKnownNotBigInt = knownRight != null && knownRight !== TYPES.bigint;
+  if (!eqOp && !relationalOp &&
+      ((knownLeft === TYPES.bigint && rightKnownNotBigInt) ||
+       (knownRight === TYPES.bigint && leftKnownNotBigInt))) {
     const unknownType = knownLeft === TYPES.bigint ? rightType : leftType;
     startOut.push(
       ...unknownType,
@@ -1901,13 +1910,16 @@ const generateBinaryExp = (scope, decl) => {
   // relational operators: convert non-number/non-string operands to numbers
   // (if both are strings, performOp handles string comparison)
   // (exclude BigInt which has its own comparison semantics)
+  // (exclude unknown types - they might be BigInt at runtime)
   if (relationalOps.includes(decl.operator)) {
     const leftStr = leftKnown === TYPES.string || leftKnown === TYPES.bytestring;
     const rightStr = rightKnown === TYPES.string || rightKnown === TYPES.bytestring;
     const hasBigInt = leftKnown === TYPES.bigint || rightKnown === TYPES.bigint;
     // if both are strings, skip (string comparison handled by performOp)
     // if either has BigInt, skip (BigInt has its own semantics)
-    if (!(leftStr && rightStr) && !hasBigInt) {
+    // if either type is unknown, skip (might be BigInt at runtime)
+    const hasUnknown = leftKnown == null || rightKnown == null;
+    if (!(leftStr && rightStr) && !hasBigInt && !hasUnknown) {
       // convert non-number operands to numbers for correct semantics
       // (e.g., 1 >= undefined should be false because NaN comparisons are false)
       if (leftKnown !== TYPES.number && !leftStr) leftNode = wrapToNumber(decl.left);
