@@ -123,7 +123,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
 
         const h1: i32 = (c & 0xf0) / 0x10;
         const h2: i32 = c & 0x0f;
-        buffer = __Porffor_bytestring_buffer2Char(buffer, h1 < 10 ? h1 + 48 : h1 + 55, h2 < 10 ? h2 + 48 : h2 + 55); // 0-9 or A-F
+        buffer = __Porffor_bytestring_buffer2Char(buffer, h1 < 10 ? h1 + 48 : h1 + 87, h2 < 10 ? h2 + 48 : h2 + 87); // 0-9 or a-f
         continue;
       }
 
@@ -246,9 +246,62 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
         for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_bytestring_bufferStr(buffer, space as bytestring);
       }
 
-      buffer = __Porffor_bytestring_bufferChar(buffer, 34); // "
-      buffer = __Porffor_bytestring_bufferStr(buffer, objKey);
-      buffer = __Porffor_bytestring_bufferChar(buffer, 34); // "
+      buffer = __Porffor_bytestring_bufferChar(buffer, 34); // start "
+
+      // Escape object key the same way as string values
+      const keyLen: i32 = objKey.length;
+      for (let ki: i32 = 0; ki < keyLen; ki++) {
+        const kc: i32 = objKey.charCodeAt(ki);
+        if (kc < 0x20) {
+          if (kc == 0x08) {
+            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 98); // \b
+            continue;
+          }
+
+          if (kc == 0x09) {
+            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 116); // \t
+            continue;
+          }
+
+          if (kc == 0x0a) {
+            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 110); // \n
+            continue;
+          }
+
+          if (kc == 0x0c) {
+            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 102); // \f
+            continue;
+          }
+
+          if (kc == 0x0d) {
+            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 114); // \r
+            continue;
+          }
+
+          // \u00FF
+          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 117); // \u
+          buffer = __Porffor_bytestring_buffer2Char(buffer, 48, 48); // 00
+
+          const kh1: i32 = (kc & 0xf0) / 0x10;
+          const kh2: i32 = kc & 0x0f;
+          buffer = __Porffor_bytestring_buffer2Char(buffer, kh1 < 10 ? kh1 + 48 : kh1 + 87, kh2 < 10 ? kh2 + 48 : kh2 + 87); // 0-9 or a-f
+          continue;
+        }
+
+        if (kc == 0x22) { // "
+          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 34); // \"
+          continue;
+        }
+
+        if (kc == 0x5c) { // \
+          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 92); // \\
+          continue;
+        }
+
+        buffer = __Porffor_bytestring_bufferChar(buffer, kc);
+      }
+
+      buffer = __Porffor_bytestring_bufferChar(buffer, 34); // end "
 
       buffer = __Porffor_bytestring_bufferChar(buffer, 58); // :
       if (hasSpace) buffer = __Porffor_bytestring_bufferChar(buffer, 32); // space
