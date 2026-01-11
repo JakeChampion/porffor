@@ -1683,12 +1683,16 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
   // if neither known are string, stop this madness
   // we already do known checks earlier, so don't need to recheck
 
+  // Use a counter to generate unique local names to avoid conflicts with nested operations
+  scope.tmpopCounter ??= 0;
+  const tmpopId = scope.tmpopCounter++;
+
   if (op === '+' && (knownLeft == null && knownRight == null)) {
-    tmpLeftType = localTmp(scope, '__tmpop_left_type', Valtype.i32);
-    tmpRightType = localTmp(scope, '__tmpop_right_type', Valtype.i32);
+    tmpLeftType = localTmp(scope, `__tmpop_left_type_${tmpopId}`, Valtype.i32);
+    tmpRightType = localTmp(scope, `__tmpop_right_type_${tmpopId}`, Valtype.i32);
     captureTypes = true;
-    tmpLeft = localTmp(scope, '__tmpop_left');
-    tmpRight = localTmp(scope, '__tmpop_right');
+    tmpLeft = localTmp(scope, `__tmpop_left_${tmpopId}`);
+    tmpRight = localTmp(scope, `__tmpop_right_${tmpopId}`);
 
     leftType = [ [ Opcodes.local_get, tmpLeftType ] ];
     rightType = [ [ Opcodes.local_get, tmpRightType ] ];
@@ -1711,16 +1715,16 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
 
   if ((op === '===' || op === '==' || op === '!==' || op === '!=') && (knownLeft == null && knownRight == null)) {
     if (!tmpLeftType) {
-      tmpLeftType = localTmp(scope, '__tmpop_left_type', Valtype.i32);
-      tmpRightType = localTmp(scope, '__tmpop_right_type', Valtype.i32);
+      tmpLeftType = localTmp(scope, `__tmpop_left_type_${tmpopId}`, Valtype.i32);
+      tmpRightType = localTmp(scope, `__tmpop_right_type_${tmpopId}`, Valtype.i32);
     }
     captureTypes = true;
 
     leftType = [ [ Opcodes.local_get, tmpLeftType ] ];
     rightType = [ [ Opcodes.local_get, tmpRightType ] ];
 
-    tmpLeft = localTmp(scope, '__tmpop_left');
-    tmpRight = localTmp(scope, '__tmpop_right');
+    tmpLeft = localTmp(scope, `__tmpop_left_${tmpopId}`);
+    tmpRight = localTmp(scope, `__tmpop_right_${tmpopId}`);
 
     ops.unshift(
       // if left or right are string or bytestring
@@ -1934,7 +1938,26 @@ const generateBinaryExp = (scope, decl) => {
     }
   }
 
-  const out = performOp(scope, decl.operator, generate(scope, leftNode), generate(scope, rightNode), getNodeType(scope, leftNode), getNodeType(scope, rightNode));
+  // Generate left operand and capture its type immediately (before right operand overwrites #last_type)
+  const leftOut = generate(scope, leftNode);
+  let leftType = getNodeType(scope, leftNode);
+
+  // If left type is dynamic (uses #last_type), save it to a temp local before generating right operand
+  // Otherwise the right operand's generation will overwrite #last_type
+  // Use a unique local name to avoid conflicts with nested BinaryExpressions
+  if (knownType(scope, leftType) == null) {
+    scope.binexpTypeCounter ??= 0;
+    const leftTypeTmp = localTmp(scope, `#binexp_left_type_${scope.binexpTypeCounter++}`, Valtype.i32);
+    leftOut.push(
+      ...leftType,
+      [ Opcodes.local_set, leftTypeTmp ]
+    );
+    leftType = [ [ Opcodes.local_get, leftTypeTmp ] ];
+  }
+
+  const rightOut = generate(scope, rightNode);
+  const rightType = getNodeType(scope, rightNode);
+  const out = performOp(scope, decl.operator, leftOut, rightOut, leftType, rightType);
   if (valtype !== 'i32' && ['==', '===', '!=', '!==', '>', '>=', '<', '<='].includes(decl.operator)) out.push(Opcodes.i32_from_u);
 
   return out;
