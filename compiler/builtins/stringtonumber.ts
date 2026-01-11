@@ -30,7 +30,8 @@ export const __Porffor_stn_int = (str: unknown, radix: i32, i: i32): f64 => {
 
 export const __Porffor_stn_float = (str: unknown, i: i32): f64 => {
   let n: f64 = 0;
-  let dec: i32 = 0;
+  let decimalOffset: i32 = 0;  // Number of digits after decimal point
+  let sawDecimal: boolean = false;
 
   const len: i32 = str.length;
   if (len - i == 0) return NaN;
@@ -39,13 +40,14 @@ export const __Porffor_stn_float = (str: unknown, i: i32): f64 => {
     const chr: i32 = str.charCodeAt(i++);
 
     if (chr >= 48 && chr <= 57) { // 0-9
-      if (dec) {
-        dec *= 10;
-        n += (chr - 48) / dec;
-      } else n = (n * 10) + chr - 48;
+      // Parse all digits as integer, track decimal position
+      n = (n * 10) + chr - 48;
+      if (sawDecimal) {
+        decimalOffset++;
+      }
     } else if (chr == 46) { // .
-      if (dec) return NaN;
-      dec = 1;
+      if (sawDecimal) return NaN;
+      sawDecimal = true;
     } else if (chr == 69 || chr == 101) { // E or e
       // Handle exponent
       let expNeg: boolean = false;
@@ -79,15 +81,24 @@ export const __Porffor_stn_float = (str: unknown, i: i32): f64 => {
 
       if (!hasExpDigit) return NaN;
 
-      // Apply exponent
+      // Combine explicit exponent with decimal offset
+      // This avoids accumulated floating point errors from per-digit division
       if (expNeg) exp = -exp;
-      n = n * (10 ** exp);
-      return n;
+      exp -= decimalOffset;
+      // Use division for negative exponents (more precise than multiplying by 10^-n)
+      if (exp < 0) {
+        return n / (10 ** -exp);
+      }
+      return n * (10 ** exp);
     } else {
       return NaN;
     }
   }
 
+  // No exponent - apply decimal offset via division (more precise)
+  if (decimalOffset > 0) {
+    return n / (10 ** decimalOffset);
+  }
   return n;
 };
 
