@@ -472,13 +472,17 @@ export const __Number_prototype_toPrecision = (_this: number, precision: any) =>
 
   let digits: bytestring = Porffor.malloc(128);
 
+  // Limit extraction to f64 precision (17 significant digits max)
+  const maxPrecision: i32 = 17;
+  const extractDigits: i32 = precision < maxPrecision ? precision : maxPrecision;
+
   // Get the significant digits by scaling and rounding
   let scale: f64 = 1;
-  for (let j: i32 = 0; j < precision - 1; j++) {
+  for (let j: i32 = 0; j < extractDigits - 1; j++) {
     scale *= 10;
   }
 
-  // Compute m as the p-digit decimal representation
+  // Compute m as the extractDigits-digit decimal representation
   let scaledValue: f64 = _this;
   if (e >= 0) {
     for (let j: i32 = 0; j < e; j++) {
@@ -499,12 +503,12 @@ export const __Number_prototype_toPrecision = (_this: number, precision: any) =>
     checkVal /= 10;
     digitCount++;
   }
-  if (digitCount > precision) {
+  if (digitCount > extractDigits) {
     scaledValue /= 10;
     e++;
   }
 
-  // Extract digits
+  // Extract digits (only up to extractDigits, which is limited to 17)
   let l: i32 = 0;
   while (scaledValue >= 1) {
     const digit: f64 = scaledValue % 10;
@@ -513,8 +517,8 @@ export const __Number_prototype_toPrecision = (_this: number, precision: any) =>
     l++;
   }
 
-  // Pad with zeros if needed
-  while (l < precision) {
+  // Pad extracted digits with zeros if we got fewer than extractDigits
+  while (l < extractDigits) {
     Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, 0, 0, 4);
     l++;
   }
@@ -522,16 +526,21 @@ export const __Number_prototype_toPrecision = (_this: number, precision: any) =>
   // 10.c. If e < -6 or e >= p, use exponential notation
   if (e < -6 || e >= precision) {
     // Output first digit
-    let digitsPtr: i32 = Porffor.wasm`local.get ${digits}` + l - 1;
+    let digitsPtr: i32 = Porffor.wasm`local.get ${digits}` + extractDigits - 1;
     let digit: i32 = Porffor.wasm.i32.load8_u(digitsPtr--, 0, 4);
     Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
 
     // Output decimal point and remaining digits if p > 1
     if (precision > 1) {
       Porffor.wasm.i32.store8(outPtr++, 46, 0, 4); // .
-      for (let j: i32 = 1; j < precision; j++) {
+      // Output extracted digits (up to extractDigits - 1 more)
+      for (let j: i32 = 1; j < extractDigits; j++) {
         digit = Porffor.wasm.i32.load8_u(digitsPtr--, 0, 4);
         Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
+      }
+      // Pad with zeros for remaining positions
+      for (let j: i32 = extractDigits; j < precision; j++) {
+        Porffor.wasm.i32.store8(outPtr++, 48, 0, 4); // 0
       }
     }
 
@@ -565,12 +574,18 @@ export const __Number_prototype_toPrecision = (_this: number, precision: any) =>
     }
   } else if (e >= 0) {
     // 12. e >= 0: output e+1 digits, then decimal point, then remaining p-(e+1) digits
-    let digitsPtr: i32 = Porffor.wasm`local.get ${digits}` + l - 1;
+    let digitsPtr: i32 = Porffor.wasm`local.get ${digits}` + extractDigits - 1;
+    let outputPos: i32 = 0;
 
     // Output digits before decimal point (e+1 digits)
     for (let j: i32 = 0; j <= e; j++) {
-      let digit: i32 = Porffor.wasm.i32.load8_u(digitsPtr--, 0, 4);
-      Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
+      if (outputPos < extractDigits) {
+        let digit: i32 = Porffor.wasm.i32.load8_u(digitsPtr--, 0, 4);
+        Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
+      } else {
+        Porffor.wasm.i32.store8(outPtr++, 48, 0, 4); // 0
+      }
+      outputPos++;
     }
 
     // Output decimal point and remaining digits if needed
@@ -578,8 +593,13 @@ export const __Number_prototype_toPrecision = (_this: number, precision: any) =>
     if (remaining > 0) {
       Porffor.wasm.i32.store8(outPtr++, 46, 0, 4); // .
       for (let j: i32 = 0; j < remaining; j++) {
-        let digit: i32 = Porffor.wasm.i32.load8_u(digitsPtr--, 0, 4);
-        Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
+        if (outputPos < extractDigits) {
+          let digit: i32 = Porffor.wasm.i32.load8_u(digitsPtr--, 0, 4);
+          Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
+        } else {
+          Porffor.wasm.i32.store8(outPtr++, 48, 0, 4); // 0
+        }
+        outputPos++;
       }
     }
   } else {
@@ -593,11 +613,15 @@ export const __Number_prototype_toPrecision = (_this: number, precision: any) =>
       Porffor.wasm.i32.store8(outPtr++, 48, 0, 4); // 0
     }
 
-    // Output all significant digits
-    let digitsPtr: i32 = Porffor.wasm`local.get ${digits}` + l - 1;
-    for (let j: i32 = 0; j < precision; j++) {
+    // Output significant digits (from buffer) then pad with zeros
+    let digitsPtr: i32 = Porffor.wasm`local.get ${digits}` + extractDigits - 1;
+    for (let j: i32 = 0; j < extractDigits; j++) {
       let digit: i32 = Porffor.wasm.i32.load8_u(digitsPtr--, 0, 4);
       Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
+    }
+    // Pad remaining positions with zeros
+    for (let j: i32 = extractDigits; j < precision; j++) {
+      Porffor.wasm.i32.store8(outPtr++, 48, 0, 4); // 0
     }
   }
 
