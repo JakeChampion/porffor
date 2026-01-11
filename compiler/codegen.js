@@ -840,7 +840,7 @@ const lookup = (scope, name, failEarly = false) => {
         if (len === 0) {
           return [
             [ Opcodes.local_get, scope.locals['#arguments_rest'].idx ],
-            ...setLastType(scope, TYPES.array)
+            ...setLastType(scope, TYPES.arguments)
           ];
         }
 
@@ -872,7 +872,7 @@ const lookup = (scope, name, failEarly = false) => {
           [ Opcodes.end ],
 
           [ Opcodes.local_get, localTmp(scope, '#arguments') ],
-          ...setLastType(scope, TYPES.array)
+          ...setLastType(scope, TYPES.arguments)
         ];
       }
 
@@ -898,7 +898,8 @@ const lookup = (scope, name, failEarly = false) => {
           [ Opcodes.local_set, localTmp(scope, '#arguments') ],
         [ Opcodes.end ],
 
-        [ Opcodes.local_get, localTmp(scope, '#arguments') ]
+        [ Opcodes.local_get, localTmp(scope, '#arguments') ],
+        ...setLastType(scope, TYPES.arguments)
       ];
     }
 
@@ -2202,16 +2203,12 @@ const getType = (scope, name, failEarly = false) => {
   }
 
   if (global !== false && name === 'arguments' && !scope.arrow) {
-    // if function has implicit rest argument for arguments object, return array type
-    if (scope._usesArgumentsObject && scope.locals['#arguments_rest']) {
-      return [ number(TYPES.array, Valtype.i32) ];
-    }
-    return [ number(TYPES.object, Valtype.i32) ];
+    return [ number(TYPES.arguments, Valtype.i32) ];
   }
 
   // Arrow functions accessing 'arguments' - get type from the #outer_arguments global
   if (name === 'arguments' && scope.arrow && '#outer_arguments' in globals) {
-    return [ number(TYPES.array, Valtype.i32) ];
+    return [ number(TYPES.arguments, Valtype.i32) ];
   }
 
   // Closure support: get type from closure environment

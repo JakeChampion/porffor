@@ -7,6 +7,7 @@ export type BooleanObject = Boolean;
 export type NumberObject = Number;
 export type StringObject = String;
 export type SymbolObject = Symbol;
+export type Arguments = any[];
 
 type PorfforGlobal = {
   wasm: {
