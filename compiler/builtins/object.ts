@@ -1,11 +1,23 @@
 import type {} from './porffor.d.ts';
 
 export const Object = function (value: any): any {
+  // 1. If NewTarget is neither undefined nor the active function, then
+  //    a. Return ? OrdinaryCreateFromConstructor(NewTarget, "%ObjectPrototype%").
+  if (new.target !== undefined && new.target !== Object) {
+    const obj: object = Porffor.malloc();
+    const proto: any = new.target.prototype;
+    if (Porffor.object.isObject(proto)) {
+      Porffor.object.setPrototype(obj, proto);
+    }
+    return obj;
+  }
+
+  // 2. If value is either undefined or null, return OrdinaryObjectCreate(%ObjectPrototype%).
   if (value == null) {
-    // if nullish, return new empty object
     return Porffor.malloc() as object;
   }
 
+  // 3. Return ! ToObject(value).
   // primitives into primitive objects
   if ((Porffor.type(value) | 0b10000000) == Porffor.TYPES.bytestring) return new String(value);
   if (Porffor.type(value) == Porffor.TYPES.number) return new Number(value);
