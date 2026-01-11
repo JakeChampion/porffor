@@ -316,6 +316,11 @@ export const __Number_prototype_toFixed = (_this: number, fractionDigits: any) =
     return '-Infinity';
   }
 
+  // Step 9: If |x| >= 10^21, return ToString(x)
+  if (_this >= 1e21 || _this <= -1e21) {
+    return __Number_prototype_toString(_this, 10);
+  }
+
   let out: bytestring = Porffor.malloc(512);
   let outPtr: i32 = Porffor.wasm`local.get ${out}`;
 
