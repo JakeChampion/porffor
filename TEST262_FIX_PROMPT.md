@@ -63,6 +63,22 @@ fails.slice(0, 20).forEach(t => console.log(t));
 
 ## Common Issues and Fixes
 
+### CRITICAL: Never Change `_this` Parameter to `any` in Prototype Methods
+
+**DO NOT** change prototype method `_this` parameters from specific types to `any`:
+
+```typescript
+// WRONG - causes non-deterministic precompile builds
+export const __Error_prototype_toString = (_this: any) => { ... }
+
+// CORRECT - keep the specific type
+export const __Error_prototype_toString = (_this: Error) => { ... }
+```
+
+Using `_this: any` in prototype methods causes `./porf precompile` to become non-deterministic, alternating between different function counts (e.g., 1167 vs 1185) on consecutive runs. This breaks the build.
+
+Even if the spec says a method should work with any `this` value passed via `.call()`, DO NOT change the type to `any`. Spec compliance in this case must be sacrificed to maintain build determinism.
+
 ### NaN/Infinity in i32 files
 If a bug involves NaN or Infinity being corrupted, the function needs to be in an f64 file:
 - `string.ts` has `// @porf --valtype=i32` - NaN/Infinity get truncated

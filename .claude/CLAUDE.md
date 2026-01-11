@@ -80,6 +80,21 @@ Porffor.object.isObject(obj)
 - Array literals in builtins may not store functions correctly; use `Porffor.malloc()` with individual assignments instead
 - Generator functions have limited support - prefer returning arrays when possible
 
+### CRITICAL: Never Use `_this: any` in Prototype Methods
+
+**DO NOT** change prototype method parameters from specific types to `any`. For example:
+```typescript
+// WRONG - causes non-deterministic precompile
+export const __Error_prototype_toString = (_this: any) => { ... }
+
+// CORRECT - use the specific type
+export const __Error_prototype_toString = (_this: Error) => { ... }
+```
+
+Using `_this: any` in prototype methods causes the precompile to become non-deterministic, alternating between different function counts on each run. This happens because Porffor generates type-specific variants for `any` parameters based on what types it sees during compilation, and the precompiled output affects subsequent compilations in a feedback loop.
+
+If you need a prototype method to work with objects passed via `.call()`, find an alternative approach that doesn't involve changing `_this` to `any`. The spec compliance can sometimes be sacrificed to maintain build determinism.
+
 ### Pattern for Set-like Objects (ES2024)
 When implementing methods that accept "set-like" objects:
 1. Add a fast path for native Set: `if (Porffor.type(other) == Porffor.TYPES.set)`
