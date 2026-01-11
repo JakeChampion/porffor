@@ -98,8 +98,13 @@ export const __Set_prototype_clear = (_this: Set) => {
 export const __Set_prototype_forEach = (_this: Set, callbackFn: any, thisArg: any = undefined) => {
   if (typeof callbackFn !== 'function') throw new TypeError('callbackFn must be a function');
 
-  for (const x of _this) {
+  // Use index-based iteration to handle elements added during iteration
+  // The spec says: "New values added after the call to forEach begins are visited"
+  let i: number = 0;
+  while (i < Porffor.wasm.i32.load(_this, 0, 0)) {
+    const x: any = (_this as any[])[i];
     callbackFn.call(thisArg, x, x, _this);
+    i++;
   }
 };
 

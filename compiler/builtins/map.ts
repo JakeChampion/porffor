@@ -87,11 +87,12 @@ export const __Map_prototype_forEach = (_this: Map, callbackFn: any, thisArg: an
   const keys: any[] = Porffor.wasm.i32.load(_this, 0, 0);
   const vals: any[] = Porffor.wasm.i32.load(_this, 0, 4);
 
-  const size: i32 = Porffor.wasm.i32.load(keys, 0, 0);
-
+  // Use dynamic size check to handle elements added during iteration
+  // The spec says: "New values added after the call to forEach begins are visited"
   let i: i32 = 0;
-  while (i < size) {
-    callbackFn.call(thisArg, vals[i], keys[i++], _this);
+  while (i < Porffor.wasm.i32.load(keys, 0, 0)) {
+    callbackFn.call(thisArg, vals[i], keys[i], _this);
+    i++;
   }
 };
 
