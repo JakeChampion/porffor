@@ -1009,6 +1009,11 @@ export const __Array_prototype_toReversed = (_this: any[]) => {
 
 // @porf-typed-array
 export const __Array_prototype_toSorted = (_this: any[], callbackFn: any) => {
+  // 1. If comparefn is not undefined and IsCallable(comparefn) is false, throw a TypeError exception.
+  if (callbackFn !== undefined && Porffor.type(callbackFn) != Porffor.TYPES.function) {
+    throw new TypeError('callbackFn is not a function');
+  }
+
   // todo/perf: could be rewritten to be its own instead of cloning and using normal sort()
 
   let out: any[] = Porffor.malloc();
