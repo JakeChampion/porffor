@@ -327,7 +327,7 @@ export const __Number_prototype_toFixed = (_this: number, fractionDigits: any) =
 
   let i: f64 = Math.trunc(_this);
 
-  let digits: bytestring = Porffor.malloc(64); // byte "array" scratch buffer
+  let digits: bytestring = Porffor.malloc(128); // byte "array" scratch buffer
 
   let l: i32 = 0;
 
@@ -358,7 +358,11 @@ export const __Number_prototype_toFixed = (_this: number, fractionDigits: any) =
 
     decimal += 1;
 
-    for (let j: i32 = 0; j < fractionDigits; j++) {
+    // Limit extraction to f64 precision, then pad with zeros
+    const maxPrecision: i32 = 17; // max significant digits for f64
+    const extractDigits: i32 = fractionDigits < maxPrecision ? fractionDigits : maxPrecision;
+
+    for (let j: i32 = 0; j < extractDigits; j++) {
       decimal *= 10;
     }
 
@@ -373,6 +377,12 @@ export const __Number_prototype_toFixed = (_this: number, fractionDigits: any) =
       l++;
     }
 
+    // Pad with leading zeros if we got fewer digits than extractDigits
+    while (l < extractDigits) {
+      Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, 0, 0, 4);
+      l++;
+    }
+
     digitsPtr = Porffor.wasm`local.get ${digits}` + l;
 
     endPtr = outPtr + l;
@@ -383,6 +393,12 @@ export const __Number_prototype_toFixed = (_this: number, fractionDigits: any) =
         else digit += 87; // a-z
 
       Porffor.wasm.i32.store8(outPtr++, digit, 0, 4);
+    }
+
+    // Pad with zeros to reach fractionDigits
+    const zerosNeeded: i32 = fractionDigits - extractDigits;
+    for (let j: i32 = 0; j < zerosNeeded; j++) {
+      Porffor.wasm.i32.store8(outPtr++, 48, 0, 4); // 0
     }
   }
 
