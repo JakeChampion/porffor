@@ -516,20 +516,57 @@ export const __BigInt_asIntN = (bits: any, bigint: any): bigint => {
   // 4. If mod ≥ 2^(bits-1), return ℤ(mod - 2^bits).
   // 5. Return ℤ(mod).
 
-  // For small values, use number arithmetic
-  const n: number = __Porffor_bigint_toNumber(bigint);
   if (bits == 0) return 0n;
-  if (bits >= 53) {
-    // For large bit counts, just return the original if it fits
-    return bigint;
+
+  // For bits > 32, use number-based approach (may lose precision for very large BigInts)
+  // For bits <= 32, we can extract the lowest digit directly for precise results
+  const bigintNum: number = bigint as number;
+
+  if (bits > 32 || Math.abs(bigintNum) < 0x8000000000000) {
+    // Use number arithmetic for small BigInts or large bit counts
+    const n: number = __Porffor_bigint_toNumber(bigint);
+
+    const mod2bits: number = 2 ** bits;
+    const mod2bitsm1: number = 2 ** (bits - 1);
+
+    // Calculate mod (always positive in mathematical sense)
+    let mod: number = n % mod2bits;
+    if (mod < 0) mod += mod2bits;
+
+    // If mod >= 2^(bits-1), return mod - 2^bits (make it negative)
+    if (mod >= mod2bitsm1) {
+      return __Porffor_bigint_fromNumber(mod - mod2bits);
+    }
+
+    return __Porffor_bigint_fromNumber(mod);
   }
+
+  // Memory-based BigInt with bits <= 32 - extract the lowest digit directly
+  const ptr: i32 = bigintNum - 0x8000000000000;
+  const negative: boolean = Porffor.wasm.i32.load8_u(ptr, 0, 0) != 0;
+  const len: i32 = Porffor.wasm.i32.load16_u(ptr, 0, 2);
+
+  // Get lowest digit (last digit in big-endian storage)
+  const lowestDigit: i32 = Porffor.wasm.i32.load(ptr + (len - 1) * 4, 0, 4);
+  // Convert signed i32 to unsigned number
+  let lowBits: number = lowestDigit < 0 ? lowestDigit + 4294967296 : lowestDigit;
 
   const mod2bits: number = 2 ** bits;
   const mod2bitsm1: number = 2 ** (bits - 1);
 
-  // Calculate mod (always positive in mathematical sense)
-  let mod: number = n % mod2bits;
-  if (mod < 0) mod += mod2bits;
+  let mod: number;
+  if (negative) {
+    // For negative numbers, compute two's complement
+    // -x mod 2^bits = 2^bits - (x mod 2^bits), unless x mod 2^bits is 0
+    const posMod: number = lowBits % mod2bits;
+    if (posMod == 0) {
+      mod = 0;
+    } else {
+      mod = mod2bits - posMod;
+    }
+  } else {
+    mod = lowBits % mod2bits;
+  }
 
   // If mod >= 2^(bits-1), return mod - 2^bits (make it negative)
   if (mod >= mod2bitsm1) {
@@ -550,19 +587,50 @@ export const __BigInt_asUintN = (bits: any, bigint: any): bigint => {
 
   // 3. Return ℤ(ℝ(bigint) modulo 2^bits).
 
-  // For small values, use number arithmetic
-  const n: number = __Porffor_bigint_toNumber(bigint);
   if (bits == 0) return 0n;
-  if (bits >= 53) {
-    // For large bit counts with non-negative values, return as-is
-    if (n >= 0) return bigint;
+
+  // For bits > 32, use number-based approach (may lose precision for very large BigInts)
+  // For bits <= 32, we can extract the lowest digit directly for precise results
+  const bigintNum: number = bigint as number;
+
+  if (bits > 32 || Math.abs(bigintNum) < 0x8000000000000) {
+    // Use number arithmetic for small BigInts or large bit counts
+    const n: number = __Porffor_bigint_toNumber(bigint);
+
+    const mod2bits: number = 2 ** bits;
+
+    // Calculate mod (always positive)
+    let mod: number = n % mod2bits;
+    if (mod < 0) mod += mod2bits;
+
+    return __Porffor_bigint_fromNumber(mod);
   }
+
+  // Memory-based BigInt with bits <= 32 - extract the lowest digit directly
+  const ptr: i32 = bigintNum - 0x8000000000000;
+  const negative: boolean = Porffor.wasm.i32.load8_u(ptr, 0, 0) != 0;
+  const len: i32 = Porffor.wasm.i32.load16_u(ptr, 0, 2);
+
+  // Get lowest digit (last digit in big-endian storage)
+  const lowestDigit: i32 = Porffor.wasm.i32.load(ptr + (len - 1) * 4, 0, 4);
+  // Convert signed i32 to unsigned number
+  let lowBits: number = lowestDigit < 0 ? lowestDigit + 4294967296 : lowestDigit;
 
   const mod2bits: number = 2 ** bits;
 
-  // Calculate mod (always positive)
-  let mod: number = n % mod2bits;
-  if (mod < 0) mod += mod2bits;
+  let mod: number;
+  if (negative) {
+    // For negative numbers, compute two's complement
+    // -x mod 2^bits = 2^bits - (x mod 2^bits), unless x mod 2^bits is 0
+    const posMod: number = lowBits % mod2bits;
+    if (posMod == 0) {
+      mod = 0;
+    } else {
+      mod = mod2bits - posMod;
+    }
+  } else {
+    mod = lowBits % mod2bits;
+  }
 
   return __Porffor_bigint_fromNumber(mod);
 };
