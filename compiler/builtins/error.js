@@ -217,7 +217,28 @@ export const __Test262Error_thrower = message => {
   throw new Test262Error(message);
 };
 
-export const __Error_isError = (x: unknown): boolean => Porffor.fastAnd(Porffor.type(x) >= Porffor.TYPES.error, Porffor.type(x) <= Porffor.TYPES.test262error);`;
+export const __Error_isError = (x: unknown): boolean => {
+  // Fast path: built-in error types
+  if (Porffor.fastAnd(Porffor.type(x) >= Porffor.TYPES.error, Porffor.type(x) <= Porffor.TYPES.test262error)) {
+    return true;
+  }
+
+  // Check prototype chain for any error prototype (handles userland subclasses)
+  if (!Porffor.object.isObject(x)) return false;
+
+  // Check for each error type prototype
+  if (__Porffor_object_instanceof(x, Error, Error.prototype)) return true;
+  if (__Porffor_object_instanceof(x, TypeError, TypeError.prototype)) return true;
+  if (__Porffor_object_instanceof(x, ReferenceError, ReferenceError.prototype)) return true;
+  if (__Porffor_object_instanceof(x, SyntaxError, SyntaxError.prototype)) return true;
+  if (__Porffor_object_instanceof(x, RangeError, RangeError.prototype)) return true;
+  if (__Porffor_object_instanceof(x, EvalError, EvalError.prototype)) return true;
+  if (__Porffor_object_instanceof(x, URIError, URIError.prototype)) return true;
+  if (__Porffor_object_instanceof(x, AggregateError, AggregateError.prototype)) return true;
+  if (__Porffor_object_instanceof(x, SuppressedError, SuppressedError.prototype)) return true;
+
+  return false;
+};`;
 
   return out;
 };
