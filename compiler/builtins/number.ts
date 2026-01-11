@@ -661,41 +661,134 @@ export const __Number_prototype_toExponential = (_this: number, fractionDigits: 
           if (i - intPart < 1e-10) break;
         } else e++;
       }
+
+      i = Math.round(i);
+
+      while (i > 0) {
+        const digit: f64 = i % 10;
+        i = Math.trunc(i / 10);
+
+        Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, digit, 0, 4);
+        l++;
+      }
+
+      digitsPtr = Porffor.wasm`local.get ${digits}` + l;
+      endPtr = outPtr + l;
+      let dotPlace: i32 = outPtr + 1;
+      while (outPtr < endPtr) {
+        let digit: i32 = Porffor.wasm.i32.load8_u(--digitsPtr, 0, 4);
+
+        if (outPtr == dotPlace) {
+          Porffor.wasm.i32.store8(outPtr++, 46, 0, 4); // .
+          endPtr++;
+        }
+
+        if (digit < 10) digit += 48; // 0-9
+          else digit += 87; // a-z
+
+        Porffor.wasm.i32.store8(outPtr++, digit, 0, 4);
+      }
     } else {
-      e = 1;
-      let j: i32 = 0;
-      while (j <= fractionDigits) {
+      // With fractionDigits: compute exponent, round, handle overflow
+      e = 0;
+      let temp: f64 = i;
+      while (temp < 1) {
+        temp *= 10;
+        e++;
+      }
+
+      // Scale to get the right number of digits
+      const neededDigits: i32 = fractionDigits + 1;
+      const maxPrecision: i32 = 17;
+      const extractDigits: i32 = neededDigits < maxPrecision ? neededDigits : maxPrecision;
+
+      // Scale up to extract digits: i = original * 10^(e + extractDigits - 1)
+      for (let j: i32 = 0; j < e + extractDigits - 1; j++) {
         i *= 10;
-
-        const intPart: i32 = Math.trunc(i);
-        if (intPart == 0) e++;
-          else j++;
       }
-    }
 
-    while (i > 0) {
-      const digit: f64 = i % 10;
-      i = Math.trunc(i / 10);
+      i = Math.round(i);
 
-      Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, digit, 0, 4);
-      l++;
-    }
+      // Check for rounding overflow (e.g., 9.999 -> 10)
+      let digitCount: i32 = 0;
+      let checkVal: f64 = i;
+      while (checkVal >= 1) {
+        checkVal /= 10;
+        digitCount++;
+      }
+      if (digitCount > extractDigits) {
+        // Rounding caused overflow, adjust exponent
+        e--;
+        i /= 10;
+        i = Math.round(i);
+      }
 
-    digitsPtr = Porffor.wasm`local.get ${digits}` + l;
-    endPtr = outPtr + l;
-    let dotPlace: i32 = outPtr + 1;
-    while (outPtr < endPtr) {
+      // Track if exponent became non-negative after rounding overflow
+      let positiveExp: boolean = e <= 0;
+      if (positiveExp) {
+        e = -e;
+      }
+
+      // Extract digits
+      while (i > 0) {
+        const digit: f64 = i % 10;
+        i = Math.trunc(i / 10);
+        Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, digit, 0, 4);
+        l++;
+      }
+
+      while (l < extractDigits) {
+        Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, 0, 0, 4);
+        l++;
+      }
+
+      // Output first digit
+      digitsPtr = Porffor.wasm`local.get ${digits}` + l;
       let digit: i32 = Porffor.wasm.i32.load8_u(--digitsPtr, 0, 4);
+      Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
 
-      if (outPtr == dotPlace) {
+      if (fractionDigits > 0) {
         Porffor.wasm.i32.store8(outPtr++, 46, 0, 4); // .
-        endPtr++;
+        for (let j: i32 = 1; j < l; j++) {
+          digit = Porffor.wasm.i32.load8_u(--digitsPtr, 0, 4);
+          Porffor.wasm.i32.store8(outPtr++, digit + 48, 0, 4);
+        }
+        const zerosNeeded: i32 = fractionDigits - (l - 1);
+        for (let j: i32 = 0; j < zerosNeeded; j++) {
+          Porffor.wasm.i32.store8(outPtr++, 48, 0, 4);
+        }
       }
 
-      if (digit < 10) digit += 48; // 0-9
-        else digit += 87; // a-z
+      Porffor.wasm.i32.store8(outPtr++, 101, 0, 4); // e
+      if (positiveExp) {
+        Porffor.wasm.i32.store8(outPtr++, 43, 0, 4); // +
+      } else {
+        Porffor.wasm.i32.store8(outPtr++, 45, 0, 4); // -
+      }
 
-      Porffor.wasm.i32.store8(outPtr++, digit, 0, 4);
+      // Output exponent digits and return
+      if (e == 0) {
+        Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}`, 0, 0, 4);
+        l = 1;
+      } else {
+        l = 0;
+        for (; e > 0; l++) {
+          Porffor.wasm.i32.store8(Porffor.wasm`local.get ${digits}` + l, e % 10, 0, 4);
+          e = Math.trunc(e / 10);
+        }
+      }
+
+      digitsPtr = Porffor.wasm`local.get ${digits}` + l;
+      endPtr = outPtr + l;
+      while (outPtr < endPtr) {
+        let digit: i32 = Porffor.wasm.i32.load8_u(--digitsPtr, 0, 4);
+        if (digit < 10) digit += 48;
+          else digit += 87;
+        Porffor.wasm.i32.store8(outPtr++, digit, 0, 4);
+      }
+
+      out.length = outPtr - Porffor.wasm`local.get ${out}`;
+      return out;
     }
 
     Porffor.wasm.i32.store8(outPtr++, 101, 0, 4); // e
