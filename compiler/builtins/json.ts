@@ -1,33 +1,36 @@
 import type {} from './porffor.d.ts';
 
-export const __Porffor_bytestring_bufferStr = (buffer: i32, str: bytestring): i32 => {
-  const len: i32 = str.length;
-  let strPtr: i32 = Porffor.wasm`local.get ${str}`;
-  let ptr: i32 = Porffor.wasm`local.get ${buffer}`;
-  let endPtr: i32 = ptr + len;
+// 16-bit string buffer helpers for JSON.stringify output
+export const __Porffor_string_bufferStr = (buffer: i32, str: any): i32 => {
+  const strPtr: i32 = Porffor.wasm`local.get ${str}`;
+  let len: i32 = Porffor.wasm.i32.load(strPtr, 0, 0);
+  let ptr: i32 = buffer;
 
-  while (ptr + 4 <= endPtr) {
-    Porffor.wasm.i32.store(ptr, Porffor.wasm.i32.load(strPtr, 0, 4), 0, 4);
-    ptr += 4;
-    strPtr += 4;
-  }
-
-  while (ptr < endPtr) {
-    Porffor.wasm.i32.store8(ptr++, Porffor.wasm.i32.load8_u(strPtr++, 0, 4), 0, 4);
+  if (Porffor.type(str) == Porffor.TYPES.bytestring) {
+    // bytestring source - expand to 16-bit
+    let srcPtr: i32 = strPtr + 4;
+    for (let i: i32 = 0; i < len; i++) {
+      Porffor.wasm.i32.store16(ptr, Porffor.wasm.i32.load8_u(srcPtr++, 0, 0), 0, 0);
+      ptr += 2;
+    }
+  } else {
+    // 16-bit string source - direct copy
+    Porffor.wasm.memory.copy(ptr, strPtr + 4, len * 2, 0, 0);
+    ptr += len * 2;
   }
 
   return ptr;
 };
 
-export const __Porffor_bytestring_bufferChar = (buffer: i32, char: i32): i32 => {
-  Porffor.wasm.i32.store8(buffer, char, 0, 4);
-  return buffer + 1;
+export const __Porffor_string_bufferChar = (buffer: i32, char: i32): i32 => {
+  Porffor.wasm.i32.store16(buffer, char, 0, 0);
+  return buffer + 2;
 };
 
-export const __Porffor_bytestring_buffer2Char = (buffer: i32, char1: i32, char2: i32): i32 => {
-  Porffor.wasm.i32.store8(buffer, char1, 0, 4);
-  Porffor.wasm.i32.store8(buffer + 1, char2, 0, 4);
-  return buffer + 2;
+export const __Porffor_string_buffer2Char = (buffer: i32, char1: i32, char2: i32): i32 => {
+  Porffor.wasm.i32.store16(buffer, char1, 0, 0);
+  Porffor.wasm.i32.store16(buffer + 2, char2, 0, 0);
+  return buffer + 4;
 };
 
 export const __Porffor_json_canSerialize = (value: any): boolean => {
@@ -57,7 +60,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
   // Handle RawJSON objects - output their rawJSON content directly
   if (Porffor.type(value) == Porffor.TYPES.rawjson) {
     const rawStr: bytestring = value.rawJSON;
-    return __Porffor_bytestring_bufferStr(Porffor.wasm`local.get ${_buffer}`, rawStr);
+    return __Porffor_string_bufferStr(Porffor.wasm`local.get ${_buffer}`, rawStr);
   }
 
   // Per spec 25.5.2.2: If value is Object, check for toJSON method first
@@ -70,14 +73,14 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
 
   // somewhat modelled after 25.5.2.2 SerializeJSONProperty: https://tc39.es/ecma262/#sec-serializejsonproperty
   let buffer: i32 = Porffor.wasm`local.get ${_buffer}`;
-  if (value === null) return __Porffor_bytestring_bufferStr(buffer, 'null');
-  if (value === true) return __Porffor_bytestring_bufferStr(buffer, 'true');
-  if (value === false) return __Porffor_bytestring_bufferStr(buffer, 'false');
+  if (value === null) return __Porffor_string_bufferStr(buffer, 'null');
+  if (value === true) return __Porffor_string_bufferStr(buffer, 'true');
+  if (value === false) return __Porffor_string_bufferStr(buffer, 'false');
 
   // Handle Boolean objects by extracting [[BooleanData]]
   if (Porffor.type(value) == Porffor.TYPES.booleanobject) {
-    if (value.valueOf()) return __Porffor_bytestring_bufferStr(buffer, 'true');
-    return __Porffor_bytestring_bufferStr(buffer, 'false');
+    if (value.valueOf()) return __Porffor_string_bufferStr(buffer, 'true');
+    return __Porffor_string_bufferStr(buffer, 'false');
   }
 
   // Handle String objects - convert to primitive using ToString (which calls toString method)
@@ -86,62 +89,96 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
   }
 
   if ((Porffor.type(value) | 0b10000000) == Porffor.TYPES.bytestring) { // string
-    buffer = __Porffor_bytestring_bufferChar(buffer, 34); // start "
+    buffer = __Porffor_string_bufferChar(buffer, 34); // start "
 
     const len: i32 = value.length;
     for (let i: i32 = 0; i < len; i++) {
       const c: i32 = value.charCodeAt(i);
       if (c < 0x20) {
         if (c == 0x08) {
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 98); // \b
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 98); // \b
           continue;
         }
 
         if (c == 0x09) {
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 116); // \t
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 116); // \t
           continue;
         }
 
         if (c == 0x0a) {
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 110); // \n
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 110); // \n
           continue;
         }
 
         if (c == 0x0c) {
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 102); // \f
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 102); // \f
           continue;
         }
 
         if (c == 0x0d) {
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 114); // \r
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 114); // \r
           continue;
         }
 
         // \u00FF
-        buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 117); // \u
-        buffer = __Porffor_bytestring_buffer2Char(buffer, 48, 48); // 00
+        buffer = __Porffor_string_buffer2Char(buffer, 92, 117); // \u
+        buffer = __Porffor_string_buffer2Char(buffer, 48, 48); // 00
 
         const h1: i32 = (c & 0xf0) / 0x10;
         const h2: i32 = c & 0x0f;
-        buffer = __Porffor_bytestring_buffer2Char(buffer, h1 < 10 ? h1 + 48 : h1 + 87, h2 < 10 ? h2 + 48 : h2 + 87); // 0-9 or a-f
+        buffer = __Porffor_string_buffer2Char(buffer, h1 < 10 ? h1 + 48 : h1 + 87, h2 < 10 ? h2 + 48 : h2 + 87); // 0-9 or a-f
         continue;
       }
 
       if (c == 0x22) { // "
-        buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 34); // \"
+        buffer = __Porffor_string_buffer2Char(buffer, 92, 34); // \"
         continue;
       }
 
       if (c == 0x5c) { // \
-        buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 92); // \\
+        buffer = __Porffor_string_buffer2Char(buffer, 92, 92); // \\
         continue;
       }
 
-      // todo: support non-bytestrings
-      buffer = __Porffor_bytestring_bufferChar(buffer, c);
+      // Handle surrogates per well-formed-json-stringify
+      if (c >= 0xD800 && c <= 0xDBFF) {
+        // High surrogate - check if followed by low surrogate
+        let next: i32 = 0;
+        if (i + 1 < len) next = value.charCodeAt(i + 1);
+        if (next >= 0xDC00 && next <= 0xDFFF) {
+          // Valid surrogate pair - output both code units directly
+          buffer = __Porffor_string_buffer2Char(buffer, c, next);
+          i++; // skip the low surrogate
+          continue;
+        }
+        // Lone high surrogate - escape as \uXXXX
+        buffer = __Porffor_string_buffer2Char(buffer, 92, 117); // \u
+        const u1: i32 = (c >> 12) & 0x0f;
+        const u2: i32 = (c >> 8) & 0x0f;
+        const u3: i32 = (c >> 4) & 0x0f;
+        const u4: i32 = c & 0x0f;
+        buffer = __Porffor_string_buffer2Char(buffer, u1 < 10 ? u1 + 48 : u1 + 87, u2 < 10 ? u2 + 48 : u2 + 87);
+        buffer = __Porffor_string_buffer2Char(buffer, u3 < 10 ? u3 + 48 : u3 + 87, u4 < 10 ? u4 + 48 : u4 + 87);
+        continue;
+      }
+
+      if (c >= 0xDC00 && c <= 0xDFFF) {
+        // Lone low surrogate - escape as \uXXXX
+        buffer = __Porffor_string_buffer2Char(buffer, 92, 117); // \u
+        const u1: i32 = (c >> 12) & 0x0f;
+        const u2: i32 = (c >> 8) & 0x0f;
+        const u3: i32 = (c >> 4) & 0x0f;
+        const u4: i32 = c & 0x0f;
+        buffer = __Porffor_string_buffer2Char(buffer, u1 < 10 ? u1 + 48 : u1 + 87, u2 < 10 ? u2 + 48 : u2 + 87);
+        buffer = __Porffor_string_buffer2Char(buffer, u3 < 10 ? u3 + 48 : u3 + 87, u4 < 10 ? u4 + 48 : u4 + 87);
+        continue;
+      }
+
+      // All other characters (including non-ASCII) - output directly
+      buffer = __Porffor_string_bufferChar(buffer, c);
     }
 
-    return __Porffor_bytestring_bufferChar(buffer, 34); // final "
+    return __Porffor_string_bufferChar(buffer, 34); // final "
   }
 
   // Handle Number objects - convert to primitive using ToNumber (which calls valueOf method)
@@ -151,10 +188,10 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
 
   if (Porffor.type(value) == Porffor.TYPES.number) { // number
     if (Number.isFinite(value)) {
-      return __Porffor_bytestring_bufferStr(buffer, __Number_prototype_toString(value, 10));
+      return __Porffor_string_bufferStr(buffer, __Number_prototype_toString(value, 10));
     }
 
-    return __Porffor_bytestring_bufferStr(buffer, 'null');
+    return __Porffor_string_bufferStr(buffer, 'null');
   }
 
   if (Porffor.type(value) == Porffor.TYPES.array) {
@@ -164,7 +201,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     }
     Porffor.array.fastPush(stack, value);
 
-    buffer = __Porffor_bytestring_bufferChar(buffer, 91); // [
+    buffer = __Porffor_string_bufferChar(buffer, 91); // [
 
     const hasSpace: boolean = space !== undefined;
     depth += 1;
@@ -172,8 +209,8 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     let idx: i32 = 0;
     for (const x of (value as any[])) {
       if (hasSpace) {
-        buffer = __Porffor_bytestring_bufferChar(buffer, 10); // \n
-        for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_bytestring_bufferStr(buffer, space as bytestring);
+        buffer = __Porffor_string_bufferChar(buffer, 10); // \n
+        for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_string_bufferStr(buffer, space as bytestring);
       }
 
       const keyStr: bytestring = '' + idx;
@@ -183,10 +220,10 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
         buffer = result;
       } else {
         // non-serializable value, write null
-        buffer = __Porffor_bytestring_bufferStr(buffer, 'null');
+        buffer = __Porffor_string_bufferStr(buffer, 'null');
       }
 
-      buffer = __Porffor_bytestring_bufferChar(buffer, 44); // ,
+      buffer = __Porffor_string_bufferChar(buffer, 44); // ,
     }
 
     depth -= 1;
@@ -195,18 +232,18 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     stack.length--;
 
     // swap trailing , with ] (or \n or append if empty)
-    if ((buffer - _buffer) > 1) {
+    if ((buffer - _buffer) > 2) {
       if (hasSpace) {
-        Porffor.wasm.i32.store8(buffer, 10, 0, 3); // \n
-        for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_bytestring_bufferStr(buffer, space as bytestring);
-        return __Porffor_bytestring_bufferChar(buffer, 93); // ]
+        Porffor.wasm.i32.store16(buffer - 2, 10, 0, 0); // \n replaces trailing ,
+        for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_string_bufferStr(buffer, space as bytestring);
+        return __Porffor_string_bufferChar(buffer, 93); // ]
       }
 
-      Porffor.wasm.i32.store8(buffer, 93, 0, 3); // ]
+      Porffor.wasm.i32.store16(buffer - 2, 93, 0, 0); // ] replaces trailing ,
       return buffer;
     }
 
-    return __Porffor_bytestring_bufferChar(buffer, 93); // ]
+    return __Porffor_string_bufferChar(buffer, 93); // ]
   }
 
   if (Porffor.type(value) > 0x06) {
@@ -217,7 +254,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     }
     Porffor.array.fastPush(stack, value);
 
-    buffer = __Porffor_bytestring_bufferChar(buffer, 123); // {
+    buffer = __Porffor_string_bufferChar(buffer, 123); // {
 
     const hasSpace: boolean = space !== undefined;
     depth += 1;
@@ -242,11 +279,11 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
       const startPos: i32 = buffer;
 
       if (hasSpace) {
-        buffer = __Porffor_bytestring_bufferChar(buffer, 10); // \n
-        for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_bytestring_bufferStr(buffer, space as bytestring);
+        buffer = __Porffor_string_bufferChar(buffer, 10); // \n
+        for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_string_bufferStr(buffer, space as bytestring);
       }
 
-      buffer = __Porffor_bytestring_bufferChar(buffer, 34); // start "
+      buffer = __Porffor_string_bufferChar(buffer, 34); // start "
 
       // Escape object key the same way as string values
       const keyLen: i32 = objKey.length;
@@ -254,57 +291,92 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
         const kc: i32 = objKey.charCodeAt(ki);
         if (kc < 0x20) {
           if (kc == 0x08) {
-            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 98); // \b
+            buffer = __Porffor_string_buffer2Char(buffer, 92, 98); // \b
             continue;
           }
 
           if (kc == 0x09) {
-            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 116); // \t
+            buffer = __Porffor_string_buffer2Char(buffer, 92, 116); // \t
             continue;
           }
 
           if (kc == 0x0a) {
-            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 110); // \n
+            buffer = __Porffor_string_buffer2Char(buffer, 92, 110); // \n
             continue;
           }
 
           if (kc == 0x0c) {
-            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 102); // \f
+            buffer = __Porffor_string_buffer2Char(buffer, 92, 102); // \f
             continue;
           }
 
           if (kc == 0x0d) {
-            buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 114); // \r
+            buffer = __Porffor_string_buffer2Char(buffer, 92, 114); // \r
             continue;
           }
 
           // \u00FF
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 117); // \u
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 48, 48); // 00
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 117); // \u
+          buffer = __Porffor_string_buffer2Char(buffer, 48, 48); // 00
 
           const kh1: i32 = (kc & 0xf0) / 0x10;
           const kh2: i32 = kc & 0x0f;
-          buffer = __Porffor_bytestring_buffer2Char(buffer, kh1 < 10 ? kh1 + 48 : kh1 + 87, kh2 < 10 ? kh2 + 48 : kh2 + 87); // 0-9 or a-f
+          buffer = __Porffor_string_buffer2Char(buffer, kh1 < 10 ? kh1 + 48 : kh1 + 87, kh2 < 10 ? kh2 + 48 : kh2 + 87); // 0-9 or a-f
           continue;
         }
 
         if (kc == 0x22) { // "
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 34); // \"
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 34); // \"
           continue;
         }
 
         if (kc == 0x5c) { // \
-          buffer = __Porffor_bytestring_buffer2Char(buffer, 92, 92); // \\
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 92); // \\
           continue;
         }
 
-        buffer = __Porffor_bytestring_bufferChar(buffer, kc);
+        // Handle surrogates per well-formed-json-stringify
+        if (kc >= 0xD800 && kc <= 0xDBFF) {
+          // High surrogate - check if followed by low surrogate
+          let knext: i32 = 0;
+          if (ki + 1 < keyLen) knext = objKey.charCodeAt(ki + 1);
+          if (knext >= 0xDC00 && knext <= 0xDFFF) {
+            // Valid surrogate pair - output both code units directly
+            buffer = __Porffor_string_buffer2Char(buffer, kc, knext);
+            ki++; // skip the low surrogate
+            continue;
+          }
+          // Lone high surrogate - escape as \uXXXX
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 117); // \u
+          const ku1: i32 = (kc >> 12) & 0x0f;
+          const ku2: i32 = (kc >> 8) & 0x0f;
+          const ku3: i32 = (kc >> 4) & 0x0f;
+          const ku4: i32 = kc & 0x0f;
+          buffer = __Porffor_string_buffer2Char(buffer, ku1 < 10 ? ku1 + 48 : ku1 + 87, ku2 < 10 ? ku2 + 48 : ku2 + 87);
+          buffer = __Porffor_string_buffer2Char(buffer, ku3 < 10 ? ku3 + 48 : ku3 + 87, ku4 < 10 ? ku4 + 48 : ku4 + 87);
+          continue;
+        }
+
+        if (kc >= 0xDC00 && kc <= 0xDFFF) {
+          // Lone low surrogate - escape as \uXXXX
+          buffer = __Porffor_string_buffer2Char(buffer, 92, 117); // \u
+          const ku1: i32 = (kc >> 12) & 0x0f;
+          const ku2: i32 = (kc >> 8) & 0x0f;
+          const ku3: i32 = (kc >> 4) & 0x0f;
+          const ku4: i32 = kc & 0x0f;
+          buffer = __Porffor_string_buffer2Char(buffer, ku1 < 10 ? ku1 + 48 : ku1 + 87, ku2 < 10 ? ku2 + 48 : ku2 + 87);
+          buffer = __Porffor_string_buffer2Char(buffer, ku3 < 10 ? ku3 + 48 : ku3 + 87, ku4 < 10 ? ku4 + 48 : ku4 + 87);
+          continue;
+        }
+
+        // All other characters (including non-ASCII) - output directly
+        buffer = __Porffor_string_bufferChar(buffer, kc);
       }
 
-      buffer = __Porffor_bytestring_bufferChar(buffer, 34); // end "
+      buffer = __Porffor_string_bufferChar(buffer, 34); // end "
 
-      buffer = __Porffor_bytestring_bufferChar(buffer, 58); // :
-      if (hasSpace) buffer = __Porffor_bytestring_bufferChar(buffer, 32); // space
+      buffer = __Porffor_string_bufferChar(buffer, 58); // :
+      if (hasSpace) buffer = __Porffor_string_bufferChar(buffer, 32); // space
 
       const result: i32 = __Porffor_json_serialize(buffer, val, objKey, depth, space, replacer, stack);
       if (result == -1) {
@@ -313,7 +385,7 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
         continue;
       }
       buffer = result;
-      buffer = __Porffor_bytestring_bufferChar(buffer, 44); // ,
+      buffer = __Porffor_string_bufferChar(buffer, 44); // ,
     }
 
     depth -= 1;
@@ -322,18 +394,18 @@ export const __Porffor_json_serialize = (_buffer: i32, value: any, key: bytestri
     stack.length--;
 
     // swap trailing , with } (or \n or append if empty)
-    if ((buffer - _buffer) > 1) {
+    if ((buffer - _buffer) > 2) {
       if (hasSpace) {
-        Porffor.wasm.i32.store8(buffer, 10, 0, 3); // \n
-        for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_bytestring_bufferStr(buffer, space as bytestring);
-        return __Porffor_bytestring_bufferChar(buffer, 125); // }
+        Porffor.wasm.i32.store16(buffer - 2, 10, 0, 0); // \n replaces trailing ,
+        for (let i: i32 = 0; i < depth; i++) buffer = __Porffor_string_bufferStr(buffer, space as bytestring);
+        return __Porffor_string_bufferChar(buffer, 125); // }
       }
 
-      Porffor.wasm.i32.store8(buffer, 125, 0, 3); // }
+      Porffor.wasm.i32.store16(buffer - 2, 125, 0, 0); // } replaces trailing ,
       return buffer;
     }
 
-    return __Porffor_bytestring_bufferChar(buffer, 125); // }
+    return __Porffor_string_bufferChar(buffer, 125); // }
   }
 
   if (Porffor.type(value) == Porffor.TYPES.bigint) {
@@ -384,12 +456,16 @@ export const __JSON_stringify = (value: any, replacer: any, space: any) => {
     }
   }
 
-  const buffer: bytestring = Porffor.malloc(4096);
+  // Allocate 16-bit string buffer (4 bytes length + 2 bytes per char)
+  const buffer: string = Porffor.malloc(4 + 16384);
+  const bufferPtr: i32 = Porffor.wasm`local.get ${buffer}`;
   const stack: any[] = Porffor.malloc();
-  const out: i32 = __Porffor_json_serialize(buffer, value, '', 0, space, replacer, stack);
+  const out: i32 = __Porffor_json_serialize(bufferPtr + 4, value, '', 0, space, replacer, stack);
   if (out == -1) return undefined;
 
-  buffer.length = out - (buffer as i32);
+  // Set length (divide by 2 since each char is 2 bytes)
+  const len: i32 = (out - bufferPtr - 4) / 2;
+  Porffor.wasm.i32.store(bufferPtr, len, 0, 0);
   return buffer;
 };
 
