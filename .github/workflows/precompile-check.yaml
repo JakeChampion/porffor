@@ -1,0 +1,70 @@
+name: Precompile Determinism Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check-precompile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Save committed precompiled file
+        run: cp compiler/builtins_precompiled.js /tmp/committed_precompiled.js
+
+      - name: Run precompile 3 times and check determinism
+        run: |
+          echo "Running precompile 3 times to verify determinism..."
+
+          ./porf precompile
+          cp compiler/builtins_precompiled.js /tmp/run1.js
+          FUNCS1=$(grep -c "^x\." compiler/builtins_precompiled.js || true)
+          echo "Run 1: $FUNCS1 functions"
+
+          ./porf precompile
+          cp compiler/builtins_precompiled.js /tmp/run2.js
+          FUNCS2=$(grep -c "^x\." compiler/builtins_precompiled.js || true)
+          echo "Run 2: $FUNCS2 functions"
+
+          ./porf precompile
+          cp compiler/builtins_precompiled.js /tmp/run3.js
+          FUNCS3=$(grep -c "^x\." compiler/builtins_precompiled.js || true)
+          echo "Run 3: $FUNCS3 functions"
+
+          # Check all runs produced the same output
+          if ! diff -q /tmp/run1.js /tmp/run2.js > /dev/null; then
+            echo "ERROR: Precompile is non-deterministic! Run 1 differs from Run 2"
+            echo "Function counts: Run1=$FUNCS1, Run2=$FUNCS2, Run3=$FUNCS3"
+            exit 1
+          fi
+
+          if ! diff -q /tmp/run2.js /tmp/run3.js > /dev/null; then
+            echo "ERROR: Precompile is non-deterministic! Run 2 differs from Run 3"
+            echo "Function counts: Run1=$FUNCS1, Run2=$FUNCS2, Run3=$FUNCS3"
+            exit 1
+          fi
+
+          echo "Precompile is deterministic ($FUNCS1 functions)"
+
+      - name: Check committed file matches fresh precompile
+        run: |
+          echo "Checking committed builtins_precompiled.js matches fresh precompile..."
+
+          if ! diff -q /tmp/committed_precompiled.js /tmp/run1.js > /dev/null; then
+            echo "ERROR: Committed builtins_precompiled.js does not match fresh precompile!"
+            echo ""
+            echo "The committed file appears to be out of date or was generated"
+            echo "with a non-deterministic build. Please run './porf precompile'"
+            echo "and commit the updated file."
+            echo ""
+            echo "Diff (first 50 lines):"
+            diff /tmp/committed_precompiled.js /tmp/run1.js | head -50 || true
+            exit 1
+          fi
+
+          echo "Committed builtins_precompiled.js matches fresh precompile"

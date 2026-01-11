@@ -1,0 +1,71 @@
+name: Test262 Results Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check-test262:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Save committed results.json
+        run: cp test262/results.json /tmp/committed_results.json
+
+      - name: Run full test262 suite
+        run: |
+          echo "Running full test262 suite..."
+          node test262/index.js --threads=4
+          echo "Test262 completed"
+
+      - name: Check results.json matches committed version
+        run: |
+          echo "Checking test262/results.json matches committed version..."
+
+          # Compare the files
+          if ! diff -q /tmp/committed_results.json test262/results.json > /dev/null; then
+            echo "ERROR: test262/results.json does not match committed version!"
+            echo ""
+            echo "This could mean:"
+            echo "  1. Tests were added/removed from the test262 submodule"
+            echo "  2. A code change affected test results without updating results.json"
+            echo "  3. The committed results.json is out of date"
+            echo ""
+            echo "Please run 'node test262/index.js' and commit the updated results.json"
+            echo ""
+
+            # Show summary of differences
+            echo "=== Comparison Summary ==="
+
+            COMMITTED_PASSES=$(jq '.passes | length' /tmp/committed_results.json)
+            CURRENT_PASSES=$(jq '.passes | length' test262/results.json)
+            echo "Passes: committed=$COMMITTED_PASSES, current=$CURRENT_PASSES"
+
+            COMMITTED_FAILS=$(jq '.fails | length' /tmp/committed_results.json)
+            CURRENT_FAILS=$(jq '.fails | length' test262/results.json)
+            echo "Fails: committed=$COMMITTED_FAILS, current=$CURRENT_FAILS"
+
+            COMMITTED_RUNTIME=$(jq '.runtimeErrors | length' /tmp/committed_results.json)
+            CURRENT_RUNTIME=$(jq '.runtimeErrors | length' test262/results.json)
+            echo "Runtime errors: committed=$COMMITTED_RUNTIME, current=$CURRENT_RUNTIME"
+
+            COMMITTED_COMPILE=$(jq '.compileErrors | length' /tmp/committed_results.json)
+            CURRENT_COMPILE=$(jq '.compileErrors | length' test262/results.json)
+            echo "Compile errors: committed=$COMMITTED_COMPILE, current=$CURRENT_COMPILE"
+
+            exit 1
+          fi
+
+          echo "test262/results.json matches committed version"
+
+          # Print summary
+          PASSES=$(jq '.passes | length' test262/results.json)
+          TOTAL=$(jq '.passes + .fails + .runtimeErrors + .compileErrors + .wasmErrors + .timeouts | length' test262/results.json)
+          echo "Test262 results: $PASSES passing"
