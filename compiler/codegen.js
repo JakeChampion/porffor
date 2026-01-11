@@ -1542,6 +1542,11 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
     );
   }
 
+  // BigInt unsigned right shift is always a TypeError per spec
+  if (op === '>>>' && (knownLeft === TYPES.bigint || knownRight === TYPES.bigint)) {
+    return internalThrow(scope, 'TypeError', 'BigInts have no unsigned right shift, use >> instead');
+  }
+
   // todo: if equality op and an operand is undefined, return false
   // todo: niche null hell with 0
 
@@ -1666,6 +1671,21 @@ const performOp = (scope, op, left, right, leftType, rightType) => {
       // convert f64 result to i32 for comparison result
       Opcodes.i32_trunc_sat_f64_u,
       ...(op === '!==' || op === '!=' ? [ [ Opcodes.i32_eqz ] ] : [])
+    ]);
+  }
+
+  // BigInt arithmetic operations
+  if ((op === '+' || op === '-') && knownLeft === TYPES.bigint && knownRight === TYPES.bigint) {
+    return finalize([
+      ...left,
+      number(TYPES.bigint, Valtype.i32),
+      ...right,
+      number(TYPES.bigint, Valtype.i32),
+      // sub parameter: false for +, true for -
+      number(op === '-' ? 1 : 0),
+      number(TYPES.boolean, Valtype.i32),
+      [ Opcodes.call, includeBuiltin(scope, '__Porffor_bigint_add').index ],
+      ...setLastType(scope, TYPES.bigint)
     ]);
   }
 
@@ -1872,9 +1892,10 @@ const generateBinaryExp = (scope, decl) => {
   const rightKnown = knownType(scope, getNodeType(scope, decl.right));
 
   if (toNumberOps.includes(decl.operator)) {
-    // only wrap if not known to be a number
-    if (leftKnown !== TYPES.number) leftNode = wrapToNumber(decl.left);
-    if (rightKnown !== TYPES.number) rightNode = wrapToNumber(decl.right);
+    // only wrap if not known to be a number or bigint
+    // BigInt has its own arithmetic semantics handled in performOp
+    if (leftKnown !== TYPES.number && leftKnown !== TYPES.bigint) leftNode = wrapToNumber(decl.left);
+    if (rightKnown !== TYPES.number && rightKnown !== TYPES.bigint) rightNode = wrapToNumber(decl.right);
   }
 
   // relational operators: convert non-number/non-string operands to numbers
@@ -1926,11 +1947,14 @@ const generateBinaryExp = (scope, decl) => {
   // (string concatenation is handled by performOp when either is a string)
   // IMPORTANT: Don't wrap unknown types (null) with ToNumber - let performOp handle
   // runtime string checking. Only wrap types that are KNOWN to not be strings.
+  // Also don't wrap BigInt - BigInt has its own arithmetic semantics.
   if (decl.operator === '+') {
     const leftIsStr = leftKnown === TYPES.string || leftKnown === TYPES.bytestring;
     const rightIsStr = rightKnown === TYPES.string || rightKnown === TYPES.bytestring;
-    if (!leftIsStr && !rightIsStr) {
-      // neither is known to be string, wrap with ToNumber for correct semantics
+    const leftIsBigInt = leftKnown === TYPES.bigint;
+    const rightIsBigInt = rightKnown === TYPES.bigint;
+    if (!leftIsStr && !rightIsStr && !leftIsBigInt && !rightIsBigInt) {
+      // neither is known to be string or bigint, wrap with ToNumber for correct semantics
       // (e.g., undefined + 0 should be NaN, not 0)
       // BUT: if type is unknown (null), don't wrap - could be string at runtime
       if (leftKnown != null && leftKnown !== TYPES.number) leftNode = wrapToNumber(decl.left);

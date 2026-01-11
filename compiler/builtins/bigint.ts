@@ -42,7 +42,7 @@ export const __Porffor_bigint_fromDigits = (negative: boolean, digits: number[])
 // store small (abs(n) < 2^51 (0x8000000000000)) values inline (no allocation)
 // like a ~s52 (s53 exc 2^51+(0-2^32) for u32 as pointer) inside a f64
 export const __Porffor_bigint_inlineToDigitForm = (n: number): number => {
-  const ptr: i32 = Porffor.malloc(4); // 4 meta + 1 digit
+  const ptr: i32 = Porffor.malloc(8); // 4 meta + 1 digit (4 bytes)
   Porffor.wasm.i32.store8(ptr, n < 0, 0, 0);
   Porffor.wasm.i32.store16(ptr, 1, 0, 2);
   Porffor.wasm.i32.store(ptr, Math.abs(n), 0, 4);
@@ -262,8 +262,62 @@ export const __Porffor_bigint_fromString = (n: string|bytestring): bigint => {
 };
 
 export const __Porffor_bigint_toString = (x: number, radix: any): string|bytestring => {
-  // todo: actually use bigint
-  return __Number_prototype_toString(Math.trunc(__Porffor_bigint_toNumber(x)), radix);
+  // Handle inline BigInts (small values that fit in f64)
+  if (Math.abs(x) < 0x8000000000000) {
+    return __Number_prototype_toString(x, radix);
+  }
+
+  // For memory-based BigInts, we need to convert without going through f64
+  // to avoid precision loss for values > 2^53
+  const ptr: i32 = x - 0x8000000000000;
+  const negative: boolean = Porffor.wasm.i32.load8_u(ptr, 0, 0) != 0;
+  const len: i32 = Porffor.wasm.i32.load16_u(ptr, 0, 2);
+
+  // For now, only support radix 10 for large BigInts
+  // Copy digits to a working array for division
+  const digits: number[] = Porffor.malloc();
+  for (let i: i32 = 0; i < len; i++) {
+    const d: i32 = Porffor.wasm.i32.load(ptr + i * 4, 0, 4);
+    // Convert signed i32 to unsigned
+    const dUnsigned: number = d < 0 ? d + 4294967296 : d;
+    digits[i] = dUnsigned;
+  }
+  digits.length = len;
+
+  // Convert to decimal string by repeated division by 10
+  let result: bytestring = '';
+  let digitCount: i32 = len;
+
+  while (digitCount > 0) {
+    // Divide all digits by 10, keeping track of remainder
+    let remainder: number = 0;
+    let newDigitCount: i32 = 0;
+    let leadingZero: boolean = true;
+
+    for (let i: i32 = 0; i < digitCount; i++) {
+      // Combine remainder from previous digit with current digit
+      const current: number = remainder * 4294967296 + digits[i];
+      const quotient: number = Math.trunc(current / 10);
+      remainder = current - quotient * 10;
+
+      if (quotient != 0 || !leadingZero) {
+        digits[newDigitCount] = quotient;
+        newDigitCount++;
+        leadingZero = false;
+      }
+    }
+
+    digitCount = newDigitCount;
+
+    // Prepend the remainder digit to result
+    const digit: bytestring = __Number_prototype_toString(remainder, 10);
+    result = digit + result;
+  }
+
+  if (result.length == 0) result = '0';
+  if (negative) result = '-' + result;
+
+  return result;
 };
 
 // todo: hook up all funcs below to codegen
@@ -274,9 +328,9 @@ export const __Porffor_bigint_add = (a: number, b: number, sub: boolean): bigint
       return __Porffor_bigint_fromNumber(Math.trunc(a + b));
     }
 
-    a = __Porffor_bigint_inlineToDigitForm(a);
+    a = __Porffor_bigint_inlineToDigitForm(a) + 0x8000000000000;
   } else if (Math.abs(b) < 0x8000000000000) {
-    b = __Porffor_bigint_inlineToDigitForm(b);
+    b = __Porffor_bigint_inlineToDigitForm(b) + 0x8000000000000;
   }
 
   a -= 0x8000000000000;
@@ -294,7 +348,7 @@ export const __Porffor_bigint_add = (a: number, b: number, sub: boolean): bigint
 
   // fast path: same sign
   let negative: boolean = false;
-  let carry: i32 = 0;
+  let carry: number = 0;
   if (aNegative == bNegative) {
     negative = aNegative;
 
@@ -307,12 +361,12 @@ export const __Porffor_bigint_add = (a: number, b: number, sub: boolean): bigint
       const bOffset: i32 = bLen - i;
       if (bOffset > 0) bDigit = Porffor.wasm.i32.load(b + bOffset * 4, 0, 0);
 
-      let sum: i32 = aDigit + bDigit + carry;
+      // Convert i32 digits to unsigned values and compute sum using f64 to avoid overflow
+      const aUnsigned: number = aDigit < 0 ? aDigit + 0x100000000 : aDigit;
+      const bUnsigned: number = bDigit < 0 ? bDigit + 0x100000000 : bDigit;
+      let sum: number = aUnsigned + bUnsigned + carry;
       if (sum >= 0x100000000) {
         sum -= 0x100000000;
-        carry = 1;
-      } else if (sum < 0) {
-        sum += 0x100000000;
         carry = 1;
       } else {
         carry = 0;
