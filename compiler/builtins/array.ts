@@ -1,8 +1,8 @@
 import type {} from './porffor.d.ts';
 
 // Build arguments object from declared params array, rest array, and actual argc
-export const __Porffor_arguments_build = (declaredParams: any[], rest: any[], argc: number, declaredCount: number): Arguments => {
-  const out: Arguments = Porffor.malloc();
+export const __Porffor_arguments_build = (declaredParams: any[], rest: any[], argc: number, declaredCount: number): any[] => {
+  const out: any[] = Porffor.malloc();
 
   // Number of declared params to include (min of argc and declaredCount)
   let declaredToInclude: i32 = argc < declaredCount ? argc : declaredCount;

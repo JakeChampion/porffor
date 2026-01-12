@@ -77,7 +77,6 @@ for (const x of [ '', 'Aggregate', 'Type', 'Reference', 'Syntax', 'Range', 'Eval
   registerInternalType(`${x}Error`);
 
 registerInternalType('RawJSON');
-registerInternalType('Arguments', ['iterable', 'length']);
 
 if (Prefs.largestTypes) {
   const typeKeys = Object.keys(TYPES);
