@@ -639,15 +639,27 @@ export const __Array_prototype_copyWithin = (_this: any, _target: any, _start: a
 };
 
 // @porf-typed-array
-export const __Array_prototype_concat = (_this: any[], ...vals: any[]) => {
+export const __Array_prototype_concat = (_this: any, ...vals: any[]) => {
   // todo/perf: rewrite to use memory.copy (via some Porffor.array.append thing?)
   let out: any[] = Porffor.malloc();
-  Porffor.clone(_this, out);
+  let len: i32 = 0;
 
-  let len: i32 = _this.length;
+  // 1. Let O be ? ToObject(this value) - box primitives
+  const o: any = Object(_this);
+
+  // Process this value first, then all arguments
+  // IsConcatSpreadable simplified: just check if it's an array
+  if (Porffor.type(o) == Porffor.TYPES.array) {
+    const l: i32 = o.length;
+    for (let i: i32 = 0; i < l; i++) {
+      out[len++] = o[i];
+    }
+  } else {
+    out[len++] = o;
+  }
 
   for (const x of vals) {
-    if (Porffor.type(x) & 0b01000000) { // value is iterable
+    if (Porffor.type(x) == Porffor.TYPES.array) {
       // todo: for..of is broken here because ??
       const l: i32 = x.length;
       for (let i: i32 = 0; i < l; i++) {
