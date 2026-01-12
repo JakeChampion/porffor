@@ -7669,10 +7669,13 @@ const objectHack = node => {
       // Per spec, Number.parseInt === parseInt and Number.parseFloat === parseFloat
       // They must be the exact same function object
       // Also, Set.prototype.keys === Set.prototype.values per spec
+      // String.prototype.trimLeft/trimRight are aliases for trimStart/trimEnd (Annex B)
       const builtinAliases = {
         '__Number_parseInt': 'parseInt',
         '__Number_parseFloat': 'parseFloat',
-        '__Set_prototype_keys': '__Set_prototype_values'
+        '__Set_prototype_keys': '__Set_prototype_values',
+        '__String_prototype_trimLeft': '__String_prototype_trimStart',
+        '__String_prototype_trimRight': '__String_prototype_trimEnd'
       };
       if (builtinAliases[name]) name = builtinAliases[name];
 
