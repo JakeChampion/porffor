@@ -8279,6 +8279,7 @@
     "built-ins/Set/prototype/isSupersetOf/receiver-not-set.js",
     "built-ins/Set/prototype/isSupersetOf/require-internal-slot.js",
     "built-ins/Set/prototype/isSupersetOf/size-is-a-number.js",
+    "built-ins/Set/prototype/keys/keys.js",
     "built-ins/Set/prototype/size/returns-count-of-present-values-before-after-add-delete.js",
     "built-ins/Set/prototype/size/returns-count-of-present-values-by-insertion.js",
     "built-ins/Set/prototype/size/returns-count-of-present-values-by-iterable.js",
@@ -19523,5 +19524,5 @@
   "wasmErrors": [],
   "runtimeErrors": [],
   "timeouts": [],
-  "total": 19517
+  "total": 19518
 }
