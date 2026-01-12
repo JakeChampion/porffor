@@ -25,7 +25,7 @@ const loadInvestigatedSkips = (test262Path) => {
   }
 };
 
-export default async (test262Path, filter, preludes, first = []) => {
+export default async (test262Path, filter, preludes, first = [], forceRun = false) => {
   if (filter.startsWith('test/')) filter = filter.slice(5);
   const testPath = join(test262Path, 'test');
   const { exactSkips, patternSkips } = loadInvestigatedSkips(test262Path);
@@ -56,13 +56,14 @@ export default async (test262Path, filter, preludes, first = []) => {
     if (done[file]) return;
     done[file] = true;
 
-    // Skip tests in investigated_skips.txt (exact match or pattern match)
     const relPath = file.replace(testPath + '/', '');
-    if (exactSkips.has(relPath) || patternSkips.some(p => relPath.includes(p))) {
-      return;
-    }
 
-    let contents = await fs.readFile(file, 'utf8');
+    let contents;
+    try {
+      contents = await fs.readFile(file, 'utf8');
+    } catch {
+      return; // File doesn't exist
+    }
 
     const flags = {};
     let flagsRaw = contents.match(/^flags: \[(.*)\]$/m)?.[1];
@@ -88,101 +89,109 @@ export default async (test262Path, filter, preludes, first = []) => {
     }
     const features = featuresRaw ? featuresRaw.split(',').map(x => x.trim()) : [];
 
-    // Skip tests requiring unsupported features
-    const unsupportedFeatures = [
-      // Parser/syntax features not supported
-      'decorators',
-      'explicit-resource-management',
-      'import-defer',
-      'source-phase-imports',
-      'source-phase-imports-module-source',
-      // Runtime features not yet implemented
-      'Temporal',
-      'Intl.DateTimeFormat',
-      'Intl.DisplayNames',
-      'Intl.DurationFormat',
-      'Intl.ListFormat',
-      'Intl.Locale',
-      'Intl.NumberFormat',
-      'Intl.PluralRules',
-      'Intl.RelativeTimeFormat',
-      'Intl.Segmenter',
-      'Intl-enumeration',
-      'Proxy',
-      'iterator-helpers',
-      'ShadowRealm',
-      'FinalizationRegistry',
-      'WeakRef',
-      'resizable-arraybuffer',
-      'ArrayBuffer-transfer',
-      'SharedArrayBuffer',
-      'Atomics',
-      'Atomics.waitAsync',
-      'Atomics.pause',
-      'tail-call-optimization',
-      'regexp-lookbehind',
-      'regexp-named-groups',
-      'regexp-unicode-property-escapes',
-      'regexp-v-flag',
-      'regexp-duplicate-named-groups',
-      'regexp-modifiers',
-      'symbols-as-weakmap-keys',
-      'promise-try',
-      'import-attributes',
-      'json-modules',
-      'top-level-await',
-      'Symbol.iterator', 
-      'destructuring-binding',
-      'cross-realm',
-      'dynamic-import',
-    ];
-    if (features.some(f => unsupportedFeatures.includes(f))) {
-      return; // Skip this test
-    }
+    // When forceRun is true, skip all filtering (for running specific test files)
+    if (!forceRun) {
+      // Skip tests in investigated_skips.txt (exact match or pattern match)
+      if (exactSkips.has(relPath) || patternSkips.some(p => relPath.includes(p))) {
+        return;
+      }
 
-    // Skip annexB tests (non-standard legacy features)
-    if (file.includes('/annexB/')) {
-      return;
-    }
+      // Skip tests requiring unsupported features
+      const unsupportedFeatures = [
+        // Parser/syntax features not supported
+        'decorators',
+        'explicit-resource-management',
+        'import-defer',
+        'source-phase-imports',
+        'source-phase-imports-module-source',
+        // Runtime features not yet implemented
+        'Temporal',
+        'Intl.DateTimeFormat',
+        'Intl.DisplayNames',
+        'Intl.DurationFormat',
+        'Intl.ListFormat',
+        'Intl.Locale',
+        'Intl.NumberFormat',
+        'Intl.PluralRules',
+        'Intl.RelativeTimeFormat',
+        'Intl.Segmenter',
+        'Intl-enumeration',
+        'Proxy',
+        'iterator-helpers',
+        'ShadowRealm',
+        'FinalizationRegistry',
+        'WeakRef',
+        'resizable-arraybuffer',
+        'ArrayBuffer-transfer',
+        'SharedArrayBuffer',
+        'Atomics',
+        'Atomics.waitAsync',
+        'Atomics.pause',
+        'tail-call-optimization',
+        'regexp-lookbehind',
+        'regexp-named-groups',
+        'regexp-unicode-property-escapes',
+        'regexp-v-flag',
+        'regexp-duplicate-named-groups',
+        'regexp-modifiers',
+        'symbols-as-weakmap-keys',
+        'promise-try',
+        'import-attributes',
+        'json-modules',
+        'top-level-await',
+        'Symbol.iterator',
+        'destructuring-binding',
+        'cross-realm',
+        'dynamic-import',
+      ];
+      if (features.some(f => unsupportedFeatures.includes(f))) {
+        return; // Skip this test
+      }
 
-    // Skip noStrict tests (non-strict mode only)
-    if (flags.noStrict) {
-      return;
-    }
+      // Skip annexB tests (non-standard legacy features)
+      if (file.includes('/annexB/')) {
+        return;
+      }
 
-    // Skip module tests (ES modules not supported)
-    if (flags.module) {
-      return;
-    }
+      // Skip noStrict tests (non-strict mode only)
+      if (flags.noStrict) {
+        return;
+      }
 
-    // Skip Intl - they have an esid which starts with sec-intl
-    if (contents.match(/^esid:\s*sec-intl\./m)) {
-      return;
-    }
+      // Skip module tests (ES modules not supported)
+      if (flags.module) {
+        return;
+      }
 
-    // Skip Intl - they have files which contain the path /intl402/
-    if (file.includes('/intl402/')) {
-      return;
-    }
+      // Skip Intl - they have an esid which starts with sec-intl
+      if (contents.match(/^esid:\s*sec-intl\./m)) {
+        return;
+      }
 
-    // Skip Unicode 17.0.0 tests (acorn doesn't support it yet)
-    if (contents.includes('Unicode v17.0.0')) {
-      return;
-    }
+      // Skip Intl - they have files which contain the path /intl402/
+      if (file.includes('/intl402/')) {
+        return;
+      }
 
-    // Skip tests with pending esid (not yet standardized)
-    if (contents.match(/^esid:\s*pending\s*$/m)) {
-      return;
-    }
+      // Skip Unicode 17.0.0 tests (acorn doesn't support it yet)
+      if (contents.includes('Unicode v17.0.0')) {
+        return;
+      }
 
-    // skip es5id: 12.2.1-9-s
-    if (contents.match(/^es5id:\s*12\.2\.1-9-s\s*$/m)) {
-      return;
-    }
+      // Skip tests with pending esid (not yet standardized)
+      if (contents.match(/^esid:\s*pending\s*$/m)) {
+        return;
+      }
 
-    // skip eval tests - they all have a file path containing /language/eval-code
-    if (file.includes('/language/eval-code/')) {
-      return;
+      // skip es5id: 12.2.1-9-s
+      if (contents.match(/^es5id:\s*12\.2\.1-9-s\s*$/m)) {
+        return;
+      }
+
+      // skip eval tests - they all have a file path containing /language/eval-code
+      if (file.includes('/language/eval-code/')) {
+        return;
+      }
     }
 
     if (!flags.raw) {

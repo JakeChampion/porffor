@@ -57,8 +57,9 @@ if (cluster.isPrimary) {
   }, {});
 
   let tests = [];
+  const singleTestFile = whatTests.length === 1 && whatTests[0].endsWith('.js');
   for (const filter of whatTests) {
-    const filterTests = await readTest262(test262Path, filter, preludes, lastResults.timeouts);
+    const filterTests = await readTest262(test262Path, filter, preludes, lastResults.timeouts, singleTestFile);
     tests = tests.concat(filterTests);
   }
   // deduplicate tests by file path
