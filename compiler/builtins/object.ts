@@ -769,6 +769,7 @@ export const __Object_prototype_toString = (_this: any) => {
     Porffor.type(_this) == Porffor.TYPES.stringobject)) return '[object String]';
   if (Porffor.type(_this) == Porffor.TYPES.date) return '[object Date]';
   if (Porffor.type(_this) == Porffor.TYPES.regexp) return '[object RegExp]';
+  if (Porffor.type(_this) == Porffor.TYPES.promise) return '[object Promise]';
 
   return '[object Object]';
 };
