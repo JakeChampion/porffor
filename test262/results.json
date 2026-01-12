@@ -19516,9 +19516,7 @@
     "staging/set-methods/set-intersection-other-is-set.js",
     "staging/Uint8Array/fromBase64/invalid-options.js"
   ],
-  "fails": [
-    "staging/built-ins/Array/prototype/flatMap/callback-with-side-effects.js"
-  ],
+  "fails": [],
   "compileErrors": [],
   "wasmErrors": [],
   "runtimeErrors": [
@@ -20864,5 +20862,5 @@
     "language/types/reference/S8.7.2_A3.js"
   ],
   "timeouts": [],
-  "total": 20856
+  "total": 20855
 }
