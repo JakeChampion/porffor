@@ -3,26 +3,32 @@ import { readFileSync } from 'node:fs';
 import { join, dirname, extname } from 'node:path';
 
 // Load investigated skips - tests that have been investigated and determined to be unfixable
+// Supports both exact file paths (ending in .js) and substring patterns
 const loadInvestigatedSkips = (test262Path) => {
   try {
     const content = readFileSync(join(dirname(test262Path), 'investigated_skips.txt'), 'utf8');
-    const skips = new Set();
+    const exactSkips = new Set();
+    const patternSkips = [];
     for (const line of content.split('\n')) {
       const trimmed = line.trim();
       if (trimmed && !trimmed.startsWith('#')) {
-        skips.add(trimmed);
+        if (trimmed.endsWith('.js')) {
+          exactSkips.add(trimmed);
+        } else {
+          patternSkips.push(trimmed);
+        }
       }
     }
-    return skips;
+    return { exactSkips, patternSkips };
   } catch {
-    return new Set();
+    return { exactSkips: new Set(), patternSkips: [] };
   }
 };
 
 export default async (test262Path, filter, preludes, first = []) => {
   if (filter.startsWith('test/')) filter = filter.slice(5);
   const testPath = join(test262Path, 'test');
-  const investigatedSkips = loadInvestigatedSkips(test262Path);
+  const { exactSkips, patternSkips } = loadInvestigatedSkips(test262Path);
 
   const alwaysPrelude = preludes['assert.js'] + preludes['sta.js'] + preludes['compareArray.js'];
 
@@ -50,9 +56,9 @@ export default async (test262Path, filter, preludes, first = []) => {
     if (done[file]) return;
     done[file] = true;
 
-    // Skip tests in investigated_skips.txt
+    // Skip tests in investigated_skips.txt (exact match or pattern match)
     const relPath = file.replace(testPath + '/', '');
-    if (investigatedSkips.has(relPath)) {
+    if (exactSkips.has(relPath) || patternSkips.some(p => relPath.includes(p))) {
       return;
     }
 
