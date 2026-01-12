@@ -140,6 +140,11 @@ if (cluster.isPrimary) {
 
   const totalTests = tests.length;
 
+  if (totalTests === 0) {
+    console.log('no tests found');
+    process.exit(1);
+  }
+
   const noAnsi = s => s.replace(/\u001b\[[0-9]+m/g, '');
 
   let queue = 0;
