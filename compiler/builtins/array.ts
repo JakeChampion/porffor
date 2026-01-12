@@ -1008,17 +1008,39 @@ export const __Array_prototype_toReversed = (_this: any[]) => {
 };
 
 // @porf-typed-array
-export const __Array_prototype_toSorted = (_this: any[], callbackFn: any) => {
+export const __Array_prototype_toSorted = (_this: any, callbackFn: any) => {
   // 1. If comparefn is not undefined and IsCallable(comparefn) is false, throw a TypeError exception.
   if (callbackFn !== undefined && Porffor.type(callbackFn) != Porffor.TYPES.function) {
     throw new TypeError('callbackFn is not a function');
   }
 
-  // todo/perf: could be rewritten to be its own instead of cloning and using normal sort()
+  // 2. Let O be ? ToObject(this value).
+  // 3. Let len be ? LengthOfArrayLike(O).
+  let len: i32;
+  if (Porffor.type(_this) == Porffor.TYPES.object) {
+    len = ecma262.ToIntegerOrInfinity((_this as object)['length']);
+  } else {
+    len = _this.length;
+  }
+  if (len < 0) len = 0;
 
+  // 4. Let A be ? ArrayCreate(len).
   let out: any[] = Porffor.malloc();
-  Porffor.clone(_this, out);
+  out.length = len;
 
+  // 5. Let k be 0.
+  // 6. Repeat, while k < len
+  if (Porffor.type(_this) == Porffor.TYPES.object) {
+    for (let k: i32 = 0; k < len; k++) {
+      out[k] = (_this as object)[k];
+    }
+  } else {
+    for (let k: i32 = 0; k < len; k++) {
+      out[k] = _this[k];
+    }
+  }
+
+  // 7. Sort items in A
   return __Array_prototype_sort(out, callbackFn);
 };
 
