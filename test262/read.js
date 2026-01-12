@@ -1,9 +1,28 @@
 import fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join, dirname, extname } from 'node:path';
+
+// Load investigated skips - tests that have been investigated and determined to be unfixable
+const loadInvestigatedSkips = (test262Path) => {
+  try {
+    const content = readFileSync(join(dirname(test262Path), 'investigated_skips.txt'), 'utf8');
+    const skips = new Set();
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        skips.add(trimmed);
+      }
+    }
+    return skips;
+  } catch {
+    return new Set();
+  }
+};
 
 export default async (test262Path, filter, preludes, first = []) => {
   if (filter.startsWith('test/')) filter = filter.slice(5);
   const testPath = join(test262Path, 'test');
+  const investigatedSkips = loadInvestigatedSkips(test262Path);
 
   const alwaysPrelude = preludes['assert.js'] + preludes['sta.js'] + preludes['compareArray.js'];
 
@@ -30,6 +49,12 @@ export default async (test262Path, filter, preludes, first = []) => {
   const read = async file => {
     if (done[file]) return;
     done[file] = true;
+
+    // Skip tests in investigated_skips.txt
+    const relPath = file.replace(testPath + '/', '');
+    if (investigatedSkips.has(relPath)) {
+      return;
+    }
 
     let contents = await fs.readFile(file, 'utf8');
 
