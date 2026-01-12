@@ -19518,12 +19518,6 @@
     "staging/Uint8Array/fromBase64/invalid-options.js"
   ],
   "fails": [
-    "built-ins/Array/prototype/copyWithin/coerced-values-start-change-start.js",
-    "built-ins/Array/prototype/copyWithin/coerced-values-start-change-target.js",
-    "built-ins/Array/prototype/copyWithin/fill-holes.js",
-    "built-ins/Array/prototype/copyWithin/length-near-integer-limit.js",
-    "built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-target.js",
-    "built-ins/Array/prototype/every/15.4.4.16-2-17.js",
     "built-ins/Array/prototype/every/15.4.4.16-2-18.js",
     "built-ins/Array/prototype/every/15.4.4.16-2-19.js",
     "built-ins/Array/prototype/every/15.4.4.16-4-15.js",
@@ -23771,5 +23765,5 @@
     "language/types/reference/S8.7.2_A3.js"
   ],
   "timeouts": [],
-  "total": 23763
+  "total": 23757
 }
