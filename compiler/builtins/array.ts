@@ -457,7 +457,14 @@ export const __Array_prototype_fill = (_this: any, value: any, _start: any, _end
   // 1. Let O be ? ToObject(this value).
   if (_this == null) throw new TypeError('Cannot convert nullish to object');
 
-  const len: i32 = _this.length;
+  // 2. Let len be ? LengthOfArrayLike(O).
+  let len: i32;
+  if (Porffor.type(_this) == Porffor.TYPES.object) {
+    len = ecma262.ToIntegerOrInfinity((_this as object)['length']);
+  } else {
+    len = _this.length;
+  }
+  if (len < 0) len = 0;
 
   if (Porffor.type(_start) == Porffor.TYPES.undefined) _start = 0;
   if (Porffor.type(_end) == Porffor.TYPES.undefined) _end = len;
@@ -571,7 +578,14 @@ export const __Array_prototype_copyWithin = (_this: any, _target: any, _start: a
   // 1. Let O be ? ToObject(this value).
   if (_this == null) throw new TypeError('Cannot convert nullish to object');
 
-  const len: i32 = _this.length;
+  // 2. Let len be ? LengthOfArrayLike(O).
+  let len: i32;
+  if (Porffor.type(_this) == Porffor.TYPES.object) {
+    len = ecma262.ToIntegerOrInfinity((_this as object)['length']);
+  } else {
+    len = _this.length;
+  }
+  if (len < 0) len = 0;
 
   let target: i32 = ecma262.ToIntegerOrInfinity(_target);
   if (target < 0) {
@@ -653,7 +667,14 @@ export const __Array_prototype_reverse = (_this: any) => {
   // 1. Let O be ? ToObject(this value).
   if (_this == null) throw new TypeError('Cannot convert nullish to object');
 
-  const len: i32 = _this.length;
+  // 2. Let len be ? LengthOfArrayLike(O).
+  let len: i32;
+  if (Porffor.type(_this) == Porffor.TYPES.object) {
+    len = ecma262.ToIntegerOrInfinity((_this as object)['length']);
+  } else {
+    len = _this.length;
+  }
+  if (len < 0) len = 0;
 
   let start: i32 = 0;
   let end: i32 = len - 1;
