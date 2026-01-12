@@ -577,13 +577,14 @@ export const __Array_prototype_with = (_this: any[], _index: any, value: any) =>
 export const __Array_prototype_copyWithin = (_this: any, _target: any, _start: any, _end: any) => {
   // 1. Let O be ? ToObject(this value).
   if (_this == null) throw new TypeError('Cannot convert nullish to object');
+  const o: any = Object(_this);
 
   // 2. Let len be ? LengthOfArrayLike(O).
   let len: i32;
-  if (Porffor.type(_this) == Porffor.TYPES.object) {
-    len = ecma262.ToIntegerOrInfinity((_this as object)['length']);
+  if (Porffor.type(o) == Porffor.TYPES.object) {
+    len = ecma262.ToIntegerOrInfinity((o as object)['length']);
   } else {
-    len = _this.length;
+    len = o.length;
   }
   if (len < 0) len = 0;
 
@@ -616,7 +617,7 @@ export const __Array_prototype_copyWithin = (_this: any, _target: any, _start: a
   // Calculate the count of elements to copy
   let count: i32 = end - start;
   if (count > len - target) count = len - target;
-  if (count <= 0) return _this;
+  if (count <= 0) return o;
 
   // If regions overlap and destination is ahead of source, copy backward
   if (start < target && target < start + count) {
@@ -624,18 +625,18 @@ export const __Array_prototype_copyWithin = (_this: any, _target: any, _start: a
     let from: i32 = start + count - 1;
     let to: i32 = target + count - 1;
     while (count > 0) {
-      _this[to--] = _this[from--];
+      o[to--] = o[from--];
       count--;
     }
   } else {
     // Copy forward
     while (count > 0) {
-      _this[target++] = _this[start++];
+      o[target++] = o[start++];
       count--;
     }
   }
 
-  return _this;
+  return o;
 };
 
 // @porf-typed-array

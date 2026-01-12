@@ -178,8 +178,6 @@
     "built-ins/Array/prototype/concat/15.4.4.4-5-c-i-1.js",
     "built-ins/Array/prototype/concat/Array.prototype.concat_no-prototype.js",
     "built-ins/Array/prototype/concat/Array.prototype.concat_non-array.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_sloppy-arguments.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_strict-arguments.js",
     "built-ins/Array/prototype/concat/call-with-boolean.js",
     "built-ins/Array/prototype/concat/create-non-array.js",
     "built-ins/Array/prototype/concat/length.js",
@@ -193,6 +191,7 @@
     "built-ins/Array/prototype/concat/S15.4.4.4_A2_T1.js",
     "built-ins/Array/prototype/concat/S15.4.4.4_A2_T2.js",
     "built-ins/Array/prototype/constructor.js",
+    "built-ins/Array/prototype/copyWithin/call-with-boolean.js",
     "built-ins/Array/prototype/copyWithin/coerced-values-end.js",
     "built-ins/Array/prototype/copyWithin/coerced-values-start.js",
     "built-ins/Array/prototype/copyWithin/coerced-values-target.js",
@@ -19519,24 +19518,6 @@
     "staging/Uint8Array/fromBase64/invalid-options.js"
   ],
   "fails": [
-    "built-ins/Array/prototype/concat/Array.prototype.concat_array-like-length-to-string-throws.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_array-like-length-value-of-throws.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_array-like-negative-length.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_array-like-primitive-non-number-length.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_array-like-string-length.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_array-like-to-length-throws.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_array-like.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_holey-sloppy-arguments.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_large-typed-array.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_length-throws.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_sloppy-arguments-throws.js",
-    "built-ins/Array/prototype/concat/Array.prototype.concat_small-typed-array.js",
-    "built-ins/Array/prototype/concat/create-ctor-non-object.js",
-    "built-ins/Array/prototype/concat/create-ctor-poisoned.js",
-    "built-ins/Array/prototype/concat/S15.4.4.4_A3_T1.js",
-    "built-ins/Array/prototype/concat/S15.4.4.4_A3_T2.js",
-    "built-ins/Array/prototype/concat/S15.4.4.4_A3_T3.js",
-    "built-ins/Array/prototype/copyWithin/call-with-boolean.js",
     "built-ins/Array/prototype/copyWithin/coerced-values-start-change-start.js",
     "built-ins/Array/prototype/copyWithin/coerced-values-start-change-target.js",
     "built-ins/Array/prototype/copyWithin/fill-holes.js",
@@ -23790,5 +23771,5 @@
     "language/types/reference/S8.7.2_A3.js"
   ],
   "timeouts": [],
-  "total": 23782
+  "total": 23763
 }
