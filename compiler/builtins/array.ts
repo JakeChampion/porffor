@@ -987,23 +987,40 @@ export const __Array_prototype_valueOf = (_this: any) => {
 };
 
 // @porf-typed-array
-export const __Array_prototype_toReversed = (_this: any[]) => {
-  const len: i32 = _this.length;
+export const __Array_prototype_toReversed = (_this: any) => {
+  // 1. Let O be ? ToObject(this value).
+  if (_this == null) throw new TypeError('Cannot convert nullish to object');
 
-  let start: i32 = 0;
-  let end: i32 = len - 1;
+  // 2. Let len be ? LengthOfArrayLike(O).
+  let len: i32;
+  if (Porffor.type(_this) == Porffor.TYPES.object) {
+    len = ecma262.ToIntegerOrInfinity((_this as object)['length']);
+  } else {
+    len = _this.length;
+  }
+  if (len < 0) len = 0;
 
+  // 3. Let A be ? ArrayCreate(len).
   let out: any[] = Porffor.malloc();
   out.length = len;
 
-  while (true) {
-    out[start] = _this[end];
-    if (start >= end) {
-      break;
+  // 4. Let k be 0.
+  // 5. Repeat, while k < len
+  if (Porffor.type(_this) == Porffor.TYPES.object) {
+    for (let k: i32 = 0; k < len; k++) {
+      // a. Let from be len - k - 1.
+      // b. Let Pk be ! ToString(k).
+      // c. Let fromValue be ? Get(O, from).
+      // d. Perform ? CreateDataPropertyOrThrow(A, Pk, fromValue).
+      out[k] = (_this as object)[len - k - 1];
     }
-    out[end--] = _this[start++];
+  } else {
+    for (let k: i32 = 0; k < len; k++) {
+      out[k] = _this[len - k - 1];
+    }
   }
 
+  // 6. Return A.
   return out;
 };
 
@@ -1015,6 +1032,8 @@ export const __Array_prototype_toSorted = (_this: any, callbackFn: any) => {
   }
 
   // 2. Let O be ? ToObject(this value).
+  if (_this == null) throw new TypeError('Cannot convert nullish to object');
+
   // 3. Let len be ? LengthOfArrayLike(O).
   let len: i32;
   if (Porffor.type(_this) == Porffor.TYPES.object) {
