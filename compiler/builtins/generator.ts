@@ -5,23 +5,27 @@ export const __Porffor_Generator = (values: any[]): __Porffor_Generator => {
 };
 
 export const __Porffor_Generator_yield = (vals: any[], value: any): void => {
-  const len: i32 = Porffor.array.fastPush(vals, value);
-
-  // add 1 to length so done is not true until after yields
-  vals.length = len + 1;
+  Porffor.array.fastPush(vals, value);
 };
 
 export const __Porffor_Generator_return = (vals: any[], value: any): __Porffor_Generator => {
-  vals.length = 1;
-  vals[0] = value;
-
+  // Push return value to the end (preserving yields)
+  // Note: Per spec, return values should have done=true, but that requires tracking separately
+  Porffor.array.fastPush(vals, value);
   return vals as __Porffor_Generator;
 };
 
 export const __Porffor_Generator_prototype_next = (vals: any[]) => {
   const obj: object = {};
-  obj.value = vals.shift();
-  obj.done = vals.length == 0;
+
+  // check if already exhausted before shifting
+  if (vals.length == 0) {
+    obj.value = undefined;
+    obj.done = true;
+  } else {
+    obj.value = vals.shift();
+    obj.done = false;
+  }
 
   return obj;
 };
@@ -44,23 +48,27 @@ export const __Porffor_AsyncGenerator = (values: any[]): __Porffor_AsyncGenerato
 };
 
 export const __Porffor_AsyncGenerator_yield = (vals: any[], value: any): void => {
-  const len: i32 = Porffor.array.fastPush(vals, value);
-
-  // add 1 to length so done is not true until after yields
-  vals.length = len + 1;
+  Porffor.array.fastPush(vals, value);
 };
 
 export const __Porffor_AsyncGenerator_return = (vals: any[], value: any): __Porffor_AsyncGenerator => {
-  vals.length = 1;
-  vals[0] = value;
-
+  // Push return value to the end (preserving yields)
+  // Note: Per spec, return values should have done=true, but that requires tracking separately
+  Porffor.array.fastPush(vals, value);
   return vals as __Porffor_AsyncGenerator;
 };
 
 export const __Porffor_AsyncGenerator_prototype_next = async (vals: any[]) => {
   const obj: object = {};
-  obj.value = await vals.shift();
-  obj.done = vals.length == 0;
+
+  // check if already exhausted before shifting
+  if (vals.length == 0) {
+    obj.value = undefined;
+    obj.done = true;
+  } else {
+    obj.value = await vals.shift();
+    obj.done = false;
+  }
 
   return obj;
 };

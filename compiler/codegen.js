@@ -998,9 +998,9 @@ const generateYield = (scope, decl) => {
     computed: true
   };
 
-  // just support a single yield like a return for now
+  // eager evaluation: execute all yields upfront, don't return after each yield
   return [
-    // return value in generator
+    // push value to generator array
     [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
     number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32),
 
@@ -1009,12 +1009,7 @@ const generateYield = (scope, decl) => {
 
     [ Opcodes.call, includeBuiltin(scope, scope.async ? '__Porffor_AsyncGenerator_yield' : '__Porffor_Generator_yield').index ],
 
-    // return generator
-    [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
-    ...(scope.returnType != null ? [] : [ number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
-    [ Opcodes.return ],
-
-    // use undefined as yield expression value
+    // continue execution (no return here) - use undefined as yield expression value
     number(0),
     ...setLastType(scope, TYPES.undefined)
   ];
@@ -5829,8 +5824,35 @@ const generateForOf = (scope, decl) => {
       [ Opcodes.call, includeBuiltin(scope, '__Porffor_bigint_fromU64').index ]
     ], 8, TYPES.bigint) ],
     [ TYPES.__porffor_generator, () => [
-      // just break?! TODO: actually implement this
-      [ Opcodes.br, depth.length - prevDepth ]
+      // generators are arrays of yielded values (eager evaluation)
+      // iterate like arrays
+      // if remaining length == 0 then break
+      [ Opcodes.local_get, length ],
+      [ Opcodes.i32_eqz ],
+      [ Opcodes.br_if, depth.length - prevDepth ],
+
+      // get value
+      [ Opcodes.local_get, pointer ],
+      [ Opcodes.load, 0, ...unsignedLEB128(ValtypeSize.i32) ],
+
+      // get type
+      [ Opcodes.local_get, pointer ],
+      [ Opcodes.i32_load8_u, 0, ...unsignedLEB128(ValtypeSize.i32 + ValtypeSize[valtype]) ],
+
+      // increment iter pointer by valtype size + 1
+      [ Opcodes.local_get, pointer ],
+      number(ValtypeSize[valtype] + 1, Valtype.i32),
+      [ Opcodes.i32_add ],
+      [ Opcodes.local_set, pointer ],
+
+      // decrement remaining length by 1
+      [ Opcodes.local_get, length ],
+      number(1, Valtype.i32),
+      [ Opcodes.i32_sub ],
+      [ Opcodes.local_set, length ],
+
+      // set type
+      ...setLastType(scope)
     ] ],
 
     [ TYPES.__porffor_wrapperiterator, () => [
@@ -8086,10 +8108,18 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       } else {
         // add end empty return if not found
         if (wasm[wasm.length - 1]?.[0] !== Opcodes.return) {
-          wasm.push(
-            [ Opcodes.drop ],
-            ...generateReturn(func, {})
-          );
+          wasm.push([ Opcodes.drop ]);
+
+          if (func.generator) {
+            // for generators without explicit return, just return the generator with all yielded values
+            wasm.push(
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              ...(func.returnType != null ? [] : [ number(func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
+              [ Opcodes.return ]
+            );
+          } else {
+            wasm.push(...generateReturn(func, {}));
+          }
         }
       }
 
