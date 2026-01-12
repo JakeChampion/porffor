@@ -132,6 +132,31 @@ const arrowsUseArguments = (node) => {
   return false;
 };
 
+// Count yield expressions in a generator function body
+// Returns array of yield nodes in order of appearance
+const collectYields = (node, yields = []) => {
+  if (!node) return yields;
+  if (Array.isArray(node)) {
+    for (const n of node) collectYields(n, yields);
+    return yields;
+  }
+  if (typeof node !== 'object') return yields;
+
+  // Don't descend into nested functions (they have their own yields)
+  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression') return yields;
+
+  if (node.type === 'YieldExpression') {
+    yields.push(node);
+  }
+
+  for (const key in node) {
+    if (key[0] === '_' || key === 'type' || key === 'loc' || key === 'range') continue;
+    collectYields(node[key], yields);
+  }
+  return yields;
+};
+
 let doNotMarkFuncRef = false;
 const funcRef = (func, scope = null) => {
   if (!doNotMarkFuncRef) func.referenced = true;
@@ -987,7 +1012,7 @@ const generateYield = (scope, decl) => {
     ];
   }
 
-  // hack: `yield* foo` -> `yielf foo[0]`
+  // hack: `yield* foo` -> `yield foo[0]`
   if (decl.delegate) arg = {
     type: 'MemberExpression',
     object: arg,
@@ -998,19 +1023,22 @@ const generateYield = (scope, decl) => {
     computed: true
   };
 
-  // eager evaluation: execute all yields upfront, don't return after each yield
+  // Eager evaluation: push value to generator array and continue
+  // (doesn't support receiving values via next(), but basic iteration works)
   return [
-    // push value to generator array
+    // Push yielded value to generator array using fastPush pattern
+    // Generator is stored as an array, so we append {value, done:false} info
     [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
     number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32),
 
     ...generate(scope, arg),
     ...getNodeType(scope, arg),
 
-    [ Opcodes.call, includeBuiltin(scope, scope.async ? '__Porffor_AsyncGenerator_yield' : '__Porffor_Generator_yield').index ],
+    [ Opcodes.call, includeBuiltin(scope, '__Porffor_array_fastPush').index ],
+    [ Opcodes.drop ],
 
-    // continue execution (no return here) - use undefined as yield expression value
-    number(0),
+    // yield expression value is undefined (can't receive values in eager mode)
+    number(UNDEFINED),
     ...setLastType(scope, TYPES.undefined)
   ];
 };
@@ -1019,16 +1047,21 @@ const generateReturn = (scope, decl) => {
   const arg = decl.argument ?? DEFAULT_VALUE();
 
   if (scope.generator) {
+    // For eager evaluation: push return value to array like a yield
+    // This is not fully spec-compliant (return value should have done:true)
+    // but works for basic cases
     return [
-      // return value in generator
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32),
 
       ...generate(scope, arg),
       ...getNodeType(scope, arg),
 
-      // return generator
-      [ Opcodes.call, includeBuiltin(scope, scope.async ? '__Porffor_AsyncGenerator_return' : '__Porffor_Generator_return').index ],
+      [ Opcodes.call, includeBuiltin(scope, '__Porffor_array_fastPush').index ],
+      [ Opcodes.drop ],
+
+      // return the generator object
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       ...(scope.returnType != null ? [] : [ number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
       [ Opcodes.return ]
     ];
