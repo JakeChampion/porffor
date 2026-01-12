@@ -636,14 +636,20 @@ export const __Number_prototype_toPrecision = (_this: number, precision: any) =>
 
 // fractionDigits: number|any for type check
 export const __Number_prototype_toExponential = (_this: number, fractionDigits: number|any) => {
+  // Step 2: ToInteger(fractionDigits) must be called first to throw if valueOf throws
+  if (Porffor.type(fractionDigits) != Porffor.TYPES.undefined) {
+    fractionDigits = ecma262.ToIntegerOrInfinity(fractionDigits);
+  }
+
+  // Step 3-7: Check for non-finite values after ToInteger but before range check
   if (!Number.isFinite(_this)) {
     if (Number.isNaN(_this)) return 'NaN';
     if (_this == Infinity) return 'Infinity';
     return '-Infinity';
   }
 
-  if (Porffor.type(fractionDigits) != Porffor.TYPES.undefined) {
-    fractionDigits = ecma262.ToIntegerOrInfinity(fractionDigits);
+  // Step 10: Range check comes after Infinity/NaN checks
+  if (Porffor.type(fractionDigits) == Porffor.TYPES.number) {
     if (fractionDigits < 0 || fractionDigits > 100) {
       throw new RangeError('toExponential() fractionDigits argument must be between 0 and 100');
     }
