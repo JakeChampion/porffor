@@ -2706,8 +2706,8 @@ const aliasPrimObjsBC = bc => {
 };
 
 const typeIsIterable = wasm => [
-  // array, set, map, string, bytestring, generator
-  ...typeIsOneOf(wasm, [ TYPES.array, TYPES.set, TYPES.map, TYPES.string, TYPES.bytestring, TYPES.__porffor_generator ]),
+  // array, set, map, string, bytestring, stringobject, generator, wrapperiterator
+  ...typeIsOneOf(wasm, [ TYPES.array, TYPES.set, TYPES.map, TYPES.string, TYPES.bytestring, TYPES.stringobject, TYPES.__porffor_generator, TYPES.__porffor_wrapperiterator ]),
   // typed array
   ...wasm,
   number(TYPES.uint8clampedarray, Valtype.i32),
@@ -5601,10 +5601,29 @@ const generateForOf = (scope, decl) => {
       ...internalThrow(scope, 'TypeError', `Tried for..of on non-iterable type`),
     [ Opcodes.end ],
 
-    // get length
-    [ Opcodes.local_get, pointer ],
-    [ Opcodes.i32_load, Math.log2(ValtypeSize.i32) - 1, 0 ],
-    [ Opcodes.local_set, length ]
+    // get length - special handling for WrapperIterator
+    ...typeSwitch(scope, iterType, [
+      [ TYPES.__porffor_wrapperiterator, () => [
+        // For WrapperIterator, call __Porffor_iterator_getLength on underlying iterable
+        // WrapperIterator is stored as array: [iterable, index]
+        // Array layout: [length:i32, elem0_val:f64, elem0_type:i8, ...]
+        // storage[0] value is at pointer + ValtypeSize.i32
+        // storage[0] type is at pointer + ValtypeSize.i32 + ValtypeSize[valtype]
+        [ Opcodes.local_get, pointer ],
+        [ Opcodes.f64_load, 0, ValtypeSize.i32 ],
+        [ Opcodes.local_get, pointer ],
+        [ Opcodes.i32_load8_u, 0, ValtypeSize.i32 + ValtypeSize[valtype] ],
+        [ Opcodes.call, includeBuiltin(scope, '__Porffor_iterator_getLength').index ],
+        Opcodes.i32_to_u,
+        [ Opcodes.local_set, length ]
+      ] ],
+      [ 'default', () => [
+        // For other types, length is at offset 0
+        [ Opcodes.local_get, pointer ],
+        [ Opcodes.i32_load, Math.log2(ValtypeSize.i32) - 1, 0 ],
+        [ Opcodes.local_set, length ]
+      ] ]
+    ], Blocktype.void)
   );
 
   inferLoopStart(scope);
@@ -5812,6 +5831,37 @@ const generateForOf = (scope, decl) => {
     [ TYPES.__porffor_generator, () => [
       // just break?! TODO: actually implement this
       [ Opcodes.br, depth.length - prevDepth ]
+    ] ],
+
+    [ TYPES.__porffor_wrapperiterator, () => [
+      // WrapperIterator is stored as array: [iterable, index]
+      // Array layout: [length:i32, elem0_val:f64, elem0_type:i8, ...]
+
+      // if counter >= length then break
+      [ Opcodes.local_get, counter ],
+      [ Opcodes.local_get, length ],
+      [ Opcodes.i32_ge_s ],
+      [ Opcodes.br_if, depth.length - prevDepth ],
+
+      // Call __Porffor_iterator_getElement(iterable, index) to get element
+      // storage[0] value is at pointer + ValtypeSize.i32
+      // storage[0] type is at pointer + ValtypeSize.i32 + ValtypeSize[valtype]
+      [ Opcodes.local_get, pointer ],
+      [ Opcodes.f64_load, 0, ValtypeSize.i32 ],
+      [ Opcodes.local_get, pointer ],
+      [ Opcodes.i32_load8_u, 0, ValtypeSize.i32 + ValtypeSize[valtype] ],
+      [ Opcodes.local_get, counter ],
+      Opcodes.i32_from_u,
+      number(TYPES.number, Valtype.i32),
+      [ Opcodes.call, includeBuiltin(scope, '__Porffor_iterator_getElement').index ],
+
+      // Increment counter
+      [ Opcodes.local_get, counter ],
+      number(1, Valtype.i32),
+      [ Opcodes.i32_add ],
+      [ Opcodes.local_set, counter ],
+
+      ...setLastType(scope)
     ] ],
 
     [ TYPES.map, () => [

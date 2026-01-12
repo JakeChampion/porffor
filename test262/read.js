@@ -117,7 +117,6 @@ export default async (test262Path, filter, preludes, first = [], forceRun = fals
         'Intl.Segmenter',
         'Intl-enumeration',
         'Proxy',
-        'iterator-helpers',
         'ShadowRealm',
         'FinalizationRegistry',
         'WeakRef',

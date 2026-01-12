@@ -34,7 +34,7 @@ export const __Porffor_iterator_getLength = (iterable: any): i32 => {
   const t: i32 = Porffor.type(iterable);
 
   // Arrays, strings, typed arrays have .length
-  if (t == Porffor.TYPES.array || t == Porffor.TYPES.string || t == Porffor.TYPES.bytestring) {
+  if (t == Porffor.TYPES.array || t == Porffor.TYPES.string || t == Porffor.TYPES.bytestring || t == Porffor.TYPES.stringobject) {
     return iterable.length;
   }
 
@@ -66,7 +66,7 @@ export const __Porffor_iterator_getElement = (iterable: any, index: i32): any =>
   }
 
   // Strings
-  if (t == Porffor.TYPES.string || t == Porffor.TYPES.bytestring) {
+  if (t == Porffor.TYPES.string || t == Porffor.TYPES.bytestring || t == Porffor.TYPES.stringobject) {
     return (iterable as string)[index];
   }
 
@@ -134,13 +134,13 @@ export const Iterator = function (): void {
 
 // Iterator.from - creates an iterator from an iterable or iterator-like
 export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
-  // If obj is already an iterator (has next method), wrap it? For now, treat everything as iterable
   const t: i32 = Porffor.type(obj);
 
-  // Check if it's iterable
+  // Check if it's a known iterable type
   if (t == Porffor.TYPES.array ||
       t == Porffor.TYPES.string ||
       t == Porffor.TYPES.bytestring ||
+      t == Porffor.TYPES.stringobject ||
       t == Porffor.TYPES.set ||
       t == Porffor.TYPES.__porffor_generator ||
       (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
@@ -151,6 +151,22 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
   // If it's already a WrapperIterator, return as-is
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return obj;
+  }
+
+  // Check if it's an iterator-like object with a next() method
+  if (t == Porffor.TYPES.object) {
+    const next: any = obj.next;
+    if (typeof next === 'function') {
+      // Eagerly consume the iterator into an array
+      const result: any[] = [];
+      let iterResult: any = next.call(obj);
+      while (!iterResult.done) {
+        result.push(iterResult.value);
+        iterResult = next.call(obj);
+      }
+      const storage: any[] = __Porffor_WrapperIterator_create(result);
+      return __Porffor_WrapperIterator(storage);
+    }
   }
 
   throw new TypeError('Iterator.from requires an iterable or iterator-like object');
