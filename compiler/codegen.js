@@ -7670,12 +7670,14 @@ const objectHack = node => {
       // They must be the exact same function object
       // Also, Set.prototype.keys === Set.prototype.values per spec
       // String.prototype.trimLeft/trimRight are aliases for trimStart/trimEnd (Annex B)
+      // Date.prototype.toGMTString is an alias for toUTCString (Annex B)
       const builtinAliases = {
         '__Number_parseInt': 'parseInt',
         '__Number_parseFloat': 'parseFloat',
         '__Set_prototype_keys': '__Set_prototype_values',
         '__String_prototype_trimLeft': '__String_prototype_trimStart',
-        '__String_prototype_trimRight': '__String_prototype_trimEnd'
+        '__String_prototype_trimRight': '__String_prototype_trimEnd',
+        '__Date_prototype_toGMTString': '__Date_prototype_toUTCString'
       };
       if (builtinAliases[name]) name = builtinAliases[name];
 
