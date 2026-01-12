@@ -7668,9 +7668,11 @@ const objectHack = node => {
 
       // Per spec, Number.parseInt === parseInt and Number.parseFloat === parseFloat
       // They must be the exact same function object
+      // Also, Set.prototype.keys === Set.prototype.values per spec
       const builtinAliases = {
         '__Number_parseInt': 'parseInt',
-        '__Number_parseFloat': 'parseFloat'
+        '__Number_parseFloat': 'parseFloat',
+        '__Set_prototype_keys': '__Set_prototype_values'
       };
       if (builtinAliases[name]) name = builtinAliases[name];
 
