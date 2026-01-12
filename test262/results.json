@@ -3863,6 +3863,7 @@
     "built-ins/Math/hypot/Math.hypot_NegInfinity.js",
     "built-ins/Math/hypot/Math.hypot_NoArgs.js",
     "built-ins/Math/hypot/Math.hypot_Success_2.js",
+    "built-ins/Math/hypot/Math.hypot_ToNumberErr.js",
     "built-ins/Math/hypot/Math.hypot_Zero_2.js",
     "built-ins/Math/hypot/name.js",
     "built-ins/Math/hypot/not-a-constructor.js",
@@ -19522,5 +19523,5 @@
   "wasmErrors": [],
   "runtimeErrors": [],
   "timeouts": [],
-  "total": 19516
+  "total": 19517
 }
