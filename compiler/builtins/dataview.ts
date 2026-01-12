@@ -10,14 +10,14 @@ export const DataView = function (arg: any, byteOffset: any, length: any): DataV
   if ((arg as ArrayBuffer).detached) throw new TypeError('Constructed DataView with a detached ArrayBuffer');
 
   let offset: i32 = 0;
-  if (Porffor.type(byteOffset) != Porffor.TYPES.undefined) offset = Math.trunc(byteOffset);
+  if (Porffor.type(byteOffset) != Porffor.TYPES.undefined) offset = Math.trunc(Number(byteOffset));
   if (offset < 0) throw new RangeError('Invalid DataView byte offset (negative)');
 
   let len: i32 = 0;
   if (Porffor.type(length) == Porffor.TYPES.undefined) {
     const bufferLen: i32 = Porffor.wasm.i32.load(Porffor.wasm`local.get ${arg}`, 0, 0);
     len = bufferLen - offset;
-  } else len = Math.trunc(length);
+  } else len = Math.trunc(Number(length));
 
   if (len < 0) throw new RangeError('Invalid DataView length (negative)');
   if (len > 4294967295) throw new RangeError('Invalid DataView length (over 32 bit address space)');
