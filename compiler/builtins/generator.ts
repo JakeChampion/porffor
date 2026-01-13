@@ -32,16 +32,18 @@ export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any) 
   // - offset 16-23: yielded value (f64)
   // - offset 24-27: yielded value type (i32)
   // - offset 28-31: done flag (i32)
-  const rawValue: f64 = Porffor.wasm.f64.load(gen, 0, 16);
+  const value: any = Porffor.wasm.f64.load(gen, 0, 16);
   const valueType: i32 = Porffor.wasm.i32.load(gen, 0, 24);
   const isDone: i32 = Porffor.wasm.i32.load(gen, 0, 28);
 
-  // Set value - simple approach that works for most types
-  if (valueType == Porffor.TYPES.undefined) {
-    obj.value = undefined;
-  } else {
-    obj.value = rawValue;
-  }
+  // Set the type of value using inline wasm to preserve exact type
+  // valueType is f64 (JS number) containing i32 value, so convert with i32.to_u
+  Porffor.wasm`
+local.get ${valueType}
+i32.to_u
+local.set ${value+1}`;
+
+  obj.value = value;
   obj.done = isDone != 0;
 
   return obj;

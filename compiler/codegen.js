@@ -3266,6 +3266,25 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             [ Opcodes.end ]
           );
 
+          // Check if suspended-start (state=0) - throw immediately without calling generator
+          out.push(
+            [ Opcodes.local_get, genLocal ],
+            Opcodes.i32_to_u,
+            [ Opcodes.f64_load, 0, 0 ], // Load state from offset 0
+            number(0),
+            [ Opcodes.f64_eq ],
+            [ Opcodes.if, Blocktype.void ],
+              // Suspended-start state - mark done and throw
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(1, Valtype.i32),
+              [ Opcodes.i32_store, 0, 28 ], // done = 1
+              [ Opcodes.local_get, throwValLocal ],
+              [ Opcodes.local_get, throwTypeLocal ],
+              [ Opcodes.throw, 0 ],
+            [ Opcodes.end ]
+          );
+
           // Set throw_requested flag (offset 60) and store throw value (offset 64, 72)
           out.push(
             [ Opcodes.local_get, genLocal ],
@@ -8631,8 +8650,10 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // This ensures TDZ errors are thrown at creation time, not step time
         wasm.push(...prefaceWasm);
 
-        // Calculate allocation size: base 44 bytes + 12 bytes per param (8 for f64 + 4 for type)
-        const genAllocSize = 44 + userParams.length * 12;
+        // Calculate allocation size: base 80 bytes + 12 bytes per param (8 for f64 + 4 for type)
+        // Base layout: state(8) + indirect(8) + value(8) + valueType(4) + done(4) + input(8) + inputType(4) +
+        //              return_requested(4) + return_value(8) + return_type(4) + throw_requested(4) + throw_value(8) + throw_type(4) + padding(4) = 80
+        const genAllocSize = 80 + userParams.length * 12;
 
         // Check if this is creation call (gen local is 0) or step call
         wasm.push(
@@ -8664,9 +8685,21 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
             number(0, Valtype.i32),
             [ Opcodes.i32_store, 0, 28 ],
 
-            // Store user parameters in generator object (starting at offset 44)
+            // Store return_requested=0 at offset 44
+            [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+            Opcodes.i32_to_u,
+            number(0, Valtype.i32),
+            [ Opcodes.i32_store, 0, 44 ],
+
+            // Store throw_requested=0 at offset 60
+            [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+            Opcodes.i32_to_u,
+            number(0, Valtype.i32),
+            [ Opcodes.i32_store, 0, 60 ],
+
+            // Store user parameters in generator object (starting at offset 80)
             ...userParams.flatMap((paramName, i) => {
-              const paramOffset = 44 + i * 12;
+              const paramOffset = 80 + i * 12;
               const local = func.locals[paramName];
               if (!local) return []; // skip if param not found
               return [
@@ -8708,9 +8741,9 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           [ Opcodes.f64_convert_i32_s ],
           [ Opcodes.local_set, func.locals['#generator_input_type'].idx ],
 
-          // Restore user parameters from generator object (starting at offset 44)
+          // Restore user parameters from generator object (starting at offset 80)
           ...userParams.flatMap((paramName, i) => {
-            const paramOffset = 44 + i * 12;
+            const paramOffset = 80 + i * 12;
             const local = func.locals[paramName];
             if (!local) return []; // skip if param not found
             return [
