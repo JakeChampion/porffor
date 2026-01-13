@@ -162,6 +162,10 @@ local.set ${obj}`;
         const proto: object = {};
         __Porffor_object_fastAdd(underlying, 'prototype', proto, 0b1000);
         __Porffor_object_fastAdd(proto, 'constructor', _obj, 0b1010);
+      } else if ((__Porffor_funcLut_flags(_obj) & 0b100) != 0) { // generator
+        // generator functions have a prototype property but aren't constructors
+        const proto: object = {};
+        __Porffor_object_fastAdd(underlying, 'prototype', proto, 0b1000);
       }
 
       // set %TypedArray% as prototype for TypedArray constructors

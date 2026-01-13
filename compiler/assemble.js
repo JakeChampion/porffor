@@ -222,6 +222,7 @@ export default (funcs, globals, tags, pages, data, noTreeshake = false) => {
       let flags = 0b00000000; // 8 flag bits
       if (func.returnType != null) flags |= 0b01;
       if (func.constr) flags |= 0b10;
+      if (func.generator) flags |= 0b100; // bit 2: generator
       bytes.push(flags);
 
       let name = func.name;

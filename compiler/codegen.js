@@ -1012,16 +1012,31 @@ const generateYield = (scope, decl) => {
     ];
   }
 
-  // hack: `yield* foo` -> `yield foo[0]`
-  if (decl.delegate) arg = {
-    type: 'MemberExpression',
-    object: arg,
-    property: {
-      type: 'Literal',
-      value: 0
-    },
-    computed: true
-  };
+  // yield* delegation: iterate and yield each value
+  if (decl.delegate) {
+    // Transform `yield* iterable` into `for (const #x of iterable) yield #x;`
+    const delegateVar = `#yield_delegate_${uniqId()}`;
+    return generate(scope, {
+      type: 'ForOfStatement',
+      left: {
+        type: 'VariableDeclaration',
+        kind: 'const',
+        declarations: [{
+          type: 'VariableDeclarator',
+          id: { type: 'Identifier', name: delegateVar }
+        }]
+      },
+      right: arg,
+      body: {
+        type: 'ExpressionStatement',
+        expression: {
+          type: 'YieldExpression',
+          argument: { type: 'Identifier', name: delegateVar },
+          delegate: false
+        }
+      }
+    });
+  }
 
   // Runtime yield counting:
   // - Increment yields_seen for each yield encountered
@@ -8396,7 +8411,11 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // Counter-based state machine generator:
         // - Creation call (gen local is 0): allocate generator, store state=0, return
         // - Step call (gen is passed): load state, run body, yields check state
-        const bodyWasm = wasm;
+
+        // Separate preface (param init) from body - preface must run before creation check
+        // for proper default parameter evaluation and TDZ errors
+        const prefaceWasm = preface;
+        const pureBodyWasm = wasm.slice(preface.length); // body without preface
         wasm = [];
 
         const indirectIndex = func.wrapperFunc?.indirectIndex ?? 0;
@@ -8410,6 +8429,10 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // Get user parameter names (from AST params, not args which includes #this)
         const userParams = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern')
           .map(p => p.type === 'Identifier' ? p.name : p.left.name);
+
+        // Run preface (parameter initialization including defaults) BEFORE creation check
+        // This ensures TDZ errors are thrown at creation time, not step time
+        wasm.push(...prefaceWasm);
 
         // Calculate allocation size: base 44 bytes + 12 bytes per param (8 for f64 + 4 for type)
         const genAllocSize = 44 + userParams.length * 12;
@@ -8512,7 +8535,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           [ Opcodes.local_set, func.locals['#yields_seen'].idx ],
 
           // Run body - yields will check yields_seen > state and return when matched
-          ...bodyWasm
+          ...pureBodyWasm
         );
       } else if (func.async) {
         // make promise at the start
