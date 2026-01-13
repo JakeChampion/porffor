@@ -1023,23 +1023,61 @@ const generateYield = (scope, decl) => {
     computed: true
   };
 
-  // Eager evaluation: push value to generator array and continue
-  // Use the fastPush approach which stores yields sequentially
-  // RETURN_MARKER sentinel in builtins distinguishes return values from yields
+  // Counter-based state machine yield:
+  // - Check if state matches this yield's number
+  // - If yes: store value, increment state, return
+  // - If no: skip (yield expression = input value from next())
+  //
+  // Generator memory layout:
+  // - offset 0-7: state (f64)
+  // - offset 8-15: indirect index (f64)
+  // - offset 16-23: yielded value (f64)
+  // - offset 24-27: yielded value type (i32)
+  // - offset 28-31: done flag (i32)
+  const yieldState = decl._yieldState ?? 0;
+
   return [
-    // Push yielded value to generator array
-    [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
-    number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32),
+    // Check if state == yieldState
+    [ Opcodes.local_get, scope.locals['#generator_state'].idx ],
+    number(yieldState),
+    [ Opcodes.f64_eq ],
+    [ Opcodes.if, Blocktype.void ],
+      // State matches - this is the yield we should execute
 
-    ...generate(scope, arg),
-    ...getNodeType(scope, arg),
+      // Store yielded value at offset 16
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      ...generate(scope, arg),
+      [ Opcodes.f64_store, 0, 16 ],
 
-    [ Opcodes.call, includeBuiltin(scope, '__Porffor_array_fastPush').index ],
-    [ Opcodes.drop ],
+      // Store type at offset 24
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      ...getNodeType(scope, arg),
+      [ Opcodes.i32_store, 0, 24 ],
 
-    // yield expression value is undefined (can't receive values in eager mode)
-    number(UNDEFINED),
-    ...setLastType(scope, TYPES.undefined)
+      // Store done=0 at offset 28
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      number(0, Valtype.i32),
+      [ Opcodes.i32_store, 0, 28 ],
+
+      // Increment state and store at offset 0
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      number(yieldState + 1),
+      [ Opcodes.f64_store, 0, 0 ],
+
+      // Return generator
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      ...(scope.returnType != null ? [] : [ number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
+      [ Opcodes.return ],
+    [ Opcodes.end ],
+
+    // State didn't match - we're resuming past this yield
+    // Yield expression value = input value from next()
+    [ Opcodes.local_get, scope.locals['#generator_input'].idx ],
+    ...getType(scope, '#generator_input')
   ];
 };
 
@@ -1047,16 +1085,29 @@ const generateReturn = (scope, decl) => {
   const arg = decl.argument ?? DEFAULT_VALUE();
 
   if (scope.generator) {
-    // Call __Porffor_Generator_return to properly mark done=true
-    // This sets gen[0] = returnValue, gen[1] = 1 (done marker)
+    // Store return value and mark done=true
+    // Generator memory layout:
+    // - offset 16-23: return value (f64)
+    // - offset 24-27: return value type (i32)
+    // - offset 28-31: done flag (i32, 1=done)
     return [
+      // Store return value at offset 16
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
-      number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32),
-
+      Opcodes.i32_to_u,
       ...generate(scope, arg),
-      ...getNodeType(scope, arg),
+      [ Opcodes.f64_store, 0, 16 ],
 
-      [ Opcodes.call, includeBuiltin(scope, scope.async ? '__Porffor_AsyncGenerator_return' : '__Porffor_Generator_return').index ],
+      // Store type at offset 24
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      ...getNodeType(scope, arg),
+      [ Opcodes.i32_store, 0, 24 ],
+
+      // Store done=1 at offset 28
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      number(1, Valtype.i32),
+      [ Opcodes.i32_store, 0, 28 ],
 
       // return the generator object
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
@@ -3010,12 +3061,101 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
         });
       }
 
-      // TODO: Future state machine support for generator.next() via call_indirect
-      // For now, use eager evaluation which works correctly for most cases
-      // True suspend/resume would require:
-      // 1. Store indirect index in generator during creation
-      // 2. Override protoBC[TYPES.__porffor_generator] to use call_indirect
-      // 3. Modify generator body to use state machine (if-chain/br_table)
+      // Override generator.next() to use call_indirect for state machine support
+      if (protoName === 'next' && protoBC[TYPES.__porffor_generator]) {
+        protoBC[TYPES.__porffor_generator] = () => {
+          // Generator memory layout:
+          // - offset 0-7: state (f64)
+          // - offset 8-15: indirect index (f64)
+          // - offset 16-23: yielded value (f64)
+          // - offset 24-27: yielded value type (i32)
+          // - offset 28-31: done flag (i32)
+          // - offset 32-39: input value (f64)
+          // - offset 40-43: input value type (i32)
+          const out = [];
+          const genLocal = localTmp(scope, '#gen_next_gen');
+          const inputLocal = localTmp(scope, '#gen_next_input');
+          const inputTypeLocal = localTmp(scope, '#gen_next_input_type', Valtype.i32);
+
+          // Get generator
+          out.push(
+            [ Opcodes.local_get, localTmp(scope, '#proto_target') ],
+            [ Opcodes.local_set, genLocal ]
+          );
+
+          // Get input value (first argument to next(), or undefined)
+          if (decl.arguments.length > 0) {
+            out.push(
+              ...generate(scope, decl.arguments[0]),
+              [ Opcodes.local_set, inputLocal ],
+              ...getNodeType(scope, decl.arguments[0]),
+              [ Opcodes.local_set, inputTypeLocal ]
+            );
+          } else {
+            out.push(
+              number(UNDEFINED),
+              [ Opcodes.local_set, inputLocal ],
+              number(TYPES.undefined, Valtype.i32),
+              [ Opcodes.local_set, inputTypeLocal ]
+            );
+          }
+
+          // Check if NOT already done (offset 28) - if not done, run the generator
+          out.push(
+            [ Opcodes.local_get, genLocal ],
+            Opcodes.i32_to_u,
+            [ Opcodes.i32_load, 0, 28 ],
+            [ Opcodes.i32_eqz ], // not done
+            [ Opcodes.if, Blocktype.void ],
+              // Store input value in generator object (offset 32-39 value, 40-43 type)
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              [ Opcodes.local_get, inputLocal ],
+              [ Opcodes.f64_store, 0, 32 ],
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              [ Opcodes.local_get, inputTypeLocal ],
+              [ Opcodes.i32_store, 0, 40 ],
+
+              // Call the generator function via call_indirect
+              // Stack order: argc, newTarget, newTargetType, this, thisType, args..., funcIndex
+              // Wrapper functions expect wrapperArgc + 2 pairs (18 by default)
+              number(0, Valtype.i32), // argc = 0
+              number(0), // newTarget = undefined
+              number(TYPES.undefined, Valtype.i32), // newTargetType
+              [ Opcodes.local_get, genLocal ], // this = generator
+              number(TYPES.__porffor_generator, Valtype.i32), // thisType
+              // Pad with undefined for remaining wrapperArgc args
+              ...(new Array(Prefs.indirectWrapperArgc ?? 16).fill(0).flatMap(() => [
+                number(UNDEFINED), number(TYPES.undefined, Valtype.i32)
+              ])),
+              // Get indirect function index from generator (offset 8)
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              [ Opcodes.f64_load, 0, 8 ],
+              Opcodes.i32_trunc_sat_f64_u,
+              [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ], // wrapperArgc + 2 pairs
+              [ Opcodes.drop ],
+              [ Opcodes.drop ],
+            [ Opcodes.end ]
+          );
+
+          // Call the builtin to read values and return result object
+          out.push(
+            ...generate(scope, {
+              type: 'CallExpression',
+              callee: { type: 'Identifier', name: '__Porffor_Generator_prototype_next' },
+              arguments: [
+                { type: 'Identifier', name: '#proto_target' },
+                ...(decl.arguments.length > 0 ? decl.arguments : [{ type: 'Identifier', name: 'undefined' }])
+              ],
+              _protoInternalCall: true
+            })
+          );
+
+          return out;
+        };
+      }
 
       protoBC.default = decl.optional ?
         withType(scope, [ number(UNDEFINED) ], TYPES.undefined) :
@@ -8090,6 +8230,9 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
 
         // Add state local for state machine tracking
         allocVar(func, '#generator_state', false, false);
+
+        // Add input value local for values passed to next()
+        allocVar(func, '#generator_input', false, false);
       }
 
       if (func.async && !func.generator) {
@@ -8161,40 +8304,106 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       } else {
         // add end empty return if not found
         if (wasm[wasm.length - 1]?.[0] !== Opcodes.return) {
-          wasm.push([ Opcodes.drop ]);
-
           if (func.generator) {
-            // for generators without explicit return, just return the generator with all yielded values
+            // Drop both value and type from last expression
+            wasm.push([ Opcodes.drop ], [ Opcodes.drop ]);
+            // Implicit return at end of generator - mark done with undefined value
             wasm.push(
+              // Store undefined at offset 16
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              Opcodes.i32_to_u,
+              number(UNDEFINED),
+              [ Opcodes.f64_store, 0, 16 ],
+
+              // Store type undefined at offset 24
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              Opcodes.i32_to_u,
+              number(TYPES.undefined, Valtype.i32),
+              [ Opcodes.i32_store, 0, 24 ],
+
+              // Store done=1 at offset 28
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              Opcodes.i32_to_u,
+              number(1, Valtype.i32),
+              [ Opcodes.i32_store, 0, 28 ],
+
+              // return the generator object
               [ Opcodes.local_get, func.locals['#generator_out'].idx ],
               ...(func.returnType != null ? [] : [ number(func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
               [ Opcodes.return ]
             );
           } else {
+            // Drop value from last expression (type is handled by generateReturn)
+            wasm.push([ Opcodes.drop ]);
             wasm.push(...generateReturn(func, {}));
           }
         }
       }
 
       if (func.generator) {
-        // Eager evaluation generator implementation:
-        // - Run body eagerly, push all yields to array
-        // - next() shifts from array
-        // Note: State machine infrastructure (collectYields, funcRef) is in place
-        // for future suspend/resume support via call_indirect
+        // Counter-based state machine generator:
+        // - Creation call (gen local is 0): allocate generator, store state=0, return
+        // - Step call (gen is passed): load state, run body, yields check state
         const bodyWasm = wasm;
         wasm = [];
 
-        // Create generator and run body eagerly
-        wasm.push(
-          number(pageSize, Valtype.i32),
-          [ Opcodes.call, includeBuiltin(func, '__Porffor_malloc').index ],
-          Opcodes.i32_from_u,
-          number(TYPES.array, Valtype.i32),
-          [ Opcodes.call, includeBuiltin(func, func.async ? '__Porffor_AsyncGenerator' : '__Porffor_Generator').index ],
-          [ Opcodes.local_set, func.locals['#generator_out'].idx ],
+        const indirectIndex = func.wrapperFunc?.indirectIndex ?? 0;
 
-          // Run body eagerly - all yields push to the array
+        // Copy #this to #generator_out (on step call, #this is the generator object)
+        wasm.push(
+          [ Opcodes.local_get, func.locals['#this'].idx ],
+          [ Opcodes.local_set, func.locals['#generator_out'].idx ]
+        );
+
+        // Check if this is creation call (gen local is 0) or step call
+        wasm.push(
+          [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.i32_eqz ],
+          [ Opcodes.if, Blocktype.void ],
+            // Creation call: allocate generator object
+            number(64, Valtype.i32), // 64 bytes for generator state
+            [ Opcodes.call, includeBuiltin(func, '__Porffor_malloc').index ],
+            Opcodes.i32_from_u,
+            [ Opcodes.local_set, func.locals['#generator_out'].idx ],
+
+            // Store state=0 at offset 0
+            [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+            Opcodes.i32_to_u,
+            number(0),
+            [ Opcodes.f64_store, 0, 0 ],
+
+            // Store indirect index at offset 8
+            [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+            Opcodes.i32_to_u,
+            number(indirectIndex),
+            [ Opcodes.f64_store, 0, 8 ],
+
+            // Store done=0 at offset 28
+            [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+            Opcodes.i32_to_u,
+            number(0, Valtype.i32),
+            [ Opcodes.i32_store, 0, 28 ],
+
+            // Return the generator object (don't run body yet)
+            [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+            ...(func.returnType != null ? [] : [ number(func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
+            [ Opcodes.return ],
+          [ Opcodes.end ],
+
+          // Step call: load state from generator
+          [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.f64_load, 0, 0 ],
+          [ Opcodes.local_set, func.locals['#generator_state'].idx ],
+
+          // Load input value from generator (offset 32-39 value, 40-43 type)
+          [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.f64_load, 0, 32 ],
+          [ Opcodes.local_set, func.locals['#generator_input'].idx ],
+
+          // Run body - yields will check state and return when matched
           ...bodyWasm
         );
       } else if (func.async) {
@@ -8248,6 +8457,9 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       for (const x of types) typeUsed(func, x);
     }
   }
+
+  // Generators need to receive #this (generator object on step calls)
+  if (decl.generator) func.method = true;
 
   const args = [];
   if (func.constr) args.push({ name: '#newtarget' }, { name: '#this' });

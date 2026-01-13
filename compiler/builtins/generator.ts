@@ -1,51 +1,43 @@
 import type {} from './porffor.d.ts';
 
-// Eager evaluation generator model:
-// Generator is an array of yielded values
-// Each yield pushes to the array, next() shifts from it
+// Counter-based state machine generator model:
+// Generator memory layout:
+// - offset 0-7: state (f64)
+// - offset 8-15: indirect index (f64)
+// - offset 16-23: yielded value (f64)
+// - offset 24-27: yielded value type (i32)
+// - offset 28-31: done flag (i32)
+// - offset 32-39: input value from next() (f64)
+// - offset 40-43: input value type (i32)
 
 export const __Porffor_Generator = (values: any[]): __Porffor_Generator => {
   return values as __Porffor_Generator;
 };
 
 export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any) => {
+  // This is called after call_indirect has been done by codegen.js
+  // Just read the values from the generator object and return result
   const obj: object = {};
 
-  // Check if there are remaining values
-  const len: i32 = gen.length;
+  // Read yielded value from generator object
+  // Generator memory layout:
+  // - offset 16-23: yielded value (f64)
+  // - offset 24-27: yielded value type (i32)
+  // - offset 28-31: done flag (i32)
+  const value: f64 = Porffor.wasm.f64.load(gen, 0, 16);
+  const isDone: i32 = Porffor.wasm.i32.load(gen, 0, 28);
 
-  if (len == 0) {
-    // No more values - done
-    obj.value = undefined;
-    obj.done = true;
-    return obj;
-  }
-
-  // Shift first value from array
-  const value: any = gen.shift();
-
-  // Check if this is the return marker (-9007199254740991)
-  // If so, the next value is the return value with done=true
-  if (value == RETURN_MARKER) {
-    // Next value is the return value
-    if (gen.length > 0) {
-      obj.value = gen.shift();
-    } else {
-      obj.value = undefined;
-    }
-    obj.done = true;
-    return obj;
-  }
-
+  // Just assign value directly - type will be number
+  // TODO: In the future, preserve the actual type from the generator
   obj.value = value;
-  obj.done = false;
+  obj.done = isDone != 0;
 
   return obj;
 };
 
 export const __Porffor_Generator_prototype_return = (gen: any[], value: any) => {
-  // Clear any remaining values
-  gen.length = 0;
+  // Mark as done and store return value
+  Porffor.wasm.i32.store(gen, 1, 0, 28); // done = 1
 
   const obj: object = {};
   obj.value = value;
@@ -54,8 +46,8 @@ export const __Porffor_Generator_prototype_return = (gen: any[], value: any) => 
 };
 
 export const __Porffor_Generator_prototype_throw = (gen: any[], value: any) => {
-  // Clear any remaining values
-  gen.length = 0;
+  // Mark as done
+  Porffor.wasm.i32.store(gen, 1, 0, 28); // done = 1
   throw value;
 };
 
