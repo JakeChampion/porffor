@@ -1023,26 +1023,37 @@ const generateYield = (scope, decl) => {
     computed: true
   };
 
-  // Counter-based state machine yield:
-  // - Check if state matches this yield's number
-  // - If yes: store value, increment state, return
-  // - If no: skip (yield expression = input value from next())
+  // Runtime yield counting:
+  // - Increment yields_seen for each yield encountered
+  // - If yields_seen > state: this is the next yield to execute
+  // - Update state to yields_seen, store value, return
+  // - If yields_seen <= state: skip (already yielded this one)
   //
   // Generator memory layout:
-  // - offset 0-7: state (f64)
+  // - offset 0-7: state (f64) - number of yields executed so far
   // - offset 8-15: indirect index (f64)
   // - offset 16-23: yielded value (f64)
   // - offset 24-27: yielded value type (i32)
   // - offset 28-31: done flag (i32)
-  const yieldState = decl._yieldState ?? 0;
 
   return [
-    // Check if state == yieldState
+    // Increment yields_seen
+    [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
+    number(1),
+    [ Opcodes.f64_add ],
+    [ Opcodes.local_tee, scope.locals['#yields_seen'].idx ],
+
+    // Check if yields_seen > state (this yield should execute)
     [ Opcodes.local_get, scope.locals['#generator_state'].idx ],
-    number(yieldState),
-    [ Opcodes.f64_eq ],
+    [ Opcodes.f64_gt ],
     [ Opcodes.if, Blocktype.void ],
-      // State matches - this is the yield we should execute
+      // This is the yield to execute
+
+      // Update state to yields_seen (store at offset 0)
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
+      [ Opcodes.f64_store, 0, 0 ],
 
       // Store yielded value at offset 16
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
@@ -1062,22 +1073,17 @@ const generateYield = (scope, decl) => {
       number(0, Valtype.i32),
       [ Opcodes.i32_store, 0, 28 ],
 
-      // Increment state and store at offset 0
-      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
-      Opcodes.i32_to_u,
-      number(yieldState + 1),
-      [ Opcodes.f64_store, 0, 0 ],
-
       // Return generator
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       ...(scope.returnType != null ? [] : [ number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
       [ Opcodes.return ],
     [ Opcodes.end ],
 
-    // State didn't match - we're resuming past this yield
+    // yields_seen <= state - we've already yielded this one, skip
     // Yield expression value = input value from next()
     [ Opcodes.local_get, scope.locals['#generator_input'].idx ],
-    ...getType(scope, '#generator_input')
+    // Input from next() is typically undefined, set type accordingly
+    ...setLastType(scope, TYPES.undefined)
   ];
 };
 
@@ -8270,6 +8276,9 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // Add state local for state machine tracking
         allocVar(func, '#generator_state', false, false);
 
+        // Add yields_seen counter for runtime yield counting
+        allocVar(func, '#yields_seen', false, false);
+
         // Add input value local for values passed to next()
         allocVar(func, '#generator_input', false, false);
       }
@@ -8344,8 +8353,8 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // add end empty return if not found
         if (wasm[wasm.length - 1]?.[0] !== Opcodes.return) {
           if (func.generator) {
-            // Drop both value and type from last expression
-            wasm.push([ Opcodes.drop ], [ Opcodes.drop ]);
+            // Drop value from last expression (type is in #last_type, not on stack)
+            wasm.push([ Opcodes.drop ]);
             // Implicit return at end of generator - mark done with undefined value
             wasm.push(
               // Store undefined at offset 16
@@ -8394,6 +8403,13 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           [ Opcodes.local_set, func.locals['#generator_out'].idx ]
         );
 
+        // Get user parameter names (from AST params, not args which includes #this)
+        const userParams = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern')
+          .map(p => p.type === 'Identifier' ? p.name : p.left.name);
+
+        // Calculate allocation size: base 44 bytes + 12 bytes per param (8 for f64 + 4 for type)
+        const genAllocSize = 44 + userParams.length * 12;
+
         // Check if this is creation call (gen local is 0) or step call
         wasm.push(
           [ Opcodes.local_get, func.locals['#generator_out'].idx ],
@@ -8401,7 +8417,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           [ Opcodes.i32_eqz ],
           [ Opcodes.if, Blocktype.void ],
             // Creation call: allocate generator object
-            number(64, Valtype.i32), // 64 bytes for generator state
+            number(genAllocSize, Valtype.i32),
             [ Opcodes.call, includeBuiltin(func, '__Porffor_malloc').index ],
             Opcodes.i32_from_u,
             [ Opcodes.local_set, func.locals['#generator_out'].idx ],
@@ -8424,6 +8440,25 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
             number(0, Valtype.i32),
             [ Opcodes.i32_store, 0, 28 ],
 
+            // Store user parameters in generator object (starting at offset 44)
+            ...userParams.flatMap((paramName, i) => {
+              const paramOffset = 44 + i * 12;
+              const local = func.locals[paramName];
+              if (!local) return []; // skip if param not found
+              return [
+                // Store value at paramOffset
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                [ Opcodes.local_get, local.idx ],
+                [ Opcodes.f64_store, 0, paramOffset ],
+                // Store type at paramOffset + 8
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                [ Opcodes.local_get, local.idx + 1 ],
+                [ Opcodes.i32_store, 0, paramOffset + 8 ]
+              ];
+            }),
+
             // Return the generator object (don't run body yet)
             [ Opcodes.local_get, func.locals['#generator_out'].idx ],
             ...(func.returnType != null ? [] : [ number(func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
@@ -8442,7 +8477,30 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           [ Opcodes.f64_load, 0, 32 ],
           [ Opcodes.local_set, func.locals['#generator_input'].idx ],
 
-          // Run body - yields will check state and return when matched
+          // Restore user parameters from generator object (starting at offset 44)
+          ...userParams.flatMap((paramName, i) => {
+            const paramOffset = 44 + i * 12;
+            const local = func.locals[paramName];
+            if (!local) return []; // skip if param not found
+            return [
+              // Load value from paramOffset
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              Opcodes.i32_to_u,
+              [ Opcodes.f64_load, 0, paramOffset ],
+              [ Opcodes.local_set, local.idx ],
+              // Load type from paramOffset + 8
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              Opcodes.i32_to_u,
+              [ Opcodes.i32_load, 0, paramOffset + 8 ],
+              [ Opcodes.local_set, local.idx + 1 ]
+            ];
+          }),
+
+          // Initialize yields_seen counter to 0
+          number(0),
+          [ Opcodes.local_set, func.locals['#yields_seen'].idx ],
+
+          // Run body - yields will check yields_seen > state and return when matched
           ...bodyWasm
         );
       } else if (func.async) {
