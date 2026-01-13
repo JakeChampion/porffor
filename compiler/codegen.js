@@ -3010,6 +3010,13 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
         });
       }
 
+      // TODO: Future state machine support for generator.next() via call_indirect
+      // For now, use eager evaluation which works correctly for most cases
+      // True suspend/resume would require:
+      // 1. Store indirect index in generator during creation
+      // 2. Override protoBC[TYPES.__porffor_generator] to use call_indirect
+      // 3. Modify generator body to use state machine (if-chain/br_table)
+
       protoBC.default = decl.optional ?
         withType(scope, [ number(UNDEFINED) ], TYPES.undefined) :
         (Prefs.neverFallbackBuiltinProto ?
@@ -8170,71 +8177,26 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       }
 
       if (func.generator) {
-        // State machine generator implementation:
-        // - Creation call: this is undefined, create generator and return
-        // - Step call (from next via call_indirect): this is the generator, execute state machine
-        const generatorType = func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator;
-        const yieldCount = func._yieldCount ?? 0;
-
-        // Get indirect index for storing in generator
-        const indirectIndex = func.wrapperFunc?.indirectIndex ?? 0;
-
-        // Wrap body in state machine: check if this is creation or step call
+        // Eager evaluation generator implementation:
+        // - Run body eagerly, push all yields to array
+        // - next() shifts from array
+        // Note: State machine infrastructure (collectYields, funcRef) is in place
+        // for future suspend/resume support via call_indirect
         const bodyWasm = wasm;
         wasm = [];
 
-        // Check if this (first param for methods) is a generator - if so, it's a step call
-        // For creation call, this is undefined/global
-        const thisLocal = func.locals['#this']?.idx;
-        const thisTypeLocal = func.locals['#this#type']?.idx;
+        // Create generator and run body eagerly
+        wasm.push(
+          number(pageSize, Valtype.i32),
+          [ Opcodes.call, includeBuiltin(func, '__Porffor_malloc').index ],
+          Opcodes.i32_from_u,
+          number(TYPES.array, Valtype.i32),
+          [ Opcodes.call, includeBuiltin(func, func.async ? '__Porffor_AsyncGenerator' : '__Porffor_Generator').index ],
+          [ Opcodes.local_set, func.locals['#generator_out'].idx ],
 
-        if (thisLocal !== undefined && thisTypeLocal !== undefined) {
-          // Check if this is a generator type (step call from next via call_indirect)
-          wasm.push(
-            [ Opcodes.local_get, thisTypeLocal ],
-            number(generatorType, Valtype.i32),
-            [ Opcodes.i32_eq ],
-            [ Opcodes.if, Blocktype.void ],
-              // Step call: this is the generator, execute from current state
-              [ Opcodes.local_get, thisLocal ],
-              [ Opcodes.local_set, func.locals['#generator_out'].idx ],
-
-              // TODO: Load state and use br_table for state machine
-              // For now, this path won't be taken until next() uses call_indirect
-
-              // Execute body (for now, just run it - will add state machine later)
-              ...bodyWasm,
-
-            [ Opcodes.else ],
-              // Creation call: create generator and run body eagerly
-              number(pageSize, Valtype.i32),
-              [ Opcodes.call, includeBuiltin(func, '__Porffor_malloc').index ],
-              Opcodes.i32_from_u,
-              number(TYPES.array, Valtype.i32),
-              [ Opcodes.call, includeBuiltin(func, func.async ? '__Porffor_AsyncGenerator' : '__Porffor_Generator').index ],
-              [ Opcodes.local_set, func.locals['#generator_out'].idx ],
-
-              // Run body eagerly (current behavior until next() uses call_indirect)
-              ...bodyWasm,
-            [ Opcodes.end ],
-
-            // Fallback return (unreachable, but needed for stack balance)
-            [ Opcodes.local_get, func.locals['#generator_out'].idx ],
-            number(generatorType, Valtype.i32),
-            [ Opcodes.return ]
-          );
-        } else {
-          // Fallback: no this parameter, use eager evaluation
-          wasm.push(
-            number(pageSize, Valtype.i32),
-            [ Opcodes.call, includeBuiltin(func, '__Porffor_malloc').index ],
-            Opcodes.i32_from_u,
-            number(TYPES.array, Valtype.i32),
-            [ Opcodes.call, includeBuiltin(func, func.async ? '__Porffor_AsyncGenerator' : '__Porffor_Generator').index ],
-            [ Opcodes.local_set, func.locals['#generator_out'].idx ],
-            ...bodyWasm
-          );
-        }
+          // Run body eagerly - all yields push to the array
+          ...bodyWasm
+        );
       } else if (func.async) {
         // make promise at the start
         wasm.unshift(
