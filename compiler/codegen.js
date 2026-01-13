@@ -5790,6 +5790,12 @@ const generateForOf = (scope, decl) => {
         Opcodes.i32_to_u,
         [ Opcodes.local_set, length ]
       ] ],
+      [ TYPES.__porffor_generator, () => [
+        // For generators, we don't know length upfront - use dummy value
+        // The nextWasm case will check the done flag instead
+        number(1, Valtype.i32),
+        [ Opcodes.local_set, length ]
+      ] ],
       [ 'default', () => [
         // For other types, length is at offset 0
         [ Opcodes.local_get, pointer ],
@@ -6001,37 +6007,70 @@ const generateForOf = (scope, decl) => {
       [ Opcodes.i64_load, 0, 4 ],
       [ Opcodes.call, includeBuiltin(scope, '__Porffor_bigint_fromU64').index ]
     ], 8, TYPES.bigint) ],
-    [ TYPES.__porffor_generator, () => [
-      // generators are arrays of yielded values (eager evaluation)
-      // iterate like arrays
-      // if remaining length == 0 then break
-      [ Opcodes.local_get, length ],
-      [ Opcodes.i32_eqz ],
-      [ Opcodes.br_if, depth.length - prevDepth ],
+    [ TYPES.__porffor_generator, () => {
+      // Generator iteration via call_indirect
+      // Generator memory layout:
+      // - offset 0-7: state (f64)
+      // - offset 8-15: indirect index (f64)
+      // - offset 16-23: yielded value (f64)
+      // - offset 24-27: yielded value type (i32)
+      // - offset 28-31: done flag (i32)
+      // - offset 32-39: input value (f64)
+      // - offset 40-43: input value type (i32)
 
-      // get value
-      [ Opcodes.local_get, pointer ],
-      [ Opcodes.load, 0, ...unsignedLEB128(ValtypeSize.i32) ],
+      const wrapperArgc = Prefs.indirectWrapperArgc ?? 16;
 
-      // get type
-      [ Opcodes.local_get, pointer ],
-      [ Opcodes.i32_load8_u, 0, ...unsignedLEB128(ValtypeSize.i32 + ValtypeSize[valtype]) ],
+      return [
+        // Check if already done (offset 28) - if so, break
+        [ Opcodes.local_get, pointer ],
+        [ Opcodes.i32_load, 0, 28 ],
+        [ Opcodes.br_if, depth.length - prevDepth ],
 
-      // increment iter pointer by valtype size + 1
-      [ Opcodes.local_get, pointer ],
-      number(ValtypeSize[valtype] + 1, Valtype.i32),
-      [ Opcodes.i32_add ],
-      [ Opcodes.local_set, pointer ],
+        // Store undefined as input value (offset 32-39 value, 40-43 type)
+        [ Opcodes.local_get, pointer ],
+        number(UNDEFINED),
+        [ Opcodes.f64_store, 0, 32 ],
+        [ Opcodes.local_get, pointer ],
+        number(TYPES.undefined, Valtype.i32),
+        [ Opcodes.i32_store, 0, 40 ],
 
-      // decrement remaining length by 1
-      [ Opcodes.local_get, length ],
-      number(1, Valtype.i32),
-      [ Opcodes.i32_sub ],
-      [ Opcodes.local_set, length ],
+        // Call the generator function via call_indirect
+        // Stack order: argc, newTarget, newTargetType, this, thisType, args..., funcIndex
+        number(0, Valtype.i32), // argc = 0
+        number(0), // newTarget = undefined
+        number(TYPES.undefined, Valtype.i32), // newTargetType
+        [ Opcodes.local_get, pointer ],
+        Opcodes.i32_from_u, // this = generator (convert i32 pointer to f64)
+        number(TYPES.__porffor_generator, Valtype.i32), // thisType
 
-      // set type
-      ...setLastType(scope)
-    ] ],
+        // Pad with undefined for remaining wrapperArgc args
+        ...(new Array(wrapperArgc).fill(0).flatMap(() => [
+          number(UNDEFINED), number(TYPES.undefined, Valtype.i32)
+        ])),
+
+        // Get indirect function index from generator (offset 8)
+        [ Opcodes.local_get, pointer ],
+        [ Opcodes.f64_load, 0, 8 ],
+        Opcodes.i32_trunc_sat_f64_u,
+        [ Opcodes.call_indirect, wrapperArgc + 2, 0 ],
+        [ Opcodes.drop ],
+        [ Opcodes.drop ],
+
+        // Check done flag again - if now done, break (don't yield final undefined)
+        [ Opcodes.local_get, pointer ],
+        [ Opcodes.i32_load, 0, 28 ],
+        [ Opcodes.br_if, depth.length - prevDepth ],
+
+        // Read yielded value from generator (offset 16)
+        [ Opcodes.local_get, pointer ],
+        [ Opcodes.f64_load, 0, 16 ],
+
+        // Read yielded type from generator (offset 24)
+        [ Opcodes.local_get, pointer ],
+        [ Opcodes.i32_load, 0, 24 ],
+        [ Opcodes.local_set, localTmp(scope, '#last_type', Valtype.i32) ]
+      ];
+    } ],
 
     [ TYPES.__porffor_wrapperiterator, () => [
       // WrapperIterator is stored as array: [iterable, index]
