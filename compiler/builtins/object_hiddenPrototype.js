@@ -20,10 +20,18 @@ export const __Porffor_object_getHiddenPrototype = (trueType: i32): any => {
       trueType == Porffor.TYPES.boolean,
       trueType == Porffor.TYPES.booleanobject
     )) return __Boolean_prototype;
+  }
+
+  if (Porffor.comptime.flag\`hasFunc.#get___Porffor_Generator_prototype\`) {
+    if (trueType == Porffor.TYPES.__porffor_generator) return __Porffor_Generator_prototype;
+  }
+
+  if (Porffor.comptime.flag\`hasFunc.#get___Porffor_AsyncGenerator_prototype\`) {
+    if (trueType == Porffor.TYPES.__porffor_asyncgenerator) return __Porffor_AsyncGenerator_prototype;
   }`;
 
   for (const x in TYPES) {
-    if (['object', 'undefined', 'string', 'bytestring', 'stringobject', 'number', 'numberobject', 'boolean', 'booleanobject'].includes(x)) continue;
+    if (['object', 'undefined', 'string', 'bytestring', 'stringobject', 'number', 'numberobject', 'boolean', 'booleanobject', '__porffor_generator', '__porffor_asyncgenerator'].includes(x)) continue;
 
     const name = TYPE_NAMES[TYPES[x]];
     out += `
