@@ -1024,10 +1024,10 @@ const generateYield = (scope, decl) => {
   };
 
   // Eager evaluation: push value to generator array and continue
-  // (doesn't support receiving values via next(), but basic iteration works)
+  // Use the fastPush approach which stores yields sequentially
+  // RETURN_MARKER sentinel in builtins distinguishes return values from yields
   return [
-    // Push yielded value to generator array using fastPush pattern
-    // Generator is stored as an array, so we append {value, done:false} info
+    // Push yielded value to generator array
     [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
     number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32),
 
@@ -8073,6 +8073,16 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // This allows yield expressions to access func.wrapperFunc.indirectIndex
         funcRef(func);
         funcs.table = true;
+
+        // For state machine: collect yields and assign state numbers
+        const yields = collectYields(body);
+        for (let i = 0; i < yields.length; i++) {
+          yields[i]._yieldState = i;
+        }
+        func._yieldCount = yields.length;
+
+        // Add state local for state machine tracking
+        allocVar(func, '#generator_state', false, false);
       }
 
       if (func.async && !func.generator) {
