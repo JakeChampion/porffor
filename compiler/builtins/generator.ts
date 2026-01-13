@@ -13,6 +13,7 @@ export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any) 
 
   // Check if there are remaining values
   const len: i32 = gen.length;
+
   if (len == 0) {
     // No more values - done
     obj.value = undefined;
@@ -22,6 +23,20 @@ export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any) 
 
   // Shift first value from array
   const value: any = gen.shift();
+
+  // Check if this is the return marker (-9007199254740991)
+  // If so, the next value is the return value with done=true
+  if (value == RETURN_MARKER) {
+    // Next value is the return value
+    if (gen.length > 0) {
+      obj.value = gen.shift();
+    } else {
+      obj.value = undefined;
+    }
+    obj.done = true;
+    return obj;
+  }
+
   obj.value = value;
   obj.done = false;
 
@@ -44,25 +59,21 @@ export const __Porffor_Generator_prototype_throw = (gen: any[], value: any) => {
   throw value;
 };
 
-// Called by return statement in generator - pushes final value with done marker
-// We use a special object to mark this as the final value
-export const __Porffor_Generator_return = (gen: any[], value: any): void => {
-  // For eager evaluation, we need to mark the generator as done
-  // We'll push a special sentinel and the value
-  // Actually, for simplicity, just clear and set length to a negative (impossible) value
-  // which next() can check
+// Called by return statement in generator - appends return value with marker
+// For eager evaluation: yields are already in the array, append return marker at end
+// Layout after return: [yields..., RETURN_MARKER, returnValue]
+// We use -1 as RETURN_MARKER since it's unlikely to be a user value
+const RETURN_MARKER: f64 = -9007199254740991; // -(2^53 - 1), unlikely user value
 
-  // Clear remaining yields and push the return value
-  gen.length = 0;
-  // Store return value at index 0 with a marker at index 1
-  gen[0] = value;
-  gen[1] = 1; // done marker
+export const __Porffor_Generator_return = (gen: any[], value: any): void => {
+  // Append return marker and value at the end (after any yields)
+  Porffor.array.fastPush(gen, RETURN_MARKER);
+  Porffor.array.fastPush(gen, value);
 };
 
 export const __Porffor_AsyncGenerator_return = (gen: any[], value: any): void => {
-  gen.length = 0;
-  gen[0] = value;
-  gen[1] = 1; // done marker
+  Porffor.array.fastPush(gen, RETURN_MARKER);
+  Porffor.array.fastPush(gen, value);
 };
 
 
@@ -75,6 +86,7 @@ export const __Porffor_AsyncGenerator_prototype_next = async (gen: any[], inputV
   const obj: object = {};
 
   const len: i32 = gen.length;
+
   if (len == 0) {
     obj.value = undefined;
     obj.done = true;
@@ -82,6 +94,18 @@ export const __Porffor_AsyncGenerator_prototype_next = async (gen: any[], inputV
   }
 
   const value: any = gen.shift();
+
+  // Check if this is the return marker
+  if (value == RETURN_MARKER) {
+    if (gen.length > 0) {
+      obj.value = await gen.shift();
+    } else {
+      obj.value = undefined;
+    }
+    obj.done = true;
+    return obj;
+  }
+
   obj.value = await value;
   obj.done = false;
 

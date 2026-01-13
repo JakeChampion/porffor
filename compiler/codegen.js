@@ -1047,9 +1047,8 @@ const generateReturn = (scope, decl) => {
   const arg = decl.argument ?? DEFAULT_VALUE();
 
   if (scope.generator) {
-    // For eager evaluation: push return value to array like a yield
-    // This is not fully spec-compliant (return value should have done:true)
-    // but works for basic cases
+    // Call __Porffor_Generator_return to properly mark done=true
+    // This sets gen[0] = returnValue, gen[1] = 1 (done marker)
     return [
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32),
@@ -1057,8 +1056,7 @@ const generateReturn = (scope, decl) => {
       ...generate(scope, arg),
       ...getNodeType(scope, arg),
 
-      [ Opcodes.call, includeBuiltin(scope, '__Porffor_array_fastPush').index ],
-      [ Opcodes.drop ],
+      [ Opcodes.call, includeBuiltin(scope, scope.async ? '__Porffor_AsyncGenerator_return' : '__Porffor_Generator_return').index ],
 
       // return the generator object
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
@@ -8070,6 +8068,11 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         allocVar(func, '#generator_out', false, false);
         typeUsed(func, func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator);
         if (func.async) typeUsed(func, TYPES.promise);
+
+        // Pre-create wrapper for indirect calling before body generation
+        // This allows yield expressions to access func.wrapperFunc.indirectIndex
+        funcRef(func);
+        funcs.table = true;
       }
 
       if (func.async && !func.generator) {
