@@ -9,6 +9,14 @@ import type {} from './porffor.d.ts';
 // - offset 28-31: done flag (i32)
 // - offset 32-39: input value from next() (f64)
 // - offset 40-43: input value type (i32)
+// - offset 44-47: return requested flag (i32)
+// - offset 48-55: return value (f64)
+// - offset 56-59: return value type (i32)
+// - offset 60-63: throw requested flag (i32)
+// - offset 64-71: throw value (f64)
+// - offset 72-75: throw value type (i32)
+// - offset 76-79: reserved (alignment padding)
+// - offset 80+: stored parameters
 
 export const __Porffor_Generator = (values: any[]): __Porffor_Generator => {
   return values as __Porffor_Generator;
@@ -28,7 +36,7 @@ export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any) 
   const valueType: i32 = Porffor.wasm.i32.load(gen, 0, 24);
   const isDone: i32 = Porffor.wasm.i32.load(gen, 0, 28);
 
-  // Check the type and return appropriate value
+  // Set value - simple approach that works for most types
   if (valueType == Porffor.TYPES.undefined) {
     obj.value = undefined;
   } else {
@@ -50,8 +58,20 @@ export const __Porffor_Generator_prototype_return = (gen: any[], value: any) => 
 };
 
 export const __Porffor_Generator_prototype_throw = (gen: any[], value: any) => {
-  // Mark as done
-  Porffor.wasm.i32.store(gen, 1, 0, 28); // done = 1
+  // Check if generator is already done
+  const isDone: i32 = Porffor.wasm.i32.load(gen, 0, 28);
+  if (isDone != 0) {
+    // Generator is already done, just throw the exception
+    throw value;
+  }
+
+  // Set throw_requested flag and store throw value
+  Porffor.wasm.i32.store(gen, 1, 0, 60); // throw_requested = 1
+  Porffor.wasm.f64.store(gen, value, 0, 64); // throw value
+  Porffor.wasm.i32.store(gen, Porffor.type(value), 0, 72); // throw value type
+
+  // The actual throwing will be done by codegen in the next step call
+  // For now, throw immediately - codegen will add proper try/catch handling later
   throw value;
 };
 

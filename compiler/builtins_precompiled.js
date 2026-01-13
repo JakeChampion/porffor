@@ -2106,9 +2106,9 @@ params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
 locals:[124,127,124,124,124,124],localNames:["gen","gen#type","value","value#type","obj","#member_setter_ptr_tmp","#member_obj_301","#member_prop_301","#member_obj_302","#member_prop_302"]
 }
 x.__Porffor_Generator_prototype_throw={
-wasm:()=>eval("[[32,0],[252,2],[65,1],[54,0,28],[32,2],[32,3],[8,0],[26],[68,0],[65,0],[15]]"),
+wasm:()=>eval("[[32,0],[252,2],[40,0,28],[183],[34,4],[68,0],[98],[4,64],[32,2],[32,3],[8,0],[26],[11],[32,0],[252,2],[65,1],[54,0,60],[32,0],[252,2],[32,2],[57,0,64],[32,0],[252,2],[32,3],[54,0,72],[32,2],[32,3],[8,0],[26],[68,0],[65,0],[15]]"),
 params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
-locals:[],localNames:["gen","gen#type","value","value#type"],
+locals:[124],localNames:["gen","gen#type","value","value#type","isDone"],
 usesTag:1
 }
 x.__Porffor_Generator_return={
