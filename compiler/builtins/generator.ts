@@ -24,12 +24,16 @@ export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any) 
   // - offset 16-23: yielded value (f64)
   // - offset 24-27: yielded value type (i32)
   // - offset 28-31: done flag (i32)
-  const value: f64 = Porffor.wasm.f64.load(gen, 0, 16);
+  const rawValue: f64 = Porffor.wasm.f64.load(gen, 0, 16);
+  const valueType: i32 = Porffor.wasm.i32.load(gen, 0, 24);
   const isDone: i32 = Porffor.wasm.i32.load(gen, 0, 28);
 
-  // Just assign value directly - type will be number
-  // TODO: In the future, preserve the actual type from the generator
-  obj.value = value;
+  // Check the type and return appropriate value
+  if (valueType == Porffor.TYPES.undefined) {
+    obj.value = undefined;
+  } else {
+    obj.value = rawValue;
+  }
   obj.done = isDone != 0;
 
   return obj;

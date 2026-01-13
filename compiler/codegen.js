@@ -1082,8 +1082,10 @@ const generateYield = (scope, decl) => {
     // yields_seen <= state - we've already yielded this one, skip
     // Yield expression value = input value from next()
     [ Opcodes.local_get, scope.locals['#generator_input'].idx ],
-    // Input from next() is typically undefined, set type accordingly
-    ...setLastType(scope, TYPES.undefined)
+    // Set type from the stored input type
+    [ Opcodes.local_get, scope.locals['#generator_input_type'].idx ],
+    Opcodes.i32_trunc_sat_f64_s,
+    [ Opcodes.local_set, localTmp(scope, '#last_type', Valtype.i32) ]
   ];
 };
 
@@ -8281,6 +8283,8 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
 
         // Add input value local for values passed to next()
         allocVar(func, '#generator_input', false, false);
+        // Add input type local (i32 type stored as f64 for simplicity)
+        allocVar(func, '#generator_input_type', false, false);
       }
 
       if (func.async && !func.generator) {
@@ -8476,6 +8480,13 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           Opcodes.i32_to_u,
           [ Opcodes.f64_load, 0, 32 ],
           [ Opcodes.local_set, func.locals['#generator_input'].idx ],
+
+          // Load input type from generator (offset 40-43)
+          [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.i32_load, 0, 40 ],
+          [ Opcodes.f64_convert_i32_s ],
+          [ Opcodes.local_set, func.locals['#generator_input_type'].idx ],
 
           // Restore user parameters from generator object (starting at offset 44)
           ...userParams.flatMap((paramName, i) => {
