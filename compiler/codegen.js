@@ -8494,6 +8494,11 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         typeUsed(func, func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator);
         if (func.async) typeUsed(func, TYPES.promise);
 
+        // Include generator prototype so Object.getPrototypeOf works
+        // This ensures hasFunc('#get___Porffor_Generator_prototype') returns true
+        // in __Porffor_object_getHiddenPrototype
+        includeBuiltin(func, func.async ? '#get___Porffor_AsyncGenerator_prototype' : '#get___Porffor_Generator_prototype');
+
         // Pre-create wrapper for indirect calling before body generation
         // This allows yield expressions to access func.wrapperFunc.indirectIndex
         funcRef(func);
