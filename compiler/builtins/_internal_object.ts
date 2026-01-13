@@ -171,10 +171,15 @@ local.set ${obj}`;
         // Object layout: offset 4 = prototype ptr, offset 3 = prototype type
         if ((flags & 0b1000) != 0) { // async generator (bit 3)
           Porffor.wasm.i32.store(proto, __Porffor_AsyncGenerator_prototype, 0, 4);
+          // Set generator function's [[Prototype]] to AsyncGenerator (%AsyncGeneratorFunction%.prototype)
+          Porffor.wasm.i32.store(underlying, __AsyncGenerator, 0, 4);
         } else { // sync generator
           Porffor.wasm.i32.store(proto, __Porffor_Generator_prototype, 0, 4);
+          // Set generator function's [[Prototype]] to Generator (%GeneratorFunction%.prototype)
+          Porffor.wasm.i32.store(underlying, __Generator, 0, 4);
         }
         Porffor.wasm.i32.store8(proto, Porffor.TYPES.object, 0, 3);
+        Porffor.wasm.i32.store8(underlying, Porffor.TYPES.object, 0, 3);
         __Porffor_object_fastAdd(underlying, 'prototype', proto, 0b1000);
       }
 

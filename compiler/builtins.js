@@ -435,6 +435,35 @@ export const BuiltinVars = ({ builtinFuncs }) => {
     object(x, props, toStringTag);
   }
 
+  // Generator is %GeneratorFunction%.prototype - the [[Prototype]] of generator functions
+  // It has a .prototype property pointing to GeneratorPrototype
+  // Symbol.toStringTag is "GeneratorFunction" per spec
+  object('__Generator', {
+    prototype: {
+      value: (scope, { builtin }) => [
+        [ Opcodes.call, builtin('#get___Porffor_Generator_prototype') ],
+        Opcodes.i32_from_u
+      ],
+      writable: false,
+      enumerable: false,
+      configurable: true
+    }
+  }, 'GeneratorFunction');
+  _['__Generator_prototype'].type = TYPES.object;
+
+  // AsyncGenerator is %AsyncGeneratorFunction%.prototype
+  object('__AsyncGenerator', {
+    prototype: {
+      value: (scope, { builtin }) => [
+        [ Opcodes.call, builtin('#get___Porffor_AsyncGenerator_prototype') ],
+        Opcodes.i32_from_u
+      ],
+      writable: false,
+      enumerable: false,
+      configurable: true
+    }
+  }, 'AsyncGeneratorFunction');
+  _['__AsyncGenerator_prototype'].type = TYPES.object;
 
   object('Number', {
     ...props({
