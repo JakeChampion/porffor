@@ -1244,14 +1244,18 @@ const generateYield = (scope, decl) => {
       [ Opcodes.i32_store, 0, slotOffset + 8 ],
 
       // Check throw_requested (offset 60)
+      // Value 1 = throw at this resume point, Value 2 = pending exception (don't throw here)
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
       [ Opcodes.i32_load, 0, 60 ],
+      number(1, Valtype.i32),
+      [ Opcodes.i32_eq ], // Only throw if throw_requested == 1
       [ Opcodes.if, Blocktype.void ],
-        // Clear throw_requested flag
+        // If inside try-finally, set to 2 (pending) instead of clearing
+        // This preserves the exception for rethrowing after finally
         [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
         Opcodes.i32_to_u,
-        number(0, Valtype.i32),
+        number(scope._inTryFinally ? 2 : 0, Valtype.i32),
         [ Opcodes.i32_store, 0, 60 ],
 
         // Throw the stored exception (offset 64 = value, offset 72 = type)
@@ -3356,26 +3360,67 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               [ Opcodes.local_get, inputTypeLocal ],
               [ Opcodes.i32_store, 0, 40 ],
 
-              // Call the generator function via call_indirect
-              // Stack order: argc, newTarget, newTargetType, this, thisType, args..., funcIndex
-              // Wrapper functions expect wrapperArgc + 2 pairs (18 by default)
-              number(0, Valtype.i32), // argc = 0
-              number(0), // newTarget = undefined
-              number(TYPES.undefined, Valtype.i32), // newTargetType
-              [ Opcodes.local_get, genLocal ], // this = generator
-              number(TYPES.__porffor_generator, Valtype.i32), // thisType
-              // Pad with undefined for remaining wrapperArgc args
-              ...(new Array(Prefs.indirectWrapperArgc ?? 16).fill(0).flatMap(() => [
-                number(UNDEFINED), number(TYPES.undefined, Valtype.i32)
-              ])),
-              // Get indirect function index from generator (offset 8)
+              // Check if generator is currently executing (offset 76)
+              // If executing, mark as done and throw TypeError
               [ Opcodes.local_get, genLocal ],
               Opcodes.i32_to_u,
-              [ Opcodes.f64_load, 0, 8 ],
-              Opcodes.i32_trunc_sat_f64_u,
-              [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ], // wrapperArgc + 2 pairs
-              [ Opcodes.drop ],
-              [ Opcodes.drop ],
+              [ Opcodes.i32_load, 0, 76 ],
+              [ Opcodes.if, Blocktype.void ],
+                // Mark as done
+                [ Opcodes.local_get, genLocal ],
+                Opcodes.i32_to_u,
+                number(1, Valtype.i32),
+                [ Opcodes.i32_store, 0, 28 ],
+                // Throw TypeError
+                ...internalThrow(scope, 'TypeError', 'Generator is already executing'),
+              [ Opcodes.end ],
+
+              // Set executing flag before calling generator
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(1, Valtype.i32),
+              [ Opcodes.i32_store, 0, 76 ],
+
+              // Call the generator function via call_indirect (wrapped in try/catch to clear executing on throw)
+              [ Opcodes.try, Blocktype.void ],
+                // Stack order: argc, newTarget, newTargetType, this, thisType, args..., funcIndex
+                // Wrapper functions expect wrapperArgc + 2 pairs (18 by default)
+                number(0, Valtype.i32), // argc = 0
+                number(0), // newTarget = undefined
+                number(TYPES.undefined, Valtype.i32), // newTargetType
+                [ Opcodes.local_get, genLocal ], // this = generator
+                number(TYPES.__porffor_generator, Valtype.i32), // thisType
+                // Pad with undefined for remaining wrapperArgc args
+                ...(new Array(Prefs.indirectWrapperArgc ?? 16).fill(0).flatMap(() => [
+                  number(UNDEFINED), number(TYPES.undefined, Valtype.i32)
+                ])),
+                // Get indirect function index from generator (offset 8)
+                [ Opcodes.local_get, genLocal ],
+                Opcodes.i32_to_u,
+                [ Opcodes.f64_load, 0, 8 ],
+                Opcodes.i32_trunc_sat_f64_u,
+                [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ], // wrapperArgc + 2 pairs
+                [ Opcodes.drop ],
+                [ Opcodes.drop ],
+                // Clear executing flag after generator returns normally
+                [ Opcodes.local_get, genLocal ],
+                Opcodes.i32_to_u,
+                number(0, Valtype.i32),
+                [ Opcodes.i32_store, 0, 76 ],
+              [ Opcodes.catch, 0 ],
+                // Clear executing flag before rethrowing
+                [ Opcodes.local_get, genLocal ],
+                Opcodes.i32_to_u,
+                number(0, Valtype.i32),
+                [ Opcodes.i32_store, 0, 76 ],
+                // Mark generator as done
+                [ Opcodes.local_get, genLocal ],
+                Opcodes.i32_to_u,
+                number(1, Valtype.i32),
+                [ Opcodes.i32_store, 0, 28 ],
+                // Rethrow
+                [ Opcodes.throw, 0 ],
+              [ Opcodes.end ],
             [ Opcodes.else ],
               // Generator is already done - set value to undefined
               [ Opcodes.local_get, genLocal ],
@@ -3451,6 +3496,23 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             [ Opcodes.end ]
           );
 
+          // Check if generator is currently executing (offset 76)
+          // Must check BEFORE suspended-start since state=0 while executing before first yield
+          out.push(
+            [ Opcodes.local_get, genLocal ],
+            Opcodes.i32_to_u,
+            [ Opcodes.i32_load, 0, 76 ],
+            [ Opcodes.if, Blocktype.void ],
+              // Mark as done
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(1, Valtype.i32),
+              [ Opcodes.i32_store, 0, 28 ],
+              // Throw TypeError
+              ...internalThrow(scope, 'TypeError', 'Generator is already executing'),
+            [ Opcodes.end ]
+          );
+
           // Check if suspended-start (state=0) - throw immediately without calling generator
           out.push(
             [ Opcodes.local_get, genLocal ],
@@ -3486,6 +3548,14 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             [ Opcodes.i32_store, 0, 72 ]
           );
 
+          // Set executing flag before calling generator
+          out.push(
+            [ Opcodes.local_get, genLocal ],
+            Opcodes.i32_to_u,
+            number(1, Valtype.i32),
+            [ Opcodes.i32_store, 0, 76 ]
+          );
+
           // Call the generator function via call_indirect (wrapped in try/catch)
           out.push(
             [ Opcodes.try, Blocktype.void ],
@@ -3506,7 +3576,17 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ],
               [ Opcodes.drop ],
               [ Opcodes.drop ],
+              // Clear executing flag after successful return
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(0, Valtype.i32),
+              [ Opcodes.i32_store, 0, 76 ],
             [ Opcodes.catch, 0 ],
+              // Clear executing flag before rethrowing
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(0, Valtype.i32),
+              [ Opcodes.i32_store, 0, 76 ],
               // Exception was not caught inside generator - mark done and rethrow
               [ Opcodes.local_get, genLocal ],
               Opcodes.i32_to_u,
@@ -3516,12 +3596,18 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             [ Opcodes.end ]
           );
 
-          // Clear throw_requested flag
+          // Only clear throw_requested flag if generator is done
+          // If generator yielded (from inside finally), keep throw_requested set for later re-throw
           out.push(
             [ Opcodes.local_get, genLocal ],
             Opcodes.i32_to_u,
-            number(0, Valtype.i32),
-            [ Opcodes.i32_store, 0, 60 ]
+            [ Opcodes.i32_load, 0, 28 ], // done flag
+            [ Opcodes.if, Blocktype.void ],
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(0, Valtype.i32),
+              [ Opcodes.i32_store, 0, 60 ],
+            [ Opcodes.end ]
           );
 
           // Call the builtin to read values and return result object
@@ -3573,6 +3659,23 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             );
           }
 
+          // Check if generator is currently executing (offset 76)
+          // Must check BEFORE done/suspended-start since state=0 while executing before first yield
+          out.push(
+            [ Opcodes.local_get, genLocal ],
+            Opcodes.i32_to_u,
+            [ Opcodes.i32_load, 0, 76 ],
+            [ Opcodes.if, Blocktype.void ],
+              // Mark as done
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(1, Valtype.i32),
+              [ Opcodes.i32_store, 0, 28 ],
+              // Throw TypeError
+              ...internalThrow(scope, 'TypeError', 'Generator is already executing'),
+            [ Opcodes.end ]
+          );
+
           // Check if already done OR in suspended-start state - if so, just return immediately
           // suspended-start means state == 0 (generator created but next() never called)
           out.push(
@@ -3588,6 +3691,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             [ Opcodes.if, Blocktype.void ],
               // Already done or suspended-start - skip to end
             [ Opcodes.else ],
+
               // Set return_requested flag (offset 44)
               [ Opcodes.local_get, genLocal ],
               Opcodes.i32_to_u,
@@ -3614,6 +3718,12 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               number(TYPES.undefined, Valtype.i32),
               [ Opcodes.i32_store, 0, 40 ],
 
+              // Set executing flag before calling generator
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(1, Valtype.i32),
+              [ Opcodes.i32_store, 0, 76 ],
+
               // Call the generator function via call_indirect to run finally blocks
               number(0, Valtype.i32), // argc = 0
               number(0), // newTarget = undefined
@@ -3630,6 +3740,12 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ],
               [ Opcodes.drop ],
               [ Opcodes.drop ],
+
+              // Clear executing flag after generator returns
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(0, Valtype.i32),
+              [ Opcodes.i32_store, 0, 76 ],
 
               // Clear return_requested flag
               [ Opcodes.local_get, genLocal ],
@@ -7240,7 +7356,8 @@ const generateTry = (scope, decl) => {
   // For generators with try/catch containing yields, we need special handling
   const tryYields = scope.generator ? countYields(decl.block) : 0;
   const catchYields = scope.generator && decl.handler ? countYields(decl.handler.body) : 0;
-  const totalYields = tryYields + catchYields;
+  const finallyYields = scope.generator && decl.finalizer ? countYields(decl.finalizer) : 0;
+  const totalYields = tryYields + catchYields + finallyYields;
   const hasFinally = decl.finalizer != null;
 
   // For generators with finally blocks containing yields, we need special handling
@@ -7257,7 +7374,7 @@ const generateTry = (scope, decl) => {
       number(totalYields),
       [ Opcodes.f64_add ],
       [ Opcodes.local_get, scope.locals['#generator_state'].idx ],
-      [ Opcodes.f64_le ],
+      [ Opcodes.f64_lt ], // Use lt (not le) - skip only if state is PAST the block, not AT the last yield
       // For finally handling, also check that return_requested is NOT set
       ...(needsGeneratorFinallyHandling ? [
         [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
@@ -7266,11 +7383,13 @@ const generateTry = (scope, decl) => {
         [ Opcodes.i32_eqz ], // only skip if return_requested is 0
         [ Opcodes.i32_and ]
       ] : []),
-      // Also check that throw_requested is NOT set - need to enter to throw at yield
+      // Also check that throw_requested is NOT 1 (throw at resume point) - need to enter to throw at yield
+      // Value 2 (pending exception) should NOT prevent skipping - we're resuming past the throw point
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
       [ Opcodes.i32_load, 0, 60 ], // throw_requested
-      [ Opcodes.i32_eqz ], // only skip if throw_requested is 0
+      number(1, Valtype.i32),
+      [ Opcodes.i32_ne ], // only skip if throw_requested != 1 (allow skip if 0 or 2)
       [ Opcodes.i32_and ],
       [ Opcodes.if, Blocktype.void ],
         // Skip the try/catch - just increment yields_seen by totalYields
@@ -7308,10 +7427,27 @@ const generateTry = (scope, decl) => {
     scope._inTryFinally = true;
   }
 
+  // For generators with finally: skip try body if throw_requested=2 (pending exception)
+  // This means we're resuming inside finally after a throw, so skip try body entirely
+  if (needsGeneratorFinallyHandling) {
+    out.push(
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      [ Opcodes.i32_load, 0, 60 ], // throw_requested
+      number(2, Valtype.i32),
+      [ Opcodes.i32_ne ], // only run try body if throw_requested != 2
+      [ Opcodes.if, Blocktype.void ]
+    );
+  }
+
   out.push(
     ...generate(scope, decl.block),
     [ Opcodes.drop ]
   );
+
+  if (needsGeneratorFinallyHandling) {
+    out.push([ Opcodes.end ]); // end if (throw_requested != 2)
+  }
 
   // Run finally inline at end of try block (for normal completion)
   out.push(...finalizer);
@@ -7440,6 +7576,35 @@ const generateTry = (scope, decl) => {
 
   // Restore inTryFinally state
   scope._inTryFinally = prevInTryFinally;
+
+  // For generators with finally blocks: after finally completes, check if there's a pending
+  // exception (throw_requested == 2) and rethrow it. This handles the case where
+  // iter.throw() triggered finally, finally yielded, and now we've resumed and completed finally.
+  if (needsGeneratorFinallyHandling) {
+    out.push(
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      [ Opcodes.i32_load, 0, 60 ], // throw_requested
+      number(2, Valtype.i32),
+      [ Opcodes.i32_eq ], // Check if pending exception (value 2)
+      [ Opcodes.if, Blocktype.void ],
+        // Clear throw_requested
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        number(0, Valtype.i32),
+        [ Opcodes.i32_store, 0, 60 ],
+        // Rethrow the stored exception
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        [ Opcodes.f64_load, 0, 64 ],
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        [ Opcodes.i32_load, 0, 72 ],
+        [ Opcodes.throw, 0 ],
+      [ Opcodes.end ]
+    );
+    ensureTag();
+  }
 
   // Close the skip-try-catch if block
   if (scope.generator && totalYields > 0 && scope.locals['#yields_seen']) {

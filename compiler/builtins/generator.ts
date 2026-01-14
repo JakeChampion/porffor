@@ -15,7 +15,7 @@ import type {} from './porffor.d.ts';
 // - offset 60-63: throw requested flag (i32)
 // - offset 64-71: throw value (f64)
 // - offset 72-75: throw value type (i32)
-// - offset 76-79: reserved (alignment padding)
+// - offset 76-79: executing flag (i32) - set while generator body is running
 // - offset 80+: stored parameters
 
 export const __Porffor_Generator = (values: any[]): __Porffor_Generator => {
@@ -32,6 +32,14 @@ export const __Porffor_Generator_validate = (gen: any): void => {
   // In Porffor, this means checking if it's a generator type
   if (Porffor.type(gen) != Porffor.TYPES.__porffor_generator) {
     throw new TypeError('Generator method called on incompatible receiver');
+  }
+  // 5. If state is "executing", throw a TypeError exception
+  // Check executing flag at offset 76
+  const executing: i32 = Porffor.wasm.i32.load(gen, 0, 76);
+  if (executing != 0) {
+    // Mark generator as completed before throwing
+    Porffor.wasm.i32.store(gen, 1, 0, 28); // done = 1
+    throw new TypeError('Generator is already executing');
   }
 };
 

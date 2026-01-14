@@ -2120,9 +2120,9 @@ params:[124,127],typedParams:1,returns:[124],returnType:35,jsLength:1,
 locals:[],localNames:["values","values#type"]
 }
 x.__Porffor_Generator_validate={
-wasm:(_,{builtin,internalThrow})=>eval("[[32,0],[252,2],[32,1],[16,builtin('__Porffor_object_isObjectOrSymbol')],[183],[68,0],[97],[4,64],...internalThrow(_,'TypeError',`Generator method called on incompatible receiver`),[26],[11],[32,1],[184],[68,35],[98],[4,64],...internalThrow(_,'TypeError',`Generator method called on incompatible receiver`),[26],[11],[15]]"),
+wasm:(_,{builtin,internalThrow})=>eval("[[32,0],[252,2],[32,1],[16,builtin('__Porffor_object_isObjectOrSymbol')],[183],[68,0],[97],[4,64],...internalThrow(_,'TypeError',`Generator method called on incompatible receiver`),[26],[11],[32,1],[184],[68,35],[98],[4,64],...internalThrow(_,'TypeError',`Generator method called on incompatible receiver`),[26],[11],[32,0],[252,2],[40,0,76],[183],[34,2],[68,0],[98],[4,64],[32,0],[252,2],[65,1],[54,0,28],...internalThrow(_,'TypeError',`Generator is already executing`),[26],[11],[15]]"),
 params:[124,127],typedParams:1,returns:[],returnType:0,jsLength:1,
-locals:[],localNames:["gen","gen#type"],
+locals:[124],localNames:["gen","gen#type","executing"],
 usesTag:1
 }
 x.__Porffor_Generator_getInstancePrototype={
