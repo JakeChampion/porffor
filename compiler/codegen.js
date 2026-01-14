@@ -174,20 +174,10 @@ const extractYieldsFromExpressions = (body) => {
       return;
     }
 
-    // Determine if children are in a complex context
-    // Complex contexts: spread elements, array elements (except as yield arg),
-    // object properties, binary expressions, call arguments, etc.
-    const complexContexts = [
-      'SpreadElement', 'ArrayExpression', 'ObjectExpression',
-      'BinaryExpression', 'LogicalExpression', 'ConditionalExpression',
-      'CallExpression', 'NewExpression', 'MemberExpression',
-      'TemplateLiteral', 'TaggedTemplateExpression',
-      'SequenceExpression', 'UnaryExpression', 'UpdateExpression'
-    ];
-
-    // For YieldExpression, its argument is NOT a complex context
-    // (we already handle yield yield specially)
-    let childComplexContext = inComplexContext || complexContexts.includes(node.type);
+    // Only extract yields inside SpreadElement
+    // Other contexts (arrays, conditionals, etc.) work fine with yields
+    // SpreadElement is special because the spread operation needs the complete value
+    let childComplexContext = inComplexContext || node.type === 'SpreadElement';
     if (node.type === 'YieldExpression') {
       childComplexContext = false; // argument of yield is not complex
     }
