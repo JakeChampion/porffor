@@ -205,9 +205,21 @@ export const __Porffor_object_instanceof = (obj: any, constr: any, checkProto: a
     return false;
   }
 
+  // Helper to get prototype, handling generators specially
+  const getProto = (o: any): any => {
+    const t: i32 = Porffor.type(o);
+    if (t == Porffor.TYPES.__porffor_generator) {
+      return Porffor.Generator.getInstancePrototype(o);
+    }
+    if (t == Porffor.TYPES.__porffor_asyncgenerator) {
+      return Porffor.AsyncGenerator.getInstancePrototype(o);
+    }
+    return Porffor.object.getPrototypeWithHidden(o, t);
+  };
+
   let lastProto: any = obj;
   while (true) {
-    obj = Porffor.object.getPrototypeWithHidden(obj, Porffor.type(obj));
+    obj = getProto(obj);
     if (Porffor.fastOr(obj == null, Porffor.wasm`local.get ${obj}` == Porffor.wasm`local.get ${lastProto}`)) break;
 
     if (obj === checkProto) return true;
@@ -707,7 +719,17 @@ export const __Object_groupBy = (items: any, callbackFn: any): object => {
 
 export const __Object_getPrototypeOf = (obj: any): any => {
   if (obj == null) throw new TypeError('Object is nullish, expected object');
-  return Porffor.object.getPrototypeWithHidden(obj, Porffor.type(obj));
+
+  // For generator instances, get prototype from the generator function's .prototype
+  const objType: i32 = Porffor.type(obj);
+  if (objType == Porffor.TYPES.__porffor_generator) {
+    return Porffor.Generator.getInstancePrototype(obj);
+  }
+  if (objType == Porffor.TYPES.__porffor_asyncgenerator) {
+    return Porffor.AsyncGenerator.getInstancePrototype(obj);
+  }
+
+  return Porffor.object.getPrototypeWithHidden(obj, objType);
 };
 
 export const __Object_setPrototypeOf = (obj: any, proto: any): any => {

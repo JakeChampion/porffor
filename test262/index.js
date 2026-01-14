@@ -48,8 +48,6 @@ if (cluster.isPrimary) {
     }
   }
 
-  if (!resultOnly) process.stdout.write('reading tests...');
-
   const preludes = fs.readFileSync(join(__dirname, 'harness.js'), 'utf8').split('///').reduce((acc, x) => {
     const [ k, ...content ] = x.split('\n');
     acc[k.trim()] = content.join('\n').trim() + '\n';
@@ -64,10 +62,8 @@ if (cluster.isPrimary) {
   }
   // deduplicate tests by file path
   tests = [...new Map(tests.map(t => [t.file, t])).values()];
-  if (!resultOnly) process.stdout.write(`\r${' '.repeat(60)}\rcaching tests to tmp...`);
 
   fs.writeFileSync(workerDataPath, JSON.stringify(tests, undefined, 2));
-  if (!resultOnly) process.stdout.write(`\r${' '.repeat(60)}\rstarting ${threads} runners...`);
 
   const profile = process.argv.includes('--profile');
   if (profile) process.argv.push('--profile-compiler');
@@ -76,7 +72,6 @@ if (cluster.isPrimary) {
   const profileStats = new Array(7).fill(0);
 
   const trackErrors = process.argv.includes('--errors');
-  const onlyTrackCompilerErrors = process.argv.includes('--compiler-errors-only');
   const logErrors = process.argv.includes('--log-errors');
   const dontWriteResults = process.argv.includes('--dont-write-results');
   const plainResults = process.argv.includes('--plain-results');
@@ -118,8 +113,6 @@ if (cluster.isPrimary) {
 
     return out;
   };
-
-  let spinner = ['-', '\\', '|', '/'], spin = 0;
 
   const start = performance.now();
 
@@ -255,18 +248,6 @@ if (cluster.isPrimary) {
       if (!resultOnly && !logErrors) {
         const percent = ((total / tests.length) * 100);
         if (allTests) {
-          // if (percent > lastPercent) process.stdout.write(`\r${' '.repeat(200)}\r${percent.toFixed(0).padStart(4, ' ')}% | ${file}`);
-          if (percent > lastPercent) {
-            const tab = `  ${spinner[spin++ % 4]} ${percent.toFixed(1)}%    ` +
-              table(false, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts);
-
-            process.stdout.write(
-              (lastPercent != 0 ? `` : `\r${' '.repeat(100)}\r`) +
-              bar([...noAnsi(tab)].length + 8, total, passes, fails, runtimeErrors + timeouts, compileErrors + wasmErrors, 0) +
-              '\n' + tab + '\n'
-            );
-            lastPercent = percent + 0.1;
-          }
         } else {
           process.stdout.write(`\r${' '.repeat(100)}\r${percent.toFixed(0).padStart(4, ' ')}% | ${runIconTable[result]} ${file}\n`);
 
@@ -295,8 +276,6 @@ if (cluster.isPrimary) {
   const percent = parseFloat(((passes / total) * 100).toFixed(2));
   const percentChange = parseFloat((percent - lastCommitResults[0]).toFixed(2));
 
-  if (minimal) process.exit();
-
   if (resultOnly) {
     process.stdout.write(`test262: ${percent.toFixed(2)}%${percentChange !== 0 ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''} | `);
     console.log(table(true, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts));
@@ -306,14 +285,7 @@ if (cluster.isPrimary) {
   if (allTests) process.stdout.write('');
   else console.log();
 
-  const nextMinorPercent = parseFloat(((Math.floor(percent * 10) / 10) + 0.1).toFixed(1));
-  const nextMajorPercent = Math.floor(percent) + 1;
-
-  const togo = next => `${Math.floor((total * next / 100) - passes)} to go until ${next}%`;
-
-  const whatTestsLabel = whatTests.length === 1 && whatTests[0] === '' ? '' : whatTests.join(', ');
   const isFullRun = whatTests.length === 1 && whatTests[0] === '';
-  console.log(`${whatTestsLabel || 'test262'}: ${passes}/${total} passed - ${percent.toFixed(2)}%${isFullRun && percentChange !== 0 ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''} (${togo(nextMinorPercent)}, ${togo(nextMajorPercent)})`);
   const tab = table(isFullRun, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts);
   console.log(bar([...noAnsi(tab)].length + 10, total, passes, fails, runtimeErrors + timeouts, compileErrors + wasmErrors, 0));
   process.stdout.write('  ');
@@ -322,17 +294,6 @@ if (cluster.isPrimary) {
   console.log();
 
   if (isFullRun) {
-    for (const dir of dirs.keys()) {
-      const results = dirs.get(dir);
-      process.stdout.write(' '.repeat(6) + dir + ' '.repeat(14 - dir.length));
-
-      const [ total, pass, todo, wasmError, compileError, fail, timeout, runtimeError ] = results;
-      console.log(bar(120, total, pass, fail, runtimeError + timeout, compileError + wasmError, 0));
-      process.stdout.write(' '.repeat(6) + ' '.repeat(14 + 2));
-      console.log(table(false, total, pass, fail, runtimeError, wasmError, compileError, timeout, todo));
-      console.log();
-    }
-
     if (lastResults.compileErrors) console.log(`\n\nnew compile errors\n${compileErrorFiles.filter(x => !lastResults.compileErrors.includes(x)).join('\n')}\n\n`);
     if (lastResults.wasmErrors) console.log(`new wasm errors\n${wasmErrorFiles.filter(x => !lastResults.wasmErrors.includes(x)).join('\n')}\n\n`);
 

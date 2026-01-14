@@ -4665,6 +4665,7 @@ const memberTmpNames = scope => {
 };
 
 // todo: generate this array procedurally
+// Note: 'caller' and 'arguments' are handled separately with own-property checks
 const builtinPrototypeGets = ['size', 'description', 'byteLength', 'byteOffset', 'buffer', 'detached', 'resizable', 'growable', 'maxByteLength', 'name', 'message', 'constructor', 'source', 'flags', 'global', 'ignoreCase', 'multiline', 'dotAll', 'unicode', 'sticky', 'hasIndices', 'unicodeSets', 'lastIndex'];
 
 const ctHash = prop => {
@@ -4960,6 +4961,95 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
       [ Opcodes.end ],
       ...optional(number(UNDEFINED), valueUnused)
     ];
+  }
+
+  // Handle Function.prototype.caller and Function.prototype.arguments setters
+  // Only apply when object is a function AND doesn't have an own property
+  if (type === 'MemberExpression' && (decl.left.property.name === 'caller' || decl.left.property.name === 'arguments') && !decl._internalAssign) {
+    const propName = decl.left.property.name;
+    const setterName = '__Function_prototype_' + propName + '$set';
+    const objectType = getNodeType(scope, decl.left.object);
+    const known = knownType(scope, objectType);
+
+    // For known non-function types, skip this handler entirely
+    if (known != null && known !== TYPES.function) {
+      // Fall through to normal member assignment
+    } else {
+      // For function types or unknown types, we need runtime checks
+      const slow = generate(scope, {
+        ...decl,
+        _internalAssign: true
+      });
+
+      // Check: is it a function AND doesn't have own property?
+      // If yes, call the throwing setter. Otherwise, use normal assignment.
+      const hasOwnCheck = generate(scope, {
+        type: 'CallExpression',
+        callee: {
+          type: 'MemberExpression',
+          object: decl.left.object,
+          property: { type: 'Identifier', name: 'hasOwnProperty' },
+          computed: false
+        },
+        arguments: [{ type: 'Literal', value: propName }]
+      });
+
+      const setterCall = generate(scope, {
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: setterName },
+        arguments: [ decl.left.object, decl.right ],
+        _protoInternalCall: true
+      });
+
+      // Condition: type == function && !hasOwnProperty(propName)
+      if (valueUnused) {
+        return [
+          ...objectType,
+          number(TYPES.function, Valtype.i32),
+          [ Opcodes.i32_eq ],
+          [ Opcodes.if, Blocktype.void ],
+            // It's a function, check if it has own property
+            ...hasOwnCheck,
+            Opcodes.i32_to_u,
+            [ Opcodes.i32_eqz ], // !hasOwnProperty
+            [ Opcodes.if, Blocktype.void ],
+              // No own property, call the throwing setter
+              ...setterCall,
+              [ Opcodes.drop ],
+            [ Opcodes.else ],
+              // Has own property, use normal assignment
+              ...slow,
+              [ Opcodes.drop ],
+            [ Opcodes.end ],
+          [ Opcodes.else ],
+            // Not a function, use normal assignment
+            ...slow,
+            [ Opcodes.drop ],
+          [ Opcodes.end ],
+          number(UNDEFINED)
+        ];
+      } else {
+        return [
+          ...objectType,
+          number(TYPES.function, Valtype.i32),
+          [ Opcodes.i32_eq ],
+          [ Opcodes.if, valtypeBinary ],
+            ...hasOwnCheck,
+            Opcodes.i32_to_u,
+            [ Opcodes.i32_eqz ],
+            [ Opcodes.if, valtypeBinary ],
+              ...setterCall,
+              [ Opcodes.drop ],
+              number(UNDEFINED),
+            [ Opcodes.else ],
+              ...slow,
+            [ Opcodes.end ],
+          [ Opcodes.else ],
+            ...slow,
+          [ Opcodes.end ]
+        ];
+      }
+    }
   }
 
   // arr[i]
@@ -7349,6 +7439,66 @@ const generateMember = (scope, decl, _global, _name) => {
   const { objectTmp, propertyTmp, objectGet, propertyGet } = memberTmpNames(scope);
   const type = getNodeType(scope, object);
   const known = knownType(scope, type);
+
+  // Handle Function.prototype.caller and Function.prototype.arguments getters
+  // These need own-property checks because classes can have static getters with these names
+  if ((decl.property.name === 'caller' || decl.property.name === 'arguments') && !decl.computed && !decl._skipCallerArgumentsCheck) {
+    const propName = decl.property.name;
+    const getterName = '__Function_prototype_' + propName + '$get';
+
+    // For known non-function types, skip this handler
+    if (known != null && known !== TYPES.function) {
+      // Fall through to normal property lookup
+    } else {
+      // Check: is it a function AND doesn't have own property?
+      const hasOwnCheck = generate(scope, {
+        type: 'CallExpression',
+        callee: {
+          type: 'MemberExpression',
+          object: object,
+          property: { type: 'Identifier', name: 'hasOwnProperty' },
+          computed: false
+        },
+        arguments: [{ type: 'Literal', value: propName }]
+      });
+
+      const getterCall = generate(scope, {
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: getterName },
+        arguments: [ object ],
+        _protoInternalCall: true
+      });
+
+      // Normal property access for when it has own property
+      const normalAccess = generate(scope, {
+        ...decl,
+        _skipCallerArgumentsCheck: true
+      });
+
+      // Condition: type == function && !hasOwnProperty(propName) -> call throwing getter
+      return [
+        ...type,
+        number(TYPES.function, Valtype.i32),
+        [ Opcodes.i32_eq ],
+        [ Opcodes.if, valtypeBinary ],
+          // It's a function, check if it has own property
+          ...hasOwnCheck,
+          Opcodes.i32_to_u,
+          [ Opcodes.i32_eqz ], // !hasOwnProperty
+          [ Opcodes.if, valtypeBinary ],
+            // No own property, call the throwing getter
+            ...getterCall,
+          [ Opcodes.else ],
+            // Has own property, use normal access
+            ...normalAccess,
+          [ Opcodes.end ],
+        [ Opcodes.else ],
+          // Not a function, use normal access
+          ...normalAccess,
+        [ Opcodes.end ]
+      ];
+    }
+  }
 
   if (builtinPrototypeGets.includes(decl.property.name)) {
     // todo: support optional

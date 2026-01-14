@@ -40,3 +40,21 @@ export const __Function_prototype_bind = (_this: Function, thisArg: any, argsArr
   // todo: no good way to bind without dynamic functions or closure yet, just return function
   return _this;
 };
+
+// ES Spec: Function.prototype.caller and Function.prototype.arguments are
+// poisoned accessors that throw TypeError when accessed (10.2.4)
+export const __Function_prototype_caller$get = (_this: Function): any => {
+  throw new TypeError("'caller' is restricted and cannot be accessed in this context");
+};
+
+export const __Function_prototype_caller$set = (_this: Function, value: any): void => {
+  throw new TypeError("'caller' is restricted and cannot be accessed in this context");
+};
+
+export const __Function_prototype_arguments$get = (_this: Function): any => {
+  throw new TypeError("'arguments' is restricted and cannot be accessed in this context");
+};
+
+export const __Function_prototype_arguments$set = (_this: Function, value: any): void => {
+  throw new TypeError("'arguments' is restricted and cannot be accessed in this context");
+};

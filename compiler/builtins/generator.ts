@@ -22,6 +22,35 @@ export const __Porffor_Generator = (values: any[]): __Porffor_Generator => {
   return values as __Porffor_Generator;
 };
 
+// Get the prototype of a generator instance from its generator function's .prototype
+export const __Porffor_Generator_getInstancePrototype = (gen: any): any => {
+  // Read the function indirect index from generator object offset 8
+  const funcIdx: f64 = Porffor.wasm.f64.load(gen, 0, 8);
+  // Convert to function type
+  let func: any = funcIdx;
+  Porffor.wasm`i32.const 6
+local.set ${func+1}`; // Set type to function (6)
+  // Access the function's .prototype property
+  // Per spec 9.1.14: if prototype is not an object, use intrinsic default
+  const proto: any = func.prototype;
+  if (Porffor.object.isObject(proto)) return proto;
+  // Fall back to intrinsic generator prototype via hidden prototype system
+  return __Porffor_object_getHiddenPrototype(Porffor.TYPES.__porffor_generator);
+};
+
+// Get the prototype of an async generator instance
+export const __Porffor_AsyncGenerator_getInstancePrototype = (gen: any): any => {
+  const funcIdx: f64 = Porffor.wasm.f64.load(gen, 0, 8);
+  let func: any = funcIdx;
+  Porffor.wasm`i32.const 6
+local.set ${func+1}`;
+  // Per spec 9.1.14: if prototype is not an object, use intrinsic default
+  const proto: any = func.prototype;
+  if (Porffor.object.isObject(proto)) return proto;
+  // Fall back to intrinsic async generator prototype via hidden prototype system
+  return __Porffor_object_getHiddenPrototype(Porffor.TYPES.__porffor_asyncgenerator);
+};
+
 export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any) => {
   // This is called after call_indirect has been done by codegen.js
   // Just read the values from the generator object and return result
