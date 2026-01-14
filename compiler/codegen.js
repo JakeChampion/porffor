@@ -1053,11 +1053,9 @@ const generateYield = (scope, decl) => {
     });
   }
 
-  // Runtime yield counting:
-  // - Increment yields_seen for each yield encountered
-  // - If yields_seen > state: this is the next yield to execute
-  // - Update state to yields_seen, store value, return
-  // - If yields_seen <= state: skip (already yielded this one)
+  // Runtime yield counting with support for nested yields:
+  // For `yield yield 1`, the inner yield must complete first, then the outer yield.
+  // We evaluate the argument first (which may contain yields), then check if we should yield.
   //
   // Generator memory layout:
   // - offset 0-7: state (f64) - number of yields executed so far
@@ -1066,8 +1064,19 @@ const generateYield = (scope, decl) => {
   // - offset 24-27: yielded value type (i32)
   // - offset 28-31: done flag (i32)
 
+  // First, evaluate the argument (may contain inner yields that suspend)
+  // Store in a temp so we can use it after the yield check
+  const argTmp = localTmp(scope, '#yield_arg_tmp');
+  const argTypeTmp = localTmp(scope, '#yield_arg_type_tmp', Valtype.i32);
+
   return [
-    // Increment yields_seen
+    // Evaluate argument first - inner yields will suspend here if needed
+    ...generate(scope, arg),
+    [ Opcodes.local_set, argTmp ],
+    ...getNodeType(scope, arg),
+    [ Opcodes.local_set, argTypeTmp ],
+
+    // Now increment yields_seen for THIS yield
     [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
     number(1),
     [ Opcodes.f64_add ],
@@ -1085,16 +1094,16 @@ const generateYield = (scope, decl) => {
       [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
       [ Opcodes.f64_store, 0, 0 ],
 
-      // Store yielded value at offset 16
+      // Store yielded value at offset 16 (from temp)
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
-      ...generate(scope, arg),
+      [ Opcodes.local_get, argTmp ],
       [ Opcodes.f64_store, 0, 16 ],
 
-      // Store type at offset 24
+      // Store type at offset 24 (from temp)
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
-      ...getNodeType(scope, arg),
+      [ Opcodes.local_get, argTypeTmp ],
       [ Opcodes.i32_store, 0, 24 ],
 
       // Store done=0 at offset 28
