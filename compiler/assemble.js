@@ -443,6 +443,16 @@ export default (funcs, globals, tags, pages, data, noTreeshake = false) => {
         continue;
       }
 
+      // encode memory ops (load/store) with alignment and offset as unsigned leb128
+      // opcodes 0x28-0x3d are all load/store instructions
+      // only encode if exactly 3 elements (opcode, align, offset) - more elements means already encoded
+      if (op >= 0x28 && op <= 0x3d && o.length === 3 && (o[1] > 127 || o[2] > 127)) {
+        byte(op);
+        unsigned(o[1]); // alignment
+        unsigned(o[2]); // offset
+        continue;
+      }
+
       for (let j = 0; j < o.length; j++) {
         const x = o[j];
         if (x == null || !(x <= 0xff)) continue;

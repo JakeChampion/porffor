@@ -1136,12 +1136,15 @@ const generateYield = (scope, decl) => {
   // - offset 60: throw_requested (i32)
   // - offset 64-71: throw value (f64)
   // - offset 72-75: throw type (i32)
-  // - offset 80+: yield input slots (12 bytes each: 8 bytes value + 4 bytes type)
+  // - offset 80+: user parameters (12 bytes each: 8 bytes value + 4 bytes type)
+  // - offset 80 + userParams*12: yield input slots (12 bytes each)
   //   Each yield stores the input value received when resuming at that point
 
   // Get the compile-time yield state for memory slot calculation
   const yieldState = decl._yieldState ?? 0;
-  const slotOffset = 80 + yieldState * 12; // 12 bytes per slot: 8 (f64) + 4 (i32)
+  // Yield slots start AFTER user params (which also use offset 80+)
+  const userParamsCount = scope._userParamsCount ?? 0;
+  const slotOffset = 80 + userParamsCount * 12 + yieldState * 12; // 12 bytes per slot: 8 (f64) + 4 (i32)
 
   // First, evaluate the argument (may contain inner yields that suspend)
   // Store in a temp so we can use it after the yield check
@@ -8773,6 +8776,10 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         }
         func._yieldCount = yields.length;
 
+        // Store user params count for yield slot offset calculation in generateYield
+        const userParamsCount = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern').length;
+        func._userParamsCount = userParamsCount;
+
         // Add state local for state machine tracking
         allocVar(func, '#generator_state', false, false);
 
@@ -8917,10 +8924,12 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // This ensures TDZ errors are thrown at creation time, not step time
         wasm.push(...prefaceWasm);
 
-        // Calculate allocation size: base 80 bytes + 12 bytes per param (8 for f64 + 4 for type)
+        // Calculate allocation size: base 80 bytes + 12 bytes per param + 12 bytes per yield slot
         // Base layout: state(8) + indirect(8) + value(8) + valueType(4) + done(4) + input(8) + inputType(4) +
         //              return_requested(4) + return_value(8) + return_type(4) + throw_requested(4) + throw_value(8) + throw_type(4) + padding(4) = 80
-        const genAllocSize = 80 + userParams.length * 12;
+        // Then: user params (12 bytes each), then yield input slots (12 bytes each)
+        const yieldCount = func._yieldCount ?? 0;
+        const genAllocSize = 80 + userParams.length * 12 + yieldCount * 12;
 
         // Check if this is creation call (gen local is 0) or step call
         wasm.push(
