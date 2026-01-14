@@ -3573,13 +3573,20 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             );
           }
 
-          // Check if already done - if so, just return immediately
+          // Check if already done OR in suspended-start state - if so, just return immediately
+          // suspended-start means state == 0 (generator created but next() never called)
           out.push(
             [ Opcodes.local_get, genLocal ],
             Opcodes.i32_to_u,
-            [ Opcodes.i32_load, 0, 28 ],
+            [ Opcodes.i32_load, 0, 28 ],    // Load done flag
+            [ Opcodes.local_get, genLocal ],
+            Opcodes.i32_to_u,
+            [ Opcodes.f64_load, 0, 0 ],     // Load state (f64 at offset 0)
+            number(0),
+            [ Opcodes.f64_eq ],              // state == 0?
+            [ Opcodes.i32_or ],              // done || (state == 0)
             [ Opcodes.if, Blocktype.void ],
-              // Already done - skip to end
+              // Already done or suspended-start - skip to end
             [ Opcodes.else ],
               // Set return_requested flag (offset 44)
               [ Opcodes.local_get, genLocal ],
@@ -7243,7 +7250,8 @@ const generateTry = (scope, decl) => {
   if (scope.generator && totalYields > 0 && scope.locals['#yields_seen']) {
     // Check if we should skip the entire try/catch block
     // Skip if yields_seen + totalYields <= state (we've already passed this block)
-    // BUT: if return_requested is set and we have finally, we must NOT skip - check below
+    // BUT: if return_requested is set and we have finally, we must NOT skip
+    // AND: if throw_requested is set, we must NOT skip - we need to enter to throw at the yield
     out.push(
       [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
       number(totalYields),
@@ -7258,6 +7266,12 @@ const generateTry = (scope, decl) => {
         [ Opcodes.i32_eqz ], // only skip if return_requested is 0
         [ Opcodes.i32_and ]
       ] : []),
+      // Also check that throw_requested is NOT set - need to enter to throw at yield
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      [ Opcodes.i32_load, 0, 60 ], // throw_requested
+      [ Opcodes.i32_eqz ], // only skip if throw_requested is 0
+      [ Opcodes.i32_and ],
       [ Opcodes.if, Blocktype.void ],
         // Skip the try/catch - just increment yields_seen by totalYields
         [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
@@ -9764,7 +9778,11 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
       __BigUint64Array_prototype_reduceRight: 1,
       __BigUint64Array_prototype_set: 1,
       __BigUint64Array_prototype_some: 1,
-      __BigUint64Array_prototype_copyWithin: 2
+      __BigUint64Array_prototype_copyWithin: 2,
+      // Generator prototype methods: _skipValidation param should not count
+      __Porffor_Generator_prototype_next: 1,
+      __Porffor_Generator_prototype_return: 1,
+      __Porffor_Generator_prototype_throw: 1
     })[name] ?? jsLength;
   }
 
