@@ -132,6 +132,86 @@ const arrowsUseArguments = (node) => {
   return false;
 };
 
+// Transform yields in complex expression contexts to extracted temp variables
+// e.g., `yield [...yield]` becomes `const _t = yield; yield [..._t]`
+// This is needed because our runtime can't preserve expression context across yields
+let extractYieldCounter = 0;
+const extractYieldsFromExpressions = (body) => {
+  const extractions = []; // { stmt, insertBefore }
+
+  const visit = (node, parent, key, inComplexContext = false) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        visit(node[i], node, i, inComplexContext);
+      }
+      return;
+    }
+
+    // Don't descend into nested functions
+    if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+        node.type === 'ArrowFunctionExpression') return;
+
+    // Check if this is a yield in a complex context that needs extraction
+    if (node.type === 'YieldExpression' && inComplexContext && parent) {
+      // Extract this yield into a temp variable
+      const tmpName = `#yield_extract_${extractYieldCounter++}`;
+      const tmpDecl = {
+        type: 'VariableDeclaration',
+        kind: 'const',
+        declarations: [{
+          type: 'VariableDeclarator',
+          id: { type: 'Identifier', name: tmpName },
+          init: { ...node } // Copy the yield expression
+        }]
+      };
+
+      // Replace the yield with the temp variable reference
+      parent[key] = { type: 'Identifier', name: tmpName };
+
+      // Mark for insertion
+      extractions.push({ decl: tmpDecl, yieldNode: node });
+      return;
+    }
+
+    // Determine if children are in a complex context
+    // Complex contexts: spread elements, array elements (except as yield arg),
+    // object properties, binary expressions, call arguments, etc.
+    const complexContexts = [
+      'SpreadElement', 'ArrayExpression', 'ObjectExpression',
+      'BinaryExpression', 'LogicalExpression', 'ConditionalExpression',
+      'CallExpression', 'NewExpression', 'MemberExpression',
+      'TemplateLiteral', 'TaggedTemplateExpression',
+      'SequenceExpression', 'UnaryExpression', 'UpdateExpression'
+    ];
+
+    // For YieldExpression, its argument is NOT a complex context
+    // (we already handle yield yield specially)
+    let childComplexContext = inComplexContext || complexContexts.includes(node.type);
+    if (node.type === 'YieldExpression') {
+      childComplexContext = false; // argument of yield is not complex
+    }
+
+    for (const k in node) {
+      if (k[0] === '_' || k === 'type' || k === 'loc' || k === 'range') continue;
+      visit(node[k], node, k, childComplexContext);
+    }
+  };
+
+  // Process each statement in the body
+  for (let i = 0; i < body.length; i++) {
+    const stmt = body[i];
+    extractions.length = 0;
+    visit(stmt, body, i, false);
+
+    // Insert extracted declarations before the current statement
+    if (extractions.length > 0) {
+      body.splice(i, 0, ...extractions.map(e => e.decl));
+      i += extractions.length; // Skip past inserted declarations
+    }
+  }
+};
+
 // Count yield expressions in a generator function body
 // Returns array of yield nodes in order of appearance
 const collectYields = (node, yields = []) => {
@@ -1063,6 +1143,15 @@ const generateYield = (scope, decl) => {
   // - offset 16-23: yielded value (f64)
   // - offset 24-27: yielded value type (i32)
   // - offset 28-31: done flag (i32)
+  // - offset 60: throw_requested (i32)
+  // - offset 64-71: throw value (f64)
+  // - offset 72-75: throw type (i32)
+  // - offset 80+: yield input slots (12 bytes each: 8 bytes value + 4 bytes type)
+  //   Each yield stores the input value received when resuming at that point
+
+  // Get the compile-time yield state for memory slot calculation
+  const yieldState = decl._yieldState ?? 0;
+  const slotOffset = 80 + yieldState * 12; // 12 bytes per slot: 8 (f64) + 4 (i32)
 
   // First, evaluate the argument (may contain inner yields that suspend)
   // Store in a temp so we can use it after the yield check
@@ -1119,12 +1208,27 @@ const generateYield = (scope, decl) => {
     [ Opcodes.end ],
 
     // yields_seen <= state - we're resuming past this yield point
-    // Only check throw_requested at the EXACT yield where we paused (yields_seen == state)
+    // Check if yields_seen == state (exact resume point) vs < state (skipping past)
     [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
     [ Opcodes.local_get, scope.locals['#generator_state'].idx ],
     [ Opcodes.f64_eq ],
     [ Opcodes.if, Blocktype.void ],
-      // This is the exact yield where we paused - check throw_requested (offset 60)
+      // This is the exact yield where we paused
+
+      // Store input value in this yield's slot for future resumes
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      [ Opcodes.local_get, scope.locals['#generator_input'].idx ],
+      [ Opcodes.f64_store, 0, slotOffset ],
+
+      // Store input type in slot
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      [ Opcodes.local_get, scope.locals['#generator_input_type'].idx ],
+      Opcodes.i32_trunc_sat_f64_s,
+      [ Opcodes.i32_store, 0, slotOffset + 8 ],
+
+      // Check throw_requested (offset 60)
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
       [ Opcodes.i32_load, 0, 60 ],
@@ -1146,11 +1250,14 @@ const generateYield = (scope, decl) => {
       [ Opcodes.end ],
     [ Opcodes.end ],
 
-    // Normal resume: Yield expression value = input value from next()
-    [ Opcodes.local_get, scope.locals['#generator_input'].idx ],
-    // Set type from the stored input type
-    [ Opcodes.local_get, scope.locals['#generator_input_type'].idx ],
-    Opcodes.i32_trunc_sat_f64_s,
+    // Yield expression value: load from slot (contains input from when we resumed here)
+    [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+    Opcodes.i32_to_u,
+    [ Opcodes.f64_load, 0, slotOffset ],
+    // Set type from slot
+    [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+    Opcodes.i32_to_u,
+    [ Opcodes.i32_load, 0, slotOffset + 8 ],
     [ Opcodes.local_set, localTmp(scope, '#last_type', Valtype.i32) ]
   ];
 };
@@ -8663,8 +8770,14 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         funcRef(func);
         funcs.table = true;
 
+        // Transform yields in complex expression contexts (like [...yield])
+        // into extracted temp variables before processing
+        if (body.type === 'BlockStatement') {
+          extractYieldsFromExpressions(body.body);
+        }
+
         // For state machine: collect yields and assign state numbers
-        const yields = collectYields(body);
+        const yields = collectYields(body)
         for (let i = 0; i < yields.length; i++) {
           yields[i]._yieldState = i;
         }
