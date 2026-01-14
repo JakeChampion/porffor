@@ -202,6 +202,28 @@ const extractYieldsFromExpressions = (body) => {
   }
 };
 
+// Check if a node contains any yield expressions (non-recursive into nested functions)
+const containsYield = (node) => {
+  if (!node) return false;
+  if (Array.isArray(node)) {
+    for (const n of node) if (containsYield(n)) return true;
+    return false;
+  }
+  if (typeof node !== 'object') return false;
+
+  // Don't descend into nested functions
+  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression') return false;
+
+  if (node.type === 'YieldExpression') return true;
+
+  for (const key in node) {
+    if (key[0] === '_' || key === 'type' || key === 'loc' || key === 'range') continue;
+    if (containsYield(node[key])) return true;
+  }
+  return false;
+};
+
 // Count yield expressions in a generator function body
 // Returns array of yield nodes in order of appearance
 const collectYields = (node, yields = []) => {
@@ -1240,6 +1262,49 @@ const generateYield = (scope, decl) => {
         Opcodes.i32_to_u,
         [ Opcodes.i32_load, 0, 72 ],
         [ Opcodes.throw, 0 ],
+      [ Opcodes.end ],
+
+      // Check return_requested (offset 44) - for generator.return()
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      [ Opcodes.i32_load, 0, 44 ],
+      [ Opcodes.if, Blocktype.void ],
+        ...(scope._inTryFinally ? [
+          // Inside try-finally: throw marker to trigger finally block
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          number(255, Valtype.i32), // Special type marker for return request
+          [ Opcodes.throw, 0 ],
+        ] : [
+          // Not in try-finally: complete generator immediately
+          // Clear return_requested
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          number(0, Valtype.i32),
+          [ Opcodes.i32_store, 0, 44 ],
+          // Load return value from offset 48 and store as yielded value
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.f64_load, 0, 48 ],
+          [ Opcodes.f64_store, 0, 16 ],
+          // Load return type from offset 56 and store
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.i32_load, 0, 56 ],
+          [ Opcodes.i32_store, 0, 24 ],
+          // Mark as done
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          number(1, Valtype.i32),
+          [ Opcodes.i32_store, 0, 28 ],
+          // Return generator object
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          ...(scope.returnType != null ? [] : [ number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
+          [ Opcodes.return ],
+        ]),
       [ Opcodes.end ],
     [ Opcodes.end ],
 
@@ -3311,6 +3376,16 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ], // wrapperArgc + 2 pairs
               [ Opcodes.drop ],
               [ Opcodes.drop ],
+            [ Opcodes.else ],
+              // Generator is already done - set value to undefined
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(UNDEFINED),
+              [ Opcodes.f64_store, 0, 16 ], // value = undefined
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(TYPES.undefined, Valtype.i32),
+              [ Opcodes.i32_store, 0, 24 ], // type = undefined
             [ Opcodes.end ]
           );
 
@@ -3321,7 +3396,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               callee: { type: 'Identifier', name: '__Porffor_Generator_prototype_next' },
               arguments: [
                 { type: 'Identifier', name: '#proto_target' },
-                ...(decl.arguments.length > 0 ? decl.arguments : [{ type: 'Identifier', name: 'undefined' }])
+                ...(decl.arguments.length > 0 ? decl.arguments : [{ type: 'Identifier', name: 'undefined' }]),
+                { type: 'Literal', value: true } // Skip validation - we already know it's a generator
               ],
               _protoInternalCall: true
             })
@@ -3454,7 +3530,117 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               type: 'CallExpression',
               callee: { type: 'Identifier', name: '__Porffor_Generator_prototype_next' },
               arguments: [
-                { type: 'Identifier', name: '#proto_target' }
+                { type: 'Identifier', name: '#proto_target' },
+                { type: 'Identifier', name: 'undefined' },
+                { type: 'Literal', value: true } // Skip validation - we already know it's a generator
+              ],
+              _protoInternalCall: true
+            })
+          );
+
+          return out;
+        };
+      }
+
+      // Override generator.return() to run finally blocks before completing
+      if (protoName === 'return' && protoBC[TYPES.__porffor_generator]) {
+        protoBC[TYPES.__porffor_generator] = () => {
+          const out = [];
+          const genLocal = localTmp(scope, '#gen_return_gen');
+          const returnValLocal = localTmp(scope, '#gen_return_val');
+          const returnTypeLocal = localTmp(scope, '#gen_return_type', Valtype.i32);
+
+          // Get generator
+          out.push(
+            [ Opcodes.local_get, localTmp(scope, '#proto_target') ],
+            [ Opcodes.local_set, genLocal ]
+          );
+
+          // Get return value (first argument, or undefined)
+          if (decl.arguments.length > 0) {
+            out.push(
+              ...generate(scope, decl.arguments[0]),
+              [ Opcodes.local_set, returnValLocal ],
+              ...getNodeType(scope, decl.arguments[0]),
+              [ Opcodes.local_set, returnTypeLocal ]
+            );
+          } else {
+            out.push(
+              number(UNDEFINED),
+              [ Opcodes.local_set, returnValLocal ],
+              number(TYPES.undefined, Valtype.i32),
+              [ Opcodes.local_set, returnTypeLocal ]
+            );
+          }
+
+          // Check if already done - if so, just return immediately
+          out.push(
+            [ Opcodes.local_get, genLocal ],
+            Opcodes.i32_to_u,
+            [ Opcodes.i32_load, 0, 28 ],
+            [ Opcodes.if, Blocktype.void ],
+              // Already done - skip to end
+            [ Opcodes.else ],
+              // Set return_requested flag (offset 44)
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(1, Valtype.i32),
+              [ Opcodes.i32_store, 0, 44 ],
+
+              // Store return value at offset 48-55 and type at offset 56-59
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              [ Opcodes.local_get, returnValLocal ],
+              [ Opcodes.f64_store, 0, 48 ],
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              [ Opcodes.local_get, returnTypeLocal ],
+              [ Opcodes.i32_store, 0, 56 ],
+
+              // Store undefined as input value
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(UNDEFINED),
+              [ Opcodes.f64_store, 0, 32 ],
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(TYPES.undefined, Valtype.i32),
+              [ Opcodes.i32_store, 0, 40 ],
+
+              // Call the generator function via call_indirect to run finally blocks
+              number(0, Valtype.i32), // argc = 0
+              number(0), // newTarget = undefined
+              number(TYPES.undefined, Valtype.i32),
+              [ Opcodes.local_get, genLocal ], // this = generator
+              number(TYPES.__porffor_generator, Valtype.i32),
+              ...(new Array(Prefs.indirectWrapperArgc ?? 16).fill(0).flatMap(() => [
+                number(UNDEFINED), number(TYPES.undefined, Valtype.i32)
+              ])),
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              [ Opcodes.f64_load, 0, 8 ],
+              Opcodes.i32_trunc_sat_f64_u,
+              [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ],
+              [ Opcodes.drop ],
+              [ Opcodes.drop ],
+
+              // Clear return_requested flag
+              [ Opcodes.local_get, genLocal ],
+              Opcodes.i32_to_u,
+              number(0, Valtype.i32),
+              [ Opcodes.i32_store, 0, 44 ],
+            [ Opcodes.end ]
+          );
+
+          // Call the builtin to read values and return result object
+          out.push(
+            ...generate(scope, {
+              type: 'CallExpression',
+              callee: { type: 'Identifier', name: '__Porffor_Generator_prototype_return' },
+              arguments: [
+                { type: 'Identifier', name: '#proto_target' },
+                ...(decl.arguments.length > 0 ? decl.arguments : [{ type: 'Identifier', name: 'undefined' }]),
+                { type: 'Literal', value: true } // Skip validation - we already know it's a generator
               ],
               _protoInternalCall: true
             })
@@ -7037,9 +7223,6 @@ const generateThrow = (scope, decl) => {
 };
 
 const generateTry = (scope, decl) => {
-  // todo: handle control-flow pre-exit for finally
-  // "Immediately before a control-flow statement (return, throw, break, continue) is executed in the try block or catch block."
-
   const out = [];
 
   const finalizer = decl.finalizer ? [
@@ -7048,20 +7231,33 @@ const generateTry = (scope, decl) => {
   ]: [];
 
   // For generators with try/catch containing yields, we need special handling
-  // to skip the try block when resuming after a catch
   const tryYields = scope.generator ? countYields(decl.block) : 0;
   const catchYields = scope.generator && decl.handler ? countYields(decl.handler.body) : 0;
   const totalYields = tryYields + catchYields;
+  const hasFinally = decl.finalizer != null;
+
+  // For generators with finally blocks containing yields, we need special handling
+  // When return() is called while paused in try, we throw a marker that triggers finally
+  const needsGeneratorFinallyHandling = scope.generator && hasFinally && tryYields > 0 && scope.locals['#yields_seen'];
 
   if (scope.generator && totalYields > 0 && scope.locals['#yields_seen']) {
     // Check if we should skip the entire try/catch block
     // Skip if yields_seen + totalYields <= state (we've already passed this block)
+    // BUT: if return_requested is set and we have finally, we must NOT skip - check below
     out.push(
       [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
       number(totalYields),
       [ Opcodes.f64_add ],
       [ Opcodes.local_get, scope.locals['#generator_state'].idx ],
       [ Opcodes.f64_le ],
+      // For finally handling, also check that return_requested is NOT set
+      ...(needsGeneratorFinallyHandling ? [
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        [ Opcodes.i32_load, 0, 44 ], // return_requested
+        [ Opcodes.i32_eqz ], // only skip if return_requested is 0
+        [ Opcodes.i32_and ]
+      ] : []),
       [ Opcodes.if, Blocktype.void ],
         // Skip the try/catch - just increment yields_seen by totalYields
         [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
@@ -7075,11 +7271,36 @@ const generateTry = (scope, decl) => {
   out.push([ Opcodes.try, Blocktype.void ]);
   depth.push('try');
 
+  // For generators with try-finally: if return_requested is set, throw marker to trigger finally
+  // This handles the case when return() is called and we skipped entering the try via normal resume
+  if (needsGeneratorFinallyHandling) {
+    out.push(
+      [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+      Opcodes.i32_to_u,
+      [ Opcodes.i32_load, 0, 44 ], // return_requested
+      [ Opcodes.if, Blocktype.void ],
+        // throw marker to trigger finally
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        number(255, Valtype.i32), // marker type
+        [ Opcodes.throw, 0 ],
+      [ Opcodes.end ]
+    );
+    ensureTag();
+  }
+
+  // Mark that yields in this block are inside a try-finally
+  const prevInTryFinally = scope._inTryFinally;
+  if (hasFinally) {
+    scope._inTryFinally = true;
+  }
+
   out.push(
     ...generate(scope, decl.block),
-    [ Opcodes.drop ],
-    ...finalizer
+    [ Opcodes.drop ]
   );
+
+  // Run finally inline at end of try block (for normal completion)
+  out.push(...finalizer);
 
   // At end of try block (before catch), if try completed normally in a generator,
   // increment yields_seen by catchYields to skip the catch block yields on resume
@@ -7125,13 +7346,86 @@ const generateTry = (scope, decl) => {
 
     out.push(
       ...generate(scope, decl.handler.body),
-      [ Opcodes.drop ],
-      ...finalizer
+      [ Opcodes.drop ]
     );
+
+    // Run finally inline at end of catch block
+    out.push(...finalizer);
   }
 
-  out.push([ Opcodes.end ]);
+  // For generators with try-finally, add catch_all to handle return marker exception
+  // This catches the special throw from yield when return_requested is set
+  if (needsGeneratorFinallyHandling && !decl.handler) {
+    // No user catch - add catch_all for the return marker
+    depth.pop();
+    depth.push('catch');
+
+    const excValTmp = localTmp(scope, '#gen_exc_val');
+    const excTypeTmp = localTmp(scope, '#gen_exc_type', Valtype.i32);
+
+    out.push(
+      [ Opcodes.catch, 0 ],
+      // Save exception value and type
+      [ Opcodes.local_set, excTypeTmp ],
+      [ Opcodes.local_set, excValTmp ],
+
+      // Run finally code
+      ...finalizer,
+
+      // Check if this is return marker (type 255)
+      [ Opcodes.local_get, excTypeTmp ],
+      number(255, Valtype.i32),
+      [ Opcodes.i32_eq ],
+      [ Opcodes.if, Blocktype.void ],
+        // Return marker - complete the generator
+        // Clear return_requested flag
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        number(0, Valtype.i32),
+        [ Opcodes.i32_store, 0, 44 ],
+
+        // Load return value from offset 48 and store as yielded value at offset 16
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        [ Opcodes.f64_load, 0, 48 ],
+        [ Opcodes.f64_store, 0, 16 ],
+
+        // Load return type from offset 56 and store at offset 24
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        [ Opcodes.i32_load, 0, 56 ],
+        [ Opcodes.i32_store, 0, 24 ],
+
+        // Mark as done (offset 28)
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        Opcodes.i32_to_u,
+        number(1, Valtype.i32),
+        [ Opcodes.i32_store, 0, 28 ],
+
+        // Return the generator object
+        [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+        ...(scope.returnType != null ? [] : [ number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
+        [ Opcodes.return ],
+      [ Opcodes.else ],
+        // Not return marker - rethrow the exception
+        [ Opcodes.local_get, excValTmp ],
+        [ Opcodes.local_get, excTypeTmp ],
+        [ Opcodes.throw, 0 ],
+      [ Opcodes.end ]
+    );
+
+    ensureTag();
+  }
+
+  out.push([ Opcodes.end ]); // end try
   depth.pop();
+
+  // Restore inTryFinally state
+  scope._inTryFinally = prevInTryFinally;
 
   // Close the skip-try-catch if block
   if (scope.generator && totalYields > 0 && scope.locals['#yields_seen']) {
@@ -8776,6 +9070,25 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         }
         func._yieldCount = yields.length;
 
+        // Mark statements before the first yield so they only run on state == 0
+        // This prevents pre-yield code from running on every next() call
+        if (body.type === 'BlockStatement' && yields.length > 0) {
+          let firstYieldStmtIdx = -1;
+          for (let i = 0; i < body.body.length; i++) {
+            if (containsYield(body.body[i])) {
+              firstYieldStmtIdx = i;
+              break;
+            }
+          }
+          // Mark all statements before the first yield-containing statement
+          if (firstYieldStmtIdx > 0) {
+            for (let i = 0; i < firstYieldStmtIdx; i++) {
+              body.body[i]._generatorPreYield = true;
+            }
+            func._hasPreYieldStatements = true;
+          }
+        }
+
         // Store user params count for yield slot offset calculation in generateYield
         const userParamsCount = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern').length;
         func._userParamsCount = userParamsCount;
@@ -8920,16 +9233,17 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         const userParams = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern')
           .map(p => p.type === 'Identifier' ? p.name : p.left.name);
 
-        // Run preface (parameter initialization including defaults) BEFORE creation check
-        // This ensures TDZ errors are thrown at creation time, not step time
-        wasm.push(...prefaceWasm);
-
         // Calculate allocation size: base 80 bytes + 12 bytes per param + 12 bytes per yield slot
         // Base layout: state(8) + indirect(8) + value(8) + valueType(4) + done(4) + input(8) + inputType(4) +
         //              return_requested(4) + return_value(8) + return_type(4) + throw_requested(4) + throw_value(8) + throw_type(4) + padding(4) = 80
         // Then: user params (12 bytes each), then yield input slots (12 bytes each)
         const yieldCount = func._yieldCount ?? 0;
         const genAllocSize = 80 + userParams.length * 12 + yieldCount * 12;
+
+        // Run preface (parameter initialization including defaults) BEFORE creation check
+        // This ensures TDZ errors are thrown at creation time, not step time
+        // Note: On step calls, parameters will be restored from memory, overwriting these values
+        wasm.push(...prefaceWasm);
 
         // Check if this is creation call (gen local is 0) or step call
         wasm.push(
@@ -9476,13 +9790,56 @@ const generateBlock = (scope, decl) => {
 
   inferBranchStart(scope);
 
+  // For generators: wrap pre-yield statements in a state == 0 check
+  // This prevents pre-yield code from running on every next() call
+  const isGeneratorWithPreYield = scope.generator && scope._hasPreYieldStatements;
+  let inPreYieldBlock = false;
+  let preYieldWasm = [];
+
   let len = decl.body.length, j = 0;
   for (let i = 0; i < len; i++) {
     const x = decl.body[i];
     if (isEmptyNode(x)) continue;
 
-    if (j++ > 0) out.push([ Opcodes.drop ]);
-    out = out.concat(generate(scope, x));
+    if (isGeneratorWithPreYield && x._generatorPreYield) {
+      // Accumulate pre-yield statements
+      if (preYieldWasm.length > 0) preYieldWasm.push([ Opcodes.drop ]);
+      preYieldWasm = preYieldWasm.concat(generate(scope, x));
+      inPreYieldBlock = true;
+    } else {
+      // If we were accumulating pre-yield statements, wrap and emit them now
+      if (inPreYieldBlock && preYieldWasm.length > 0) {
+        // Generate: if (state == 0) { preYieldWasm } (void block, no value left)
+        out.push(
+          [ Opcodes.local_get, scope.locals['#generator_state'].idx ],
+          number(0),
+          [ Opcodes.f64_eq ],
+          [ Opcodes.if, Blocktype.void ],
+          ...preYieldWasm,
+          [ Opcodes.drop ], // Drop the pre-yield value
+          [ Opcodes.end ]
+        );
+        preYieldWasm = [];
+        inPreYieldBlock = false;
+        // Don't increment j - we used a void block and dropped the value
+      }
+
+      if (j++ > 0) out.push([ Opcodes.drop ]);
+      out = out.concat(generate(scope, x));
+    }
+  }
+
+  // Handle case where all statements were pre-yield (shouldn't happen but be safe)
+  if (inPreYieldBlock && preYieldWasm.length > 0) {
+    out.push(
+      [ Opcodes.local_get, scope.locals['#generator_state'].idx ],
+      number(0),
+      [ Opcodes.f64_eq ],
+      [ Opcodes.if, Blocktype.void ],
+      ...preYieldWasm,
+      [ Opcodes.drop ],
+      [ Opcodes.end ]
+    );
   }
 
   inferBranchEnd(scope);

@@ -22,6 +22,19 @@ export const __Porffor_Generator = (values: any[]): __Porffor_Generator => {
   return values as __Porffor_Generator;
 };
 
+// Validate that a value is a generator object per 27.5.3.2 GeneratorValidate
+export const __Porffor_Generator_validate = (gen: any): void => {
+  // 1. If generator is not an object, throw TypeError
+  if (!Porffor.object.isObjectOrSymbol(gen)) {
+    throw new TypeError('Generator method called on incompatible receiver');
+  }
+  // 2. If generator does not have [[GeneratorState]] internal slot, throw TypeError
+  // In Porffor, this means checking if it's a generator type
+  if (Porffor.type(gen) != Porffor.TYPES.__porffor_generator) {
+    throw new TypeError('Generator method called on incompatible receiver');
+  }
+};
+
 // Get the prototype of a generator instance from its generator function's .prototype
 export const __Porffor_Generator_getInstancePrototype = (gen: any): any => {
   // Read the function indirect index from generator object offset 8
@@ -51,7 +64,10 @@ local.set ${func+1}`;
   return __Porffor_object_getHiddenPrototype(Porffor.TYPES.__porffor_asyncgenerator);
 };
 
-export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any) => {
+export const __Porffor_Generator_prototype_next = (gen: any[], inputValue: any, _skipValidation: boolean) => {
+  // Validate that gen is a generator object (unless called internally with validation skipped)
+  if (!_skipValidation) __Porffor_Generator_validate(gen);
+
   // This is called after call_indirect has been done by codegen.js
   // Just read the values from the generator object and return result
   const obj: object = {};
@@ -78,17 +94,41 @@ local.set ${value+1}`;
   return obj;
 };
 
-export const __Porffor_Generator_prototype_return = (gen: any[], value: any) => {
-  // Mark as done and store return value
+export const __Porffor_Generator_prototype_return = (gen: any[], value: any, _skipValidation: boolean) => {
+  // Validate that gen is a generator object (unless called internally with validation skipped)
+  if (!_skipValidation) __Porffor_Generator_validate(gen);
+
+  // The call_indirect to run finally blocks is done by codegen.js before calling this
+  // This builtin just reads the result from the generator object
+
+  // Mark as done if not already
   Porffor.wasm.i32.store(gen, 1, 0, 28); // done = 1
 
+  // Read result from generator object (may have been set by finally handling)
   const obj: object = {};
-  obj.value = value;
+  const resultValue: any = Porffor.wasm.f64.load(gen, 0, 16);
+  const resultType: i32 = Porffor.wasm.i32.load(gen, 0, 24);
+
+  // If result value is 0 and type is 0 (unset), use the passed-in value
+  // This handles the case where there's no try-finally
+  if (resultType == 0 && resultValue == 0) {
+    obj.value = value;
+  } else {
+    Porffor.wasm`
+local.get ${resultType}
+i32.to_u
+local.set ${resultValue+1}`;
+    obj.value = resultValue;
+  }
+
   obj.done = true;
   return obj;
 };
 
-export const __Porffor_Generator_prototype_throw = (gen: any[], value: any) => {
+export const __Porffor_Generator_prototype_throw = (gen: any[], value: any, _skipValidation: boolean) => {
+  // Validate that gen is a generator object (unless called internally with validation skipped)
+  if (!_skipValidation) __Porffor_Generator_validate(gen);
+
   // Check if generator is already done
   const isDone: i32 = Porffor.wasm.i32.load(gen, 0, 28);
   if (isDone != 0) {
