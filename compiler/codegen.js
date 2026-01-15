@@ -1327,6 +1327,19 @@ const generateYield = (scope, decl) => {
 const generateReturn = (scope, decl) => {
   const arg = decl.argument ?? DEFAULT_VALUE();
 
+  // Close any for-of iterators before returning (only those in current scope)
+  const iteratorCloseWasm = [];
+  for (const ctx of forofContexts) {
+    // Only close iterators whose locals exist in the current scope with correct types
+    const pointerLocal = Object.values(scope.locals).find(l => l.idx === ctx.pointer);
+    const iterTypeLocal = Object.values(scope.locals).find(l => l.idx === ctx.iterTypeLocal);
+    // Both locals must exist and be i32 type (pointer and type are always i32)
+    if (pointerLocal && pointerLocal.type === Valtype.i32 &&
+        iterTypeLocal && iterTypeLocal.type === Valtype.i32) {
+      iteratorCloseWasm.push(...generateIteratorClose(scope, ctx));
+    }
+  }
+
   if (scope.generator) {
     // Store return value and mark done=true
     // Generator memory layout:
@@ -1334,6 +1347,9 @@ const generateReturn = (scope, decl) => {
     // - offset 24-27: return value type (i32)
     // - offset 28-31: done flag (i32, 1=done)
     return [
+      // Close any for-of iterators first
+      ...iteratorCloseWasm,
+
       // Store return value at offset 16
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
@@ -1361,6 +1377,9 @@ const generateReturn = (scope, decl) => {
 
   if (scope.async) {
     return [
+      // Close any for-of iterators first
+      ...iteratorCloseWasm,
+
       // resolve promise with return value
       ...generate(scope, arg),
       ...getNodeType(scope, arg),
@@ -1378,6 +1397,8 @@ const generateReturn = (scope, decl) => {
   }
 
   if (scope.returns.length === 0) return [
+    // Close any for-of iterators first
+    ...iteratorCloseWasm,
     ...(arg.type !== 'Identifier' ? generate(scope, arg) : []),
     [ Opcodes.return ]
   ];
@@ -1391,6 +1412,9 @@ const generateReturn = (scope, decl) => {
     // just return this if `return undefined` or `return this`
     if ((arg.type === 'Identifier' && arg.name === 'undefined') || (arg.type === 'ThisExpression')) {
       return [
+        // Close any for-of iterators first
+        ...iteratorCloseWasm,
+
         ...(scope._onlyConstr ? [] : [
           [ Opcodes.local_get, scope.locals['#newtarget'].idx ],
           Opcodes.i32_to_u,
@@ -1409,6 +1433,9 @@ const generateReturn = (scope, decl) => {
     }
 
     return [
+      // Close any for-of iterators first
+      ...iteratorCloseWasm,
+
       ...generate(scope, arg),
       [ Opcodes.local_set, localTmp(scope, '#return') ],
       ...(scope.returnType != null ? [] : getNodeType(scope, arg)),
@@ -1465,7 +1492,7 @@ const generateReturn = (scope, decl) => {
     ];
   }
 
-  const out = generate(scope, arg);
+  const out = [...iteratorCloseWasm, ...generate(scope, arg)];
   if (scope.returns[0] === Valtype.f64 && valtypeBinary === Valtype.i32 && out[out.length - 1][0] !== Opcodes.f64_const && out[out.length - 1] !== Opcodes.i32_to_u)
     out.push([ Opcodes.f64_convert_i32_s ]);
 
@@ -6515,6 +6542,13 @@ const generateForOf = (scope, decl) => {
   depth.push('forof');
   depth.push('block');
 
+  // Track for-of context for iterator closing on break/continue/return
+  forofContexts.push({
+    pointer,
+    iterTypeLocal: localTmp(scope, '#forof_itertype' + count, Valtype.i32),
+    depthIndex: depth.length - 2 // index of 'forof' in depth array
+  });
+
   out.push([ Opcodes.loop, Blocktype.void ]);
   out.push([ Opcodes.block, Blocktype.void ]);
 
@@ -6907,6 +6941,7 @@ const generateForOf = (scope, decl) => {
   );
 
   depth.pop(); depth.pop();
+  forofContexts.pop();
 
   inferLoopEnd(scope);
   return out;
@@ -7207,6 +7242,65 @@ const getNearestLoop = () => {
   return -1;
 };
 
+// Generate code to close an iterator (call return() method) for generators
+const generateIteratorClose = (scope, ctx) => {
+  // Only close generators - they have a return() method
+  // Check if iterator type is generator and if so, call return()
+  const wrapperArgc = Prefs.indirectWrapperArgc ?? 16;
+
+  const closeGeneratorInner = [
+    // Set return_requested flag (offset 44)
+    [ Opcodes.local_get, ctx.pointer ],
+    number(1, Valtype.i32),
+    [ Opcodes.i32_store, 0, 44 ],
+
+    // Store undefined as return value (offset 48-55 value, 56-59 type)
+    [ Opcodes.local_get, ctx.pointer ],
+    number(UNDEFINED),
+    [ Opcodes.f64_store, 0, 48 ],
+    [ Opcodes.local_get, ctx.pointer ],
+    number(TYPES.undefined, Valtype.i32),
+    [ Opcodes.i32_store, 0, 56 ],
+
+    // Call the generator function via call_indirect to run finally blocks
+    number(0, Valtype.i32), // argc = 0
+    number(0), // newTarget = undefined
+    number(TYPES.undefined, Valtype.i32), // newTargetType
+    [ Opcodes.local_get, ctx.pointer ],
+    Opcodes.i32_from_u, // this = generator
+    number(TYPES.__porffor_generator, Valtype.i32), // thisType
+
+    // Pad with undefined for remaining wrapperArgc args
+    ...(new Array(wrapperArgc).fill(0).flatMap(() => [
+      number(UNDEFINED), number(TYPES.undefined, Valtype.i32)
+    ])),
+
+    // Get indirect function index from generator (offset 8)
+    [ Opcodes.local_get, ctx.pointer ],
+    [ Opcodes.f64_load, 0, 8 ],
+    Opcodes.i32_trunc_sat_f64_u,
+    [ Opcodes.call_indirect, wrapperArgc + 2, 0 ],
+    [ Opcodes.drop ],
+    [ Opcodes.drop ],
+  ];
+
+  return [
+    // Check if iterator type is generator
+    [ Opcodes.local_get, ctx.iterTypeLocal ],
+    number(TYPES.__porffor_generator, Valtype.i32),
+    [ Opcodes.i32_eq ],
+    [ Opcodes.if, Blocktype.void ],
+      // Check if generator is not already done (offset 28)
+      [ Opcodes.local_get, ctx.pointer ],
+      [ Opcodes.i32_load, 0, 28 ],
+      [ Opcodes.i32_eqz ],
+      [ Opcodes.if, Blocktype.void ],
+        ...closeGeneratorInner,
+      [ Opcodes.end ],
+    [ Opcodes.end ]
+  ];
+};
+
 const generateBreak = (scope, decl) => {
   const target = decl.label ? scope.labels.get(decl.label.name) : getNearestLoop();
   const type = depth[target];
@@ -7226,9 +7320,19 @@ const generateBreak = (scope, decl) => {
     switch_typeswitch: 1
   })[type];
 
-  return [
-    [ Opcodes.br, ...unsignedLEB128(depth.length - target - offset) ]
-  ];
+  const out = [];
+
+  // If breaking out of a for-of loop, close the iterator (call return() for generators)
+  if (type === 'forof') {
+    // Find the for-of context for this target
+    const ctx = forofContexts.find(c => c.depthIndex === target);
+    if (ctx) {
+      out.push(...generateIteratorClose(scope, ctx));
+    }
+  }
+
+  out.push([ Opcodes.br, ...unsignedLEB128(depth.length - target - offset) ]);
+  return out;
 };
 
 const generateContinue = (scope, decl) => {
@@ -7247,9 +7351,20 @@ const generateContinue = (scope, decl) => {
     forin: 3 // loop > block > if (wanted branch) (we are here)
   })[type];
 
-  return [
-    [ Opcodes.br, ...unsignedLEB128(depth.length - target - offset) ]
-  ];
+  const out = [];
+
+  // If continuing past any for-of loops (labeled continue to outer loop),
+  // close those iterators (call return() for generators)
+  for (const ctx of forofContexts) {
+    // Close for-of loops that are between current position and target
+    // (i.e., loops we're jumping out of)
+    if (ctx.depthIndex > target) {
+      out.push(...generateIteratorClose(scope, ctx));
+    }
+  }
+
+  out.push([ Opcodes.br, ...unsignedLEB128(depth.length - target - offset) ]);
+  return out;
 };
 
 const generateLabel = (scope, decl) => {
@@ -7284,8 +7399,22 @@ const ensureTag = (exceptionMode = Prefs.exceptionMode ?? 'stack') => {
 };
 
 const generateThrow = (scope, decl) => {
+  // Close any for-of iterators before throwing (only those in current scope)
+  const iteratorCloseWasm = [];
+  for (const ctx of forofContexts) {
+    // Only close iterators whose locals exist in the current scope with correct types
+    const pointerLocal = Object.values(scope.locals).find(l => l.idx === ctx.pointer);
+    const iterTypeLocal = Object.values(scope.locals).find(l => l.idx === ctx.iterTypeLocal);
+    // Both locals must exist and be i32 type (pointer and type are always i32)
+    if (pointerLocal && pointerLocal.type === Valtype.i32 &&
+        iterTypeLocal && iterTypeLocal.type === Valtype.i32) {
+      iteratorCloseWasm.push(...generateIteratorClose(scope, ctx));
+    }
+  }
+
   if (Prefs.unreachableExceptions) {
     return [
+      ...iteratorCloseWasm,
       ...generate(scope, {
         type: 'CallExpression',
         callee: {
@@ -7300,6 +7429,7 @@ const generateThrow = (scope, decl) => {
 
   if (Prefs.wasmExceptions === false) {
     return [
+      ...iteratorCloseWasm,
       ...(scope.returns.length === 0 ? [] : [ number(0, scope.returns[0]) ]),
       ...(scope.returns.length === 0 || scope.returnType != null ? [] : [ number(0, scope.returns[1]) ]),
       [ Opcodes.return ]
@@ -7328,12 +7458,13 @@ const generateThrow = (scope, decl) => {
     scope.exceptions.push(exceptId);
 
     return [
+      ...iteratorCloseWasm,
       number(exceptId, Valtype.i32),
       [ Opcodes.throw, 0 ]
     ];
   }
 
-  const out = generate(scope, decl.argument);
+  const out = [...iteratorCloseWasm, ...generate(scope, decl.argument)];
   const lastOp = out.at(-1);
   if (lastOp[0] === Opcodes.local_set && lastOp[1] === scope.locals['#last_type']?.idx) {
     out.pop();
@@ -10221,7 +10352,7 @@ const generateBlock = (scope, decl) => {
   return out;
 };
 
-let globals, tags, exceptions, funcs, indirectFuncs, funcIndex, currentFuncIndex, depth, pages, data, typeswitchDepth, usedTypes, coctc, globalInfer, builtinFuncs, builtinVars, lastValtype;
+let globals, tags, exceptions, funcs, indirectFuncs, funcIndex, currentFuncIndex, depth, forofContexts, pages, data, typeswitchDepth, usedTypes, coctc, globalInfer, builtinFuncs, builtinVars, lastValtype;
 export default program => {
   globals = Object.create(null);
   globals['#ind'] = 0;
@@ -10238,6 +10369,7 @@ export default program => {
   };
   funcIndex = Object.create(null);
   depth = [];
+  forofContexts = []; // Track for-of contexts for iterator closing
   pages = new Map();
   data = [];
   currentFuncIndex = importedFuncs.length;
