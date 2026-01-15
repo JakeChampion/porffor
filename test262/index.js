@@ -29,9 +29,7 @@ if (cluster.isPrimary) {
   if (Number.isNaN(threads)) try {
     threads = parseInt(fs.readFileSync(join(__dirname, '.threads'), 'utf8'));
   } catch {
-    threads = Math.max(1, Math.min(12, os.cpus().length) - 4);
-    log.warning('test262', `no --threads=n arg or .threads file found, using ${threads} as cautious default (max(1, min(12, threads) - 4))`);
-    log.warning('test262', 'please specify via either method to make test262 runs potentially much faster! (ask for tuning advice)');
+    threads = Math.max(1, Math.min(12, os.cpus().length) - 2);
   }
 
   if (process.argv.includes('--open')) execSync(`zed ${whatTests.map(t => `${test262Path}/test/${t}`).join(' ')}`);
