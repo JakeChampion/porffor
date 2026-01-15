@@ -7387,13 +7387,21 @@ const generateTry = (scope, decl) => {
         [ Opcodes.i32_eqz ], // only skip if return_requested is 0
         [ Opcodes.i32_and ]
       ] : []),
-      // Also check that throw_requested is NOT 1 (throw at resume point) - need to enter to throw at yield
+      // Also check that throw_requested is NOT 1 (throw at resume point) IF we're resuming inside this block
+      // If we're past the block (state > yields_seen + totalYields), allow skipping even with throw_requested == 1
       // Value 2 (pending exception) should NOT prevent skipping - we're resuming past the throw point
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
       [ Opcodes.i32_load, 0, 60 ], // throw_requested
       number(1, Valtype.i32),
-      [ Opcodes.i32_ne ], // only skip if throw_requested != 1 (allow skip if 0 or 2)
+      [ Opcodes.i32_ne ], // throw_requested != 1
+      // OR: state > yields_seen + totalYields (we're past the block, so skip anyway)
+      [ Opcodes.local_get, scope.locals['#generator_state'].idx ],
+      [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
+      number(totalYields),
+      [ Opcodes.f64_add ],
+      [ Opcodes.f64_gt ], // state > yields_seen + totalYields
+      [ Opcodes.i32_or ], // allow skip if (throw_requested != 1) OR (we're past the block)
       [ Opcodes.i32_and ],
       [ Opcodes.if, Blocktype.void ],
         // Skip the try/catch - just increment yields_seen by totalYields
@@ -7437,15 +7445,18 @@ const generateTry = (scope, decl) => {
 
   // For generators with try-catch (no finally): if resuming WITHIN the catch block, throw marker to enter catch
   // This handles the case when we're resuming from within the catch block (but not past it)
-  // BUT: if throw_requested is set (1 = throw at yield, 2 = pending), we need to actually
-  // enter the catch body to process the throw at the yield, not skip via marker
+  // We throw the marker even when throw_requested=1 (throw at yield) because:
+  // 1. We need to skip the try body to avoid re-executing throw statements
+  // 2. The actual throw will happen at the yield inside the catch block
+  // Only throw_requested=2 (pending exception) should prevent the marker - that means we're
+  // resuming from within a finally and should not re-enter catch
   if (needsGeneratorCatchSkip) {
     out.push(
       // Check three conditions:
       // 1. yields_seen + tryYields < state (we've passed all try yields)
       // 2. state <= yields_seen + tryYields + catchYields (we haven't passed all catch yields)
-      // 3. throw_requested == 0 (not in a throw operation)
-      // Combined: we're resuming WITHIN the catch block during normal next()
+      // 3. throw_requested != 2 (not a pending exception from finally)
+      // Combined: we're resuming WITHIN the catch block
       [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
       number(tryYields),
       [ Opcodes.f64_add ],
@@ -7460,14 +7471,20 @@ const generateTry = (scope, decl) => {
 
       [ Opcodes.i32_and ], // both position conditions must be true
 
-      // Also check throw_requested == 0 (only skip via marker during normal next())
+      // Check throw_requested != 2 (allow marker when 0 or 1, block when 2)
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
       [ Opcodes.i32_load, 0, 60 ], // throw_requested
-      [ Opcodes.i32_eqz ], // only throw marker if throw_requested == 0
+      number(2, Valtype.i32),
+      [ Opcodes.i32_ne ], // only throw marker if throw_requested != 2
       [ Opcodes.i32_and ],
 
       [ Opcodes.if, Blocktype.void ],
+        // Increment yields_seen by tryYields to account for skipped yields in try body
+        [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
+        number(tryYields),
+        [ Opcodes.f64_add ],
+        [ Opcodes.local_set, scope.locals['#yields_seen'].idx ],
         // throw marker (type 254) to skip to catch block
         number(0), // dummy value
         number(254, Valtype.i32), // marker type for catch skip
@@ -7542,34 +7559,50 @@ const generateTry = (scope, decl) => {
 
       // For generators with catch skip: check if this is a marker exception (type 254)
       // If so, don't bind to param, just increment yields_seen and skip catch body
+      // UNLESS throw_requested == 1, in which case we need to enter catch body to throw at the yield
       if (needsGeneratorCatchSkip) {
         const excTypeTmp = localTmp(scope, '#catch_exc_type', Valtype.i32);
         out.push(
           [ Opcodes.local_set, excTypeTmp ], // save exception type
           [ Opcodes.local_set, tmp ], // save exception value
 
-          // Check if this is our marker (type 254)
+          // Check if this is our marker (type 254) AND throw_requested != 1
+          // If throw_requested == 1, we need to enter catch body to throw at the yield there
           [ Opcodes.local_get, excTypeTmp ],
           number(254, Valtype.i32),
           [ Opcodes.i32_eq ],
+          [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+          Opcodes.i32_to_u,
+          [ Opcodes.i32_load, 0, 60 ], // throw_requested
+          number(1, Valtype.i32),
+          [ Opcodes.i32_ne ], // throw_requested != 1
+          [ Opcodes.i32_and ], // marker AND not throw_requested
           [ Opcodes.if, Blocktype.void ],
-            // Marker: increment yields_seen by tryYields + catchYields (skip all try-catch yields)
+            // Marker with no throw pending: increment yields_seen by catchYields only
+            // (tryYields was already added when throwing the marker)
             [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
-            number(tryYields + catchYields),
+            number(catchYields),
             [ Opcodes.f64_add ],
             [ Opcodes.local_set, scope.locals['#yields_seen'].idx ],
             // Skip catch body - don't execute any catch code
           [ Opcodes.else ],
-            // Real exception: bind to param as normal
+            // Real exception OR marker with throw pending: bind to param as normal
+            // For marker with throw pending, we use dummy value in tmp as param
             ...setType(scope, tmpName, [ [ Opcodes.local_get, excTypeTmp ] ]),
             ...generateVarDstr(scope, 'let', param, { type: 'Identifier', name: tmpName }, undefined, false),
             // Clear throw_requested - exception has been handled by this catch block
             // This is important when an inner catch is inside an outer try-finally
+            // But only clear if this is a REAL exception (type != 254), not our marker
             ...(scope._inTryFinally ? [
-              [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
-              Opcodes.i32_to_u,
-              number(0, Valtype.i32),
-              [ Opcodes.i32_store, 0, 60 ] // clear throw_requested
+              [ Opcodes.local_get, excTypeTmp ],
+              number(254, Valtype.i32),
+              [ Opcodes.i32_ne ], // only clear if not marker
+              [ Opcodes.if, Blocktype.void ],
+                [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                number(0, Valtype.i32),
+                [ Opcodes.i32_store, 0, 60 ], // clear throw_requested
+              [ Opcodes.end ]
             ] : [])
         );
         // ensure tag exists for specific catch
@@ -7646,13 +7679,15 @@ const generateTry = (scope, decl) => {
       [ Opcodes.local_set, excTypeTmp ],
       [ Opcodes.local_set, excValTmp ],
 
-      // Check if exception is from finally block (yields_seen >= savedYieldsSeen + tryYields)
+      // Check if exception is from finally block (yields_seen > savedYieldsSeen + tryYields)
       // If so, don't run finally again - it would cause infinite loop
+      // Use > not >= because when yields_seen == savedYieldsSeen + tryYields, we're AT the last
+      // yield in try body (not past it into finally)
       [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
       [ Opcodes.local_get, yieldsSavedLocal ],
       number(tryYields),
       [ Opcodes.f64_add ],
-      [ Opcodes.f64_ge ],
+      [ Opcodes.f64_gt ],
       [ Opcodes.if, Blocktype.void ],
         // Exception from finally - just rethrow without running finally again
         [ Opcodes.local_get, excValTmp ],
