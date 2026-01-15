@@ -9361,17 +9361,28 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           }
         }
 
-        if (def) wasm.push(
-          ...getType(func, name),
-          number(TYPES.undefined, Valtype.i32),
-          [ Opcodes.i32_eq ],
-          [ Opcodes.if, Blocktype.void ],
-            ...generate(func, def, false, name),
-            [ Opcodes.local_set, func.locals[name].idx ],
+        if (def) {
+          // For generators, store default param wasm to apply only during creation
+          const defaultWasm = [
+            ...getType(func, name),
+            number(TYPES.undefined, Valtype.i32),
+            [ Opcodes.i32_eq ],
+            [ Opcodes.if, Blocktype.void ],
+              ...generate(func, def, false, name),
+              [ Opcodes.local_set, func.locals[name].idx ],
 
-            ...setType(func, name, getNodeType(func, def), true),
-          [ Opcodes.end ]
-        );
+              ...setType(func, name, getNodeType(func, def), true),
+            [ Opcodes.end ]
+          ];
+
+          if (decl.generator) {
+            // For generators, defer default param initialization to creation time only
+            if (!func._defaultParamWasm) func._defaultParamWasm = [];
+            func._defaultParamWasm.push(...defaultWasm);
+          } else {
+            wasm.push(...defaultWasm);
+          }
+        }
 
         if (destr) wasm.push(
           ...generateVarDstr(func, 'var', destr, { type: 'Identifier', name }, undefined, false)
@@ -9641,6 +9652,9 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
             Opcodes.i32_to_u,
             number(0, Valtype.i32),
             [ Opcodes.i32_store, 0, 60 ],
+
+            // Apply default parameter initializers during creation only
+            ...(func._defaultParamWasm ?? []),
 
             // Store user parameters in generator object (starting at offset 80)
             ...userParams.flatMap((paramName, i) => {
