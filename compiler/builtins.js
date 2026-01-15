@@ -408,6 +408,42 @@ export const BuiltinVars = ({ builtinFuncs }) => {
       props.length = { value: 0, writable: true, configurable: false };
     }
 
+    // special case: Generator.prototype (GeneratorPrototype)
+    // Per spec 27.5.1, GeneratorPrototype has:
+    // - constructor: %GeneratorFunction%.prototype (which is __Generator)
+    // - Symbol.toStringTag: "Generator"
+    if (x === '__Porffor_Generator_prototype') {
+      const value = (scope, { builtin }) => [
+        [ Opcodes.call, builtin('#get___Generator') ],
+        Opcodes.i32_from_u
+      ];
+      value.type = TYPES.object;
+      props.constructor = {
+        value,
+        writable: false,
+        enumerable: false,
+        configurable: true
+      };
+    }
+
+    // special case: AsyncGenerator.prototype (AsyncGeneratorPrototype)
+    // Per spec 27.6.1, AsyncGeneratorPrototype has:
+    // - constructor: %AsyncGeneratorFunction%.prototype (which is __AsyncGenerator)
+    // - Symbol.toStringTag: "AsyncGenerator"
+    if (x === '__Porffor_AsyncGenerator_prototype') {
+      const value = (scope, { builtin }) => [
+        [ Opcodes.call, builtin('#get___AsyncGenerator') ],
+        Opcodes.i32_from_u
+      ];
+      value.type = TYPES.object;
+      props.constructor = {
+        value,
+        writable: false,
+        enumerable: false,
+        configurable: true
+      };
+    }
+
     // add constructor for constructors
     const name = x.slice(2, x.indexOf('_', 2));
     if (builtinFuncs[name]?.constr) {
@@ -431,7 +467,11 @@ export const BuiltinVars = ({ builtinFuncs }) => {
       'Promise', 'Symbol', 'BigInt'
     ]);
 
-    const toStringTag = prototypeToStringTags.has(name) ? name : null;
+    // Special handling for Generator/AsyncGenerator prototypes
+    let toStringTag = prototypeToStringTags.has(name) ? name : null;
+    if (x === '__Porffor_Generator_prototype') toStringTag = 'Generator';
+    if (x === '__Porffor_AsyncGenerator_prototype') toStringTag = 'AsyncGenerator';
+
     object(x, props, toStringTag);
   }
 
