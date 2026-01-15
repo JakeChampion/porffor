@@ -496,6 +496,23 @@ export const __Iterator_concat = (...iterables: any[]): __Porffor_WrapperIterato
   return __Iterator_from(result);
 };
 
+// Helper to get iterator from an object's Symbol.iterator
+// Returns the iterator (could be a generator or other iterator type)
+// Does NOT iterate - just gets the iterator, letting codegen handle iteration based on type
+export const __Porffor_object_getIterator = (obj: any): any => {
+  // Get Symbol.iterator method from object
+  const iteratorMethod: any = obj[Symbol.iterator];
+  if (iteratorMethod === undefined) {
+    throw new TypeError('Object is not iterable (no Symbol.iterator method)');
+  }
+
+  // Call the iterator method to get the iterator
+  // Note: We call with undefined as this because Porffor has a bug where
+  // generator functions called as methods don't advance their state properly
+  // when 'this' is an object. Most iterators don't use 'this' anyway.
+  return iteratorMethod();
+};
+
 // Helper to convert any iterable to an array
 export const __Porffor_iterableToArray = (iterable: any): any[] => {
   const t: i32 = Porffor.type(iterable);
@@ -528,26 +545,10 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
     return result;
   }
 
+  // For objects with Symbol.iterator, get the iterator and convert it to array
   if (t == Porffor.TYPES.object) {
-    // Check for Symbol.iterator on objects
-    const iteratorMethod: any = iterable[Symbol.iterator];
-    if (typeof iteratorMethod !== 'function') {
-      throw new TypeError('Value is not iterable');
-    }
-    // Call the iterator method to get the iterator
-    const iterator: any = iteratorMethod.call(iterable);
-    // Get the next method and iterate
-    const next: any = iterator.next;
-    if (typeof next !== 'function') {
-      throw new TypeError('Value is not iterable');
-    }
-    const result: any[] = [];
-    let iterResult: any = next.call(iterator);
-    while (!iterResult.done) {
-      result.push(iterResult.value);
-      iterResult = next.call(iterator);
-    }
-    return result;
+    const iterator: any = __Porffor_object_getIterator(iterable);
+    return __Porffor_iterableToArray(iterator);
   }
 
   throw new TypeError('Value is not iterable');

@@ -3053,8 +3053,8 @@ const aliasPrimObjsBC = bc => {
 };
 
 const typeIsIterable = wasm => [
-  // array, set, map, string, bytestring, stringobject, generator, wrapperiterator
-  ...typeIsOneOf(wasm, [ TYPES.array, TYPES.set, TYPES.map, TYPES.string, TYPES.bytestring, TYPES.stringobject, TYPES.__porffor_generator, TYPES.__porffor_wrapperiterator ]),
+  // array, set, map, string, bytestring, stringobject, generator, wrapperiterator, object (with Symbol.iterator)
+  ...typeIsOneOf(wasm, [ TYPES.array, TYPES.set, TYPES.map, TYPES.string, TYPES.bytestring, TYPES.stringobject, TYPES.__porffor_generator, TYPES.__porffor_wrapperiterator, TYPES.object ]),
   // typed array
   ...wasm,
   number(TYPES.uint8clampedarray, Valtype.i32),
@@ -3846,7 +3846,26 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       ...typeIsIterable([ [ Opcodes.local_get, localTmp(scope, '#spread#type', Valtype.i32) ] ]),
       [ Opcodes.if, Blocktype.void ],
         ...internalThrow(scope, 'TypeError', 'Cannot spread a non-iterable'),
-      [ Opcodes.end ]
+      [ Opcodes.end ],
+
+      // convert objects with Symbol.iterator to array (only if builtin is available)
+      ...('__Porffor_iterableToArray' in builtinFuncs ? [
+        [ Opcodes.local_get, localTmp(scope, '#spread#type', Valtype.i32) ],
+        number(TYPES.object, Valtype.i32),
+        [ Opcodes.i32_eq ],
+        [ Opcodes.if, Blocktype.void ],
+          // call __Porffor_iterableToArray(obj) to convert to array
+          // #spread is already f64, pass directly with type
+          [ Opcodes.local_get, localTmp(scope, '#spread') ],
+          number(TYPES.object, Valtype.i32),
+          [ Opcodes.call, includeBuiltin(scope, '__Porffor_iterableToArray').index ],
+          // function returns f64 (array pointer), store directly
+          [ Opcodes.local_set, localTmp(scope, '#spread') ],
+          // update type to array
+          number(TYPES.array, Valtype.i32),
+          [ Opcodes.local_set, localTmp(scope, '#spread#type', Valtype.i32) ],
+        [ Opcodes.end ]
+      ] : [])
     ];
     // For direct calls, add to out immediately. For indirect calls, spreadSetupWasm
     // will be inserted separately before argcWasm to ensure proper ordering.
@@ -4129,7 +4148,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       const declaredParamsBefore = effectiveParamCount - 1;
       // Keep the first declaredParamsBefore expanded spread elements for declared params
       args = args.slice(0, declaredParamsBefore);
-      args.push(decl.arguments.at(-1).argument);
+      // Use #spread (which has been converted to array) instead of original argument
+      args.push({ type: 'Identifier', name: '#spread' });
       if (hasArgcParam) {
         // For spread, argc is unknown at compile time - use array length
         // This is a limitation for now
@@ -6506,6 +6526,27 @@ const generateForOf = (scope, decl) => {
     [ Opcodes.if, Blocktype.void ],
       ...internalThrow(scope, 'TypeError', `Tried for..of on non-iterable type`),
     [ Opcodes.end ],
+
+    // For objects with Symbol.iterator, get the iterator and use its type for iteration
+    // This allows generator-based iterators to work properly via the generator iteration path
+    ...('__Porffor_object_getIterator' in builtinFuncs ? [
+      ...iterType,
+      number(TYPES.object, Valtype.i32),
+      [ Opcodes.i32_eq ],
+      [ Opcodes.if, Blocktype.void ],
+        // call __Porffor_object_getIterator(obj) to get the iterator
+        [ Opcodes.local_get, pointer ],
+        Opcodes.i32_from_u,
+        number(TYPES.object, Valtype.i32),
+        [ Opcodes.call, includeBuiltin(scope, '__Porffor_object_getIterator').index ],
+        // stack now has (iterator_value, iterator_type)
+        // store the type first (it's on top)
+        [ Opcodes.local_set, localTmp(scope, '#forof_itertype' + count, Valtype.i32) ],
+        // then convert and store the value
+        Opcodes.i32_to_u,
+        [ Opcodes.local_set, pointer ],
+      [ Opcodes.end ],
+    ] : []),
 
     // get length - special handling for WrapperIterator
     ...typeSwitch(scope, iterType, [
