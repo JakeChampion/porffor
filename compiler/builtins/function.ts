@@ -9,6 +9,14 @@ export const Function = function (source: string) {
   throw new SyntaxError('Dynamic code evaluation is not supported');
 };
 
+export const GeneratorFunction = function (source: string) {
+  throw new SyntaxError('Dynamic code evaluation is not supported');
+};
+
+export const AsyncGeneratorFunction = function (source: string) {
+  throw new SyntaxError('Dynamic code evaluation is not supported');
+};
+
 export const __Function_prototype_toString = (_this: Function) => {
   const out: bytestring = Porffor.malloc(256);
 

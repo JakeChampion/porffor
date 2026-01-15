@@ -478,32 +478,88 @@ export const BuiltinVars = ({ builtinFuncs }) => {
   // Generator is %GeneratorFunction%.prototype - the [[Prototype]] of generator functions
   // It has a .prototype property pointing to GeneratorPrototype
   // Symbol.toStringTag is "GeneratorFunction" per spec
-  object('__Generator', {
-    prototype: {
-      value: (scope, { builtin }) => [
-        [ Opcodes.call, builtin('#get___Porffor_Generator_prototype') ],
-        Opcodes.i32_from_u
-      ],
-      writable: false,
-      enumerable: false,
-      configurable: true
-    }
-  }, 'GeneratorFunction');
+  {
+    const constructorValue = (scope, { funcRef }) => funcRef('GeneratorFunction');
+    constructorValue.type = TYPES.function;
+    object('__Generator', {
+      constructor: {
+        value: constructorValue,
+        writable: false,
+        enumerable: false,
+        configurable: true
+      },
+      prototype: {
+        value: (scope, { builtin }) => [
+          [ Opcodes.call, builtin('#get___Porffor_Generator_prototype') ],
+          Opcodes.i32_from_u
+        ],
+        writable: false,
+        enumerable: false,
+        configurable: true
+      }
+    }, 'GeneratorFunction');
+  }
   _['__Generator_prototype'].type = TYPES.object;
 
   // AsyncGenerator is %AsyncGeneratorFunction%.prototype
-  object('__AsyncGenerator', {
-    prototype: {
-      value: (scope, { builtin }) => [
-        [ Opcodes.call, builtin('#get___Porffor_AsyncGenerator_prototype') ],
-        Opcodes.i32_from_u
-      ],
-      writable: false,
-      enumerable: false,
-      configurable: true
-    }
-  }, 'AsyncGeneratorFunction');
+  {
+    const constructorValue = (scope, { funcRef }) => funcRef('AsyncGeneratorFunction');
+    constructorValue.type = TYPES.function;
+    object('__AsyncGenerator', {
+      constructor: {
+        value: constructorValue,
+        writable: false,
+        enumerable: false,
+        configurable: true
+      },
+      prototype: {
+        value: (scope, { builtin }) => [
+          [ Opcodes.call, builtin('#get___Porffor_AsyncGenerator_prototype') ],
+          Opcodes.i32_from_u
+        ],
+        writable: false,
+        enumerable: false,
+        configurable: true
+      }
+    }, 'AsyncGeneratorFunction');
+  }
   _['__AsyncGenerator_prototype'].type = TYPES.object;
+
+  // GeneratorFunction - the intrinsic constructor
+  // GeneratorFunction.prototype = __Generator
+  {
+    const protoValue = (scope, { builtin }) => [
+      [ Opcodes.call, builtin('#get___Generator') ],
+      Opcodes.i32_from_u
+    ];
+    protoValue.type = TYPES.object;
+    object('GeneratorFunction', {
+      prototype: {
+        value: protoValue,
+        writable: false,
+        enumerable: false,
+        configurable: false
+      }
+    });
+  }
+
+  // AsyncGeneratorFunction - the intrinsic constructor
+  // AsyncGeneratorFunction.prototype = __AsyncGenerator
+  {
+    const protoValue = (scope, { builtin }) => [
+      [ Opcodes.call, builtin('#get___AsyncGenerator') ],
+      Opcodes.i32_from_u
+    ];
+    protoValue.type = TYPES.object;
+    object('AsyncGeneratorFunction', {
+      prototype: {
+        value: protoValue,
+        writable: false,
+        enumerable: false,
+        configurable: false
+      }
+    });
+  }
 
   object('Number', {
     ...props({
