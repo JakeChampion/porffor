@@ -661,6 +661,17 @@ export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): _
   return __Porffor_WrapperIterator(storage);
 };
 
+// Helper to convert iterator-like to WrapperIterator
+export const __Iterator_toWrapperIterator = (it: any): any[] => {
+  const t: i32 = Porffor.type(it);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return it as any[];
+  }
+  // Convert generator or other iterator-like to WrapperIterator
+  const wrapper: __Porffor_WrapperIterator = __Iterator_from(it);
+  return wrapper as any[];
+};
+
 // Iterator.prototype methods
 // These are the spec-compliant Iterator.prototype methods that work on any iterator
 
@@ -672,6 +683,10 @@ export const __Iterator_prototype_map = (_this: __Porffor_WrapperIterator, mappe
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_map(_this as any[], mapper);
+  }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_map(wrapper, mapper);
   }
 
   throw new TypeError('Iterator.prototype.map called on non-iterator');
@@ -686,6 +701,10 @@ export const __Iterator_prototype_filter = (_this: __Porffor_WrapperIterator, pr
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_filter(_this as any[], predicate);
   }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_filter(wrapper, predicate);
+  }
 
   throw new TypeError('Iterator.prototype.filter called on non-iterator');
 };
@@ -695,6 +714,10 @@ export const __Iterator_prototype_take = (_this: __Porffor_WrapperIterator, limi
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_take(_this as any[], limit);
   }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_take(wrapper, limit);
+  }
 
   throw new TypeError('Iterator.prototype.take called on non-iterator');
 };
@@ -703,6 +726,10 @@ export const __Iterator_prototype_drop = (_this: __Porffor_WrapperIterator, coun
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_drop(_this as any[], count);
+  }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_drop(wrapper, count);
   }
 
   throw new TypeError('Iterator.prototype.drop called on non-iterator');
@@ -717,6 +744,10 @@ export const __Iterator_prototype_flatMap = (_this: __Porffor_WrapperIterator, m
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_flatMap(_this as any[], mapper);
   }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
+  }
 
   throw new TypeError('Iterator.prototype.flatMap called on non-iterator');
 };
@@ -730,6 +761,10 @@ export const __Iterator_prototype_reduce = (_this: __Porffor_WrapperIterator, re
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_reduce(_this as any[], reducer, initialValue);
   }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_reduce(wrapper, reducer, initialValue);
+  }
 
   throw new TypeError('Iterator.prototype.reduce called on non-iterator');
 };
@@ -738,6 +773,10 @@ export const __Iterator_prototype_toArray = (_this: __Porffor_WrapperIterator) =
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_toArray(_this as any[]);
+  }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_toArray(wrapper);
   }
 
   throw new TypeError('Iterator.prototype.toArray called on non-iterator');
@@ -752,6 +791,10 @@ export const __Iterator_prototype_forEach = (_this: __Porffor_WrapperIterator, c
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_forEach(_this as any[], callback);
   }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_forEach(wrapper, callback);
+  }
 
   throw new TypeError('Iterator.prototype.forEach called on non-iterator');
 };
@@ -764,6 +807,10 @@ export const __Iterator_prototype_some = (_this: __Porffor_WrapperIterator, pred
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_some(_this as any[], predicate);
+  }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_some(wrapper, predicate);
   }
 
   throw new TypeError('Iterator.prototype.some called on non-iterator');
@@ -778,6 +825,10 @@ export const __Iterator_prototype_every = (_this: __Porffor_WrapperIterator, pre
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_every(_this as any[], predicate);
   }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_every(wrapper, predicate);
+  }
 
   throw new TypeError('Iterator.prototype.every called on non-iterator');
 };
@@ -790,6 +841,10 @@ export const __Iterator_prototype_find = (_this: __Porffor_WrapperIterator, pred
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_find(_this as any[], predicate);
+  }
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+    return __Porffor_WrapperIterator_prototype_find(wrapper, predicate);
   }
 
   throw new TypeError('Iterator.prototype.find called on non-iterator');

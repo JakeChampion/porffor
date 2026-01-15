@@ -220,3 +220,62 @@ export const __Porffor_AsyncGenerator_prototype_throw = async (gen: any[], value
   gen.length = 0;
   throw await value;
 };
+
+// Iterator.prototype methods for generators
+// These convert the generator to a WrapperIterator and then call the corresponding method
+// This allows generators to have Iterator.prototype behavior per spec
+
+export const __Porffor_Generator_prototype_map = (_this: any, mapper: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_map(wrapper, mapper);
+};
+
+export const __Porffor_Generator_prototype_filter = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_filter(wrapper, predicate);
+};
+
+export const __Porffor_Generator_prototype_take = (_this: any, limit: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_take(wrapper, limit);
+};
+
+export const __Porffor_Generator_prototype_drop = (_this: any, count: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_drop(wrapper, count);
+};
+
+export const __Porffor_Generator_prototype_flatMap = (_this: any, mapper: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
+};
+
+export const __Porffor_Generator_prototype_reduce = (_this: any, reducer: any, initialValue: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_reduce(wrapper, reducer, initialValue);
+};
+
+export const __Porffor_Generator_prototype_toArray = (_this: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_toArray(wrapper);
+};
+
+export const __Porffor_Generator_prototype_forEach = (_this: any, callback: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_forEach(wrapper, callback);
+};
+
+export const __Porffor_Generator_prototype_some = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_some(wrapper, predicate);
+};
+
+export const __Porffor_Generator_prototype_every = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_every(wrapper, predicate);
+};
+
+export const __Porffor_Generator_prototype_find = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_find(wrapper, predicate);
+};
