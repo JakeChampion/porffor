@@ -94,10 +94,8 @@ export const __Porffor_object_writeKey = (ptr: i32, key: any, hash: i32): void =
   // set MSB 1 if regular string
   if (Porffor.wasm`local.get ${key+1}` == Porffor.TYPES.string) keyEnc |= 0x80000000;
 
-  // set MSB 1&2 if symbol
-  if (Porffor.comptime.flag`hasType.symbol`) {
-    if (Porffor.wasm`local.get ${key+1}` == Porffor.TYPES.symbol) keyEnc |= 0xc0000000;
-  }
+  // set MSB 1&2 if symbol - use direct type check instead of comptime.flag
+  if (Porffor.wasm`local.get ${key+1}` == Porffor.TYPES.symbol) keyEnc |= 0xc0000000;
 
   // write encoded key to ptr + 4
   Porffor.wasm.i32.store(ptr, keyEnc, 0, 4);
