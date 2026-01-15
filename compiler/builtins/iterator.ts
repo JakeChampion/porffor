@@ -449,16 +449,6 @@ export const __Iterator_concat = (...iterables: any[]): __Porffor_WrapperIterato
     const iterable: any = iterables[idx];
     const t: i32 = Porffor.type(iterable);
 
-    if (t != Porffor.TYPES.array &&
-        t != Porffor.TYPES.string &&
-        t != Porffor.TYPES.bytestring &&
-        t != Porffor.TYPES.set &&
-        t != Porffor.TYPES.__porffor_generator &&
-        t != Porffor.TYPES.__porffor_wrapperiterator &&
-        !(t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
-      throw new TypeError('Iterator.concat requires iterable arguments');
-    }
-
     if (t == Porffor.TYPES.array) {
       const arr: any[] = iterable as any[];
       const arrLen: i32 = arr.length;
@@ -471,15 +461,96 @@ export const __Iterator_concat = (...iterables: any[]): __Porffor_WrapperIterato
       for (let j: i32 = 0; j < arrLen; j++) {
         result.push(arr[j]);
       }
-    } else {
+    } else if (t == Porffor.TYPES.string ||
+               t == Porffor.TYPES.bytestring ||
+               t == Porffor.TYPES.set ||
+               t == Porffor.TYPES.__porffor_generator ||
+               (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
       const length: i32 = __Porffor_iterator_getLength(iterable);
       for (let i: i32 = 0; i < length; i++) {
         result.push(__Porffor_iterator_getElement(iterable, i));
       }
+    } else if (t == Porffor.TYPES.object) {
+      // Check for Symbol.iterator on objects
+      const iteratorMethod: any = iterable[Symbol.iterator];
+      if (typeof iteratorMethod !== 'function') {
+        throw new TypeError('Iterator.concat requires iterable arguments');
+      }
+      // Call the iterator method to get the iterator
+      const iterator: any = iteratorMethod.call(iterable);
+      // Get the next method and iterate
+      const next: any = iterator.next;
+      if (typeof next !== 'function') {
+        throw new TypeError('Iterator.concat requires iterable arguments');
+      }
+      let iterResult: any = next.call(iterator);
+      while (!iterResult.done) {
+        result.push(iterResult.value);
+        iterResult = next.call(iterator);
+      }
+    } else {
+      throw new TypeError('Iterator.concat requires iterable arguments');
     }
   }
 
   return __Iterator_from(result);
+};
+
+// Helper to convert any iterable to an array
+export const __Porffor_iterableToArray = (iterable: any): any[] => {
+  const t: i32 = Porffor.type(iterable);
+
+  if (t == Porffor.TYPES.array) {
+    // Already an array, return copy
+    const arr: any[] = iterable as any[];
+    const result: any[] = [];
+    const len: i32 = arr.length;
+    for (let i: i32 = 0; i < len; i++) {
+      result.push(arr[i]);
+    }
+    return result;
+  }
+
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_toArray(iterable as any[]);
+  }
+
+  if (t == Porffor.TYPES.string ||
+      t == Porffor.TYPES.bytestring ||
+      t == Porffor.TYPES.set ||
+      t == Porffor.TYPES.__porffor_generator ||
+      (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
+    const result: any[] = [];
+    const length: i32 = __Porffor_iterator_getLength(iterable);
+    for (let i: i32 = 0; i < length; i++) {
+      result.push(__Porffor_iterator_getElement(iterable, i));
+    }
+    return result;
+  }
+
+  if (t == Porffor.TYPES.object) {
+    // Check for Symbol.iterator on objects
+    const iteratorMethod: any = iterable[Symbol.iterator];
+    if (typeof iteratorMethod !== 'function') {
+      throw new TypeError('Value is not iterable');
+    }
+    // Call the iterator method to get the iterator
+    const iterator: any = iteratorMethod.call(iterable);
+    // Get the next method and iterate
+    const next: any = iterator.next;
+    if (typeof next !== 'function') {
+      throw new TypeError('Value is not iterable');
+    }
+    const result: any[] = [];
+    let iterResult: any = next.call(iterator);
+    while (!iterResult.done) {
+      result.push(iterResult.value);
+      iterResult = next.call(iterator);
+    }
+    return result;
+  }
+
+  throw new TypeError('Value is not iterable');
 };
 
 // Iterator.zip - zips multiple iterables together
@@ -511,21 +582,13 @@ export const __Iterator_zip = (iterables: any[], options: any = undefined): __Po
     return __Porffor_WrapperIterator(storage);
   }
 
-  // Get lengths of all iterables
+  // Convert all iterables to arrays and get their lengths
+  const arrays: any[] = [];
   const lengths: any[] = [];
   for (let i: i32 = 0; i < numIterables; i++) {
-    const iter: any = iterablesArr[i];
-    const iterType: i32 = Porffor.type(iter);
-    if (iterType != Porffor.TYPES.array &&
-        iterType != Porffor.TYPES.string &&
-        iterType != Porffor.TYPES.bytestring &&
-        iterType != Porffor.TYPES.set &&
-        iterType != Porffor.TYPES.__porffor_generator &&
-        iterType != Porffor.TYPES.__porffor_wrapperiterator &&
-        !(iterType >= Porffor.TYPES.uint8clampedarray && iterType <= Porffor.TYPES.float64array)) {
-      throw new TypeError('Iterator.zip requires iterable arguments');
-    }
-    lengths.push(__Porffor_iterator_getLength(iter));
+    const arr: any[] = __Porffor_iterableToArray(iterablesArr[i]);
+    arrays.push(arr);
+    lengths.push(arr.length);
   }
 
   // Determine result length based on mode
@@ -552,13 +615,13 @@ export const __Iterator_zip = (iterables: any[], options: any = undefined): __Po
   }
 
   // Build result array of tuples
-  // Note: affected by variable capture bug - values may be corrupted across calls
   const result: any[] = [];
   for (let j: i32 = 0; j < resultLength; j++) {
     const tuple: any[] = [];
     for (let i: i32 = 0; i < numIterables; i++) {
       if (j < lengths[i]) {
-        tuple.push(__Porffor_iterator_getElement(iterablesArr[i], j));
+        const arr: any[] = arrays[i];
+        tuple.push(arr[j]);
       } else {
         tuple.push(undefined);
       }
@@ -599,24 +662,15 @@ export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): _
     return __Porffor_WrapperIterator(storage);
   }
 
-  // Get lengths of all iterables
+  // Convert all iterables to arrays and get their lengths
+  const arrays: any[] = [];
   const lengths: any[] = [];
-  const iterablesArr: any[] = [];
   for (let i: i32 = 0; i < numKeys; i++) {
     const key: any = keys[i];
     const iter: any = iterables[key];
-    const iterType: i32 = Porffor.type(iter);
-    if (iterType != Porffor.TYPES.array &&
-        iterType != Porffor.TYPES.string &&
-        iterType != Porffor.TYPES.bytestring &&
-        iterType != Porffor.TYPES.set &&
-        iterType != Porffor.TYPES.__porffor_generator &&
-        iterType != Porffor.TYPES.__porffor_wrapperiterator &&
-        !(iterType >= Porffor.TYPES.uint8clampedarray && iterType <= Porffor.TYPES.float64array)) {
-      throw new TypeError('Iterator.zipKeyed requires iterable values');
-    }
-    iterablesArr.push(iter);
-    lengths.push(__Porffor_iterator_getLength(iter));
+    const arr: any[] = __Porffor_iterableToArray(iter);
+    arrays.push(arr);
+    lengths.push(arr.length);
   }
 
   // Determine result length based on mode
@@ -649,7 +703,8 @@ export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): _
     for (let i: i32 = 0; i < numKeys; i++) {
       const key: any = keys[i];
       if (j < lengths[i]) {
-        obj[key] = __Porffor_iterator_getElement(iterablesArr[i], j);
+        const arr: any[] = arrays[i];
+        obj[key] = arr[j];
       } else {
         obj[key] = undefined;
       }
