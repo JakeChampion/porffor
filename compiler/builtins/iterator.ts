@@ -545,12 +545,6 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
     return result;
   }
 
-  // For objects with Symbol.iterator, get the iterator and convert it to array
-  if (t == Porffor.TYPES.object) {
-    const iterator: any = __Porffor_object_getIterator(iterable);
-    return __Porffor_iterableToArray(iterator);
-  }
-
   throw new TypeError('Value is not iterable');
 };
 

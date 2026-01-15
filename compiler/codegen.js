@@ -6529,7 +6529,8 @@ const generateForOf = (scope, decl) => {
 
     // For objects with Symbol.iterator, get the iterator and use its type for iteration
     // This allows generator-based iterators to work properly via the generator iteration path
-    ...('__Porffor_object_getIterator' in builtinFuncs ? [
+    // Skip during precompile since builtins don't iterate over arbitrary objects
+    ...(!globalThis.precompile ? [
       ...iterType,
       number(TYPES.object, Valtype.i32),
       [ Opcodes.i32_eq ],
