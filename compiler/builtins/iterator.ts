@@ -660,3 +660,147 @@ export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): _
   const storage: any[] = __Porffor_WrapperIterator_create(result);
   return __Porffor_WrapperIterator(storage);
 };
+
+// Iterator.prototype methods
+// These are the spec-compliant Iterator.prototype methods that work on any iterator
+
+export const __Iterator_prototype_map = (_this: __Porffor_WrapperIterator, mapper: any) => {
+  if (typeof mapper !== 'function') {
+    throw new TypeError('Iterator.prototype.map requires a callable');
+  }
+
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_map(_this as any[], mapper);
+  }
+
+  throw new TypeError('Iterator.prototype.map called on non-iterator');
+};
+
+export const __Iterator_prototype_filter = (_this: __Porffor_WrapperIterator, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.filter requires a callable');
+  }
+
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_filter(_this as any[], predicate);
+  }
+
+  throw new TypeError('Iterator.prototype.filter called on non-iterator');
+};
+
+export const __Iterator_prototype_take = (_this: __Porffor_WrapperIterator, limit: any) => {
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_take(_this as any[], limit);
+  }
+
+  throw new TypeError('Iterator.prototype.take called on non-iterator');
+};
+
+export const __Iterator_prototype_drop = (_this: __Porffor_WrapperIterator, count: any) => {
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_drop(_this as any[], count);
+  }
+
+  throw new TypeError('Iterator.prototype.drop called on non-iterator');
+};
+
+export const __Iterator_prototype_flatMap = (_this: __Porffor_WrapperIterator, mapper: any) => {
+  if (typeof mapper !== 'function') {
+    throw new TypeError('Iterator.prototype.flatMap requires a callable');
+  }
+
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_flatMap(_this as any[], mapper);
+  }
+
+  throw new TypeError('Iterator.prototype.flatMap called on non-iterator');
+};
+
+export const __Iterator_prototype_reduce = (_this: __Porffor_WrapperIterator, reducer: any, initialValue: any) => {
+  if (typeof reducer !== 'function') {
+    throw new TypeError('Iterator.prototype.reduce requires a callable');
+  }
+
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_reduce(_this as any[], reducer, initialValue);
+  }
+
+  throw new TypeError('Iterator.prototype.reduce called on non-iterator');
+};
+
+export const __Iterator_prototype_toArray = (_this: __Porffor_WrapperIterator) => {
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_toArray(_this as any[]);
+  }
+
+  throw new TypeError('Iterator.prototype.toArray called on non-iterator');
+};
+
+export const __Iterator_prototype_forEach = (_this: __Porffor_WrapperIterator, callback: any) => {
+  if (typeof callback !== 'function') {
+    throw new TypeError('Iterator.prototype.forEach requires a callable');
+  }
+
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_forEach(_this as any[], callback);
+  }
+
+  throw new TypeError('Iterator.prototype.forEach called on non-iterator');
+};
+
+export const __Iterator_prototype_some = (_this: __Porffor_WrapperIterator, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.some requires a callable');
+  }
+
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_some(_this as any[], predicate);
+  }
+
+  throw new TypeError('Iterator.prototype.some called on non-iterator');
+};
+
+export const __Iterator_prototype_every = (_this: __Porffor_WrapperIterator, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.every requires a callable');
+  }
+
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_every(_this as any[], predicate);
+  }
+
+  throw new TypeError('Iterator.prototype.every called on non-iterator');
+};
+
+export const __Iterator_prototype_find = (_this: __Porffor_WrapperIterator, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.find requires a callable');
+  }
+
+  const t: i32 = Porffor.type(_this);
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_find(_this as any[], predicate);
+  }
+
+  throw new TypeError('Iterator.prototype.find called on non-iterator');
+};
+
+// Symbol.iterator - returns self
+export const __Iterator_prototype_Symbol_iterator$get = (_this: __Porffor_WrapperIterator) => {
+  return _this;
+};
+
+// Symbol.toStringTag
+export const __Iterator_prototype_Symbol_toStringTag$get = () => {
+  return 'Iterator';
+};

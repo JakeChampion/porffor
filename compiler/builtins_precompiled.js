@@ -2364,6 +2364,82 @@ params:[124,127,124,127],typedParams:1,returns:[124],returnType:37,jsLength:1,
 locals:[124,127,127,127,127,124,124,127,124,124,127,124,124,124,124,124,124,124,127,124,124,127,127,127,124,127,124,124,127,127,124,124,124,124,127,124,124,124,124,124,127,124,124,124,124,127,124,124,124,124,127,124,124,124,124,124,124,124,127,124,124,124,124,124,124],localNames:["iterables","iterables#type","options","options#type","mode","#binexp_left_type_0","#binexp_left_type_1","logictmpi","#last_type","#member_obj_419","#member_prop_419","#typeswitch_tmp1","#member_obj_420","#member_prop_420","#logicinner_tmp_int","keys","numKeys","storage","lengths","iterablesArr","i","key","key#type","#member_obj_422","#member_prop_422","#array_idx_tmp","#array_obj_tmp","#loadArray_offset","iter","iter#type","#member_obj_423","#member_prop_423","#member_allocd","#swap","iterType","#logicinner_tmp","logictmp","#proto_target","#proto_target#type","resultLength","#member_obj_426","#member_prop_426","#member_obj_427","#member_prop_427","#binexp_left_type_2","#member_obj_428","#member_prop_428","#member_obj_429","#member_prop_429","#binexp_left_type_3","#member_obj_430","#member_prop_430","#member_obj_431","#member_prop_431","#binexp_left_type_4","result","j","obj","#member_obj_432","#member_prop_432","#member_obj_433","#member_prop_433","#member_setter_ptr_tmp","#member_obj_434","#member_prop_434","#member_obj_435","#member_prop_435","#member_obj_436","#member_prop_436"],
 usesTag:1
 }
+x.__Iterator_prototype_map={
+wasm:(_,{t,makeString,builtin,internalThrow})=>eval("[[32,3],[33,4],[2,124],...t([1],()=>[[32,4],[65,1],[70],[4,64],...makeString(_,\"number\",1),[12,1],[11]]),...t([2],()=>[[32,4],[65,2],[70],[4,64],...makeString(_,\"boolean\",1),[12,1],[11]]),[32,4],[65,67],[70],[32,4],[65,195],[70],[114],[4,64],...makeString(_,\"string\",1),[12,1],[11],...t([0],()=>[[32,4],[65,0],[70],[4,64],...makeString(_,\"undefined\",1),[12,1],[11]]),...t([6],()=>[[32,4],[65,6],[70],[4,64],...makeString(_,\"function\",1),[12,1],[11]]),...t([5],()=>[[32,4],[65,5],[70],[4,64],...makeString(_,\"symbol\",1),[12,1],[11]]),...t([4],()=>[[32,4],[65,4],[70],[4,64],...makeString(_,\"bigint\",1),[12,1],[11]]),...makeString(_,\"object\",1),[11],[252,3],[65,195],...makeString(_,\"function\",1),[252,3],[65,195],[16,builtin('__Porffor_strcmp')],[69],[4,64],...internalThrow(_,'TypeError',`Iterator.prototype.map requires a callable`),[26],[11],[68,37],[34,5],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_map')],[34,6],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.map called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[127,124,127],localNames:["_this","_this#type","mapper","mapper#type","#typeswitch_tmp1","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_filter={
+wasm:(_,{t,makeString,builtin,internalThrow})=>eval("[[32,3],[33,4],[2,124],...t([1],()=>[[32,4],[65,1],[70],[4,64],...makeString(_,\"number\",1),[12,1],[11]]),...t([2],()=>[[32,4],[65,2],[70],[4,64],...makeString(_,\"boolean\",1),[12,1],[11]]),[32,4],[65,67],[70],[32,4],[65,195],[70],[114],[4,64],...makeString(_,\"string\",1),[12,1],[11],...t([0],()=>[[32,4],[65,0],[70],[4,64],...makeString(_,\"undefined\",1),[12,1],[11]]),...t([6],()=>[[32,4],[65,6],[70],[4,64],...makeString(_,\"function\",1),[12,1],[11]]),...t([5],()=>[[32,4],[65,5],[70],[4,64],...makeString(_,\"symbol\",1),[12,1],[11]]),...t([4],()=>[[32,4],[65,4],[70],[4,64],...makeString(_,\"bigint\",1),[12,1],[11]]),...makeString(_,\"object\",1),[11],[252,3],[65,195],...makeString(_,\"function\",1),[252,3],[65,195],[16,builtin('__Porffor_strcmp')],[69],[4,64],...internalThrow(_,'TypeError',`Iterator.prototype.filter requires a callable`),[26],[11],[68,37],[34,5],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_filter')],[34,6],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.filter called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[127,124,127],localNames:["_this","_this#type","predicate","predicate#type","#typeswitch_tmp1","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_take={
+wasm:(_,{builtin,internalThrow})=>eval("[[68,37],[34,4],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_take')],[34,5],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.take called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[124,127],localNames:["_this","_this#type","limit","limit#type","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_drop={
+wasm:(_,{builtin,internalThrow})=>eval("[[68,37],[34,4],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_drop')],[34,5],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.drop called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[124,127],localNames:["_this","_this#type","count","count#type","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_flatMap={
+wasm:(_,{t,makeString,builtin,internalThrow})=>eval("[[32,3],[33,4],[2,124],...t([1],()=>[[32,4],[65,1],[70],[4,64],...makeString(_,\"number\",1),[12,1],[11]]),...t([2],()=>[[32,4],[65,2],[70],[4,64],...makeString(_,\"boolean\",1),[12,1],[11]]),[32,4],[65,67],[70],[32,4],[65,195],[70],[114],[4,64],...makeString(_,\"string\",1),[12,1],[11],...t([0],()=>[[32,4],[65,0],[70],[4,64],...makeString(_,\"undefined\",1),[12,1],[11]]),...t([6],()=>[[32,4],[65,6],[70],[4,64],...makeString(_,\"function\",1),[12,1],[11]]),...t([5],()=>[[32,4],[65,5],[70],[4,64],...makeString(_,\"symbol\",1),[12,1],[11]]),...t([4],()=>[[32,4],[65,4],[70],[4,64],...makeString(_,\"bigint\",1),[12,1],[11]]),...makeString(_,\"object\",1),[11],[252,3],[65,195],...makeString(_,\"function\",1),[252,3],[65,195],[16,builtin('__Porffor_strcmp')],[69],[4,64],...internalThrow(_,'TypeError',`Iterator.prototype.flatMap requires a callable`),[26],[11],[68,37],[34,5],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_flatMap')],[34,6],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.flatMap called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[127,124,127],localNames:["_this","_this#type","mapper","mapper#type","#typeswitch_tmp1","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_reduce={
+wasm:(_,{t,makeString,builtin,internalThrow})=>eval("[[32,3],[33,6],[2,124],...t([1],()=>[[32,6],[65,1],[70],[4,64],...makeString(_,\"number\",1),[12,1],[11]]),...t([2],()=>[[32,6],[65,2],[70],[4,64],...makeString(_,\"boolean\",1),[12,1],[11]]),[32,6],[65,67],[70],[32,6],[65,195],[70],[114],[4,64],...makeString(_,\"string\",1),[12,1],[11],...t([0],()=>[[32,6],[65,0],[70],[4,64],...makeString(_,\"undefined\",1),[12,1],[11]]),...t([6],()=>[[32,6],[65,6],[70],[4,64],...makeString(_,\"function\",1),[12,1],[11]]),...t([5],()=>[[32,6],[65,5],[70],[4,64],...makeString(_,\"symbol\",1),[12,1],[11]]),...t([4],()=>[[32,6],[65,4],[70],[4,64],...makeString(_,\"bigint\",1),[12,1],[11]]),...makeString(_,\"object\",1),[11],[252,3],[65,195],...makeString(_,\"function\",1),[252,3],[65,195],[16,builtin('__Porffor_strcmp')],[69],[4,64],...internalThrow(_,'TypeError',`Iterator.prototype.reduce requires a callable`),[26],[11],[68,37],[34,7],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[32,4],[32,5],[16,builtin('__Porffor_WrapperIterator_prototype_reduce')],[34,8],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.reduce called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127,124,127],typedParams:1,returns:[124,127],jsLength:2,
+locals:[127,124,127],localNames:["_this","_this#type","reducer","reducer#type","initialValue","initialValue#type","#typeswitch_tmp1","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_toArray={
+wasm:(_,{builtin,internalThrow})=>eval("[[68,37],[34,2],[68,37],[97],[4,64],[32,0],[65,72],[16,builtin('__Porffor_WrapperIterator_prototype_toArray')],[34,3],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.toArray called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127],typedParams:1,returns:[124,127],jsLength:0,
+locals:[124,127],localNames:["_this","_this#type","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_forEach={
+wasm:(_,{t,makeString,builtin,internalThrow})=>eval("[[32,3],[33,4],[2,124],...t([1],()=>[[32,4],[65,1],[70],[4,64],...makeString(_,\"number\",1),[12,1],[11]]),...t([2],()=>[[32,4],[65,2],[70],[4,64],...makeString(_,\"boolean\",1),[12,1],[11]]),[32,4],[65,67],[70],[32,4],[65,195],[70],[114],[4,64],...makeString(_,\"string\",1),[12,1],[11],...t([0],()=>[[32,4],[65,0],[70],[4,64],...makeString(_,\"undefined\",1),[12,1],[11]]),...t([6],()=>[[32,4],[65,6],[70],[4,64],...makeString(_,\"function\",1),[12,1],[11]]),...t([5],()=>[[32,4],[65,5],[70],[4,64],...makeString(_,\"symbol\",1),[12,1],[11]]),...t([4],()=>[[32,4],[65,4],[70],[4,64],...makeString(_,\"bigint\",1),[12,1],[11]]),...makeString(_,\"object\",1),[11],[252,3],[65,195],...makeString(_,\"function\",1),[252,3],[65,195],[16,builtin('__Porffor_strcmp')],[69],[4,64],...internalThrow(_,'TypeError',`Iterator.prototype.forEach requires a callable`),[26],[11],[68,37],[34,5],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_forEach')],[34,6],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.forEach called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[127,124,127],localNames:["_this","_this#type","callback","callback#type","#typeswitch_tmp1","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_some={
+wasm:(_,{t,makeString,builtin,internalThrow})=>eval("[[32,3],[33,4],[2,124],...t([1],()=>[[32,4],[65,1],[70],[4,64],...makeString(_,\"number\",1),[12,1],[11]]),...t([2],()=>[[32,4],[65,2],[70],[4,64],...makeString(_,\"boolean\",1),[12,1],[11]]),[32,4],[65,67],[70],[32,4],[65,195],[70],[114],[4,64],...makeString(_,\"string\",1),[12,1],[11],...t([0],()=>[[32,4],[65,0],[70],[4,64],...makeString(_,\"undefined\",1),[12,1],[11]]),...t([6],()=>[[32,4],[65,6],[70],[4,64],...makeString(_,\"function\",1),[12,1],[11]]),...t([5],()=>[[32,4],[65,5],[70],[4,64],...makeString(_,\"symbol\",1),[12,1],[11]]),...t([4],()=>[[32,4],[65,4],[70],[4,64],...makeString(_,\"bigint\",1),[12,1],[11]]),...makeString(_,\"object\",1),[11],[252,3],[65,195],...makeString(_,\"function\",1),[252,3],[65,195],[16,builtin('__Porffor_strcmp')],[69],[4,64],...internalThrow(_,'TypeError',`Iterator.prototype.some requires a callable`),[26],[11],[68,37],[34,5],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_some')],[34,6],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.some called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[127,124,127],localNames:["_this","_this#type","predicate","predicate#type","#typeswitch_tmp1","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_every={
+wasm:(_,{t,makeString,builtin,internalThrow})=>eval("[[32,3],[33,4],[2,124],...t([1],()=>[[32,4],[65,1],[70],[4,64],...makeString(_,\"number\",1),[12,1],[11]]),...t([2],()=>[[32,4],[65,2],[70],[4,64],...makeString(_,\"boolean\",1),[12,1],[11]]),[32,4],[65,67],[70],[32,4],[65,195],[70],[114],[4,64],...makeString(_,\"string\",1),[12,1],[11],...t([0],()=>[[32,4],[65,0],[70],[4,64],...makeString(_,\"undefined\",1),[12,1],[11]]),...t([6],()=>[[32,4],[65,6],[70],[4,64],...makeString(_,\"function\",1),[12,1],[11]]),...t([5],()=>[[32,4],[65,5],[70],[4,64],...makeString(_,\"symbol\",1),[12,1],[11]]),...t([4],()=>[[32,4],[65,4],[70],[4,64],...makeString(_,\"bigint\",1),[12,1],[11]]),...makeString(_,\"object\",1),[11],[252,3],[65,195],...makeString(_,\"function\",1),[252,3],[65,195],[16,builtin('__Porffor_strcmp')],[69],[4,64],...internalThrow(_,'TypeError',`Iterator.prototype.every requires a callable`),[26],[11],[68,37],[34,5],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_every')],[34,6],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.every called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[127,124,127],localNames:["_this","_this#type","predicate","predicate#type","#typeswitch_tmp1","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_find={
+wasm:(_,{t,makeString,builtin,internalThrow})=>eval("[[32,3],[33,4],[2,124],...t([1],()=>[[32,4],[65,1],[70],[4,64],...makeString(_,\"number\",1),[12,1],[11]]),...t([2],()=>[[32,4],[65,2],[70],[4,64],...makeString(_,\"boolean\",1),[12,1],[11]]),[32,4],[65,67],[70],[32,4],[65,195],[70],[114],[4,64],...makeString(_,\"string\",1),[12,1],[11],...t([0],()=>[[32,4],[65,0],[70],[4,64],...makeString(_,\"undefined\",1),[12,1],[11]]),...t([6],()=>[[32,4],[65,6],[70],[4,64],...makeString(_,\"function\",1),[12,1],[11]]),...t([5],()=>[[32,4],[65,5],[70],[4,64],...makeString(_,\"symbol\",1),[12,1],[11]]),...t([4],()=>[[32,4],[65,4],[70],[4,64],...makeString(_,\"bigint\",1),[12,1],[11]]),...makeString(_,\"object\",1),[11],[252,3],[65,195],...makeString(_,\"function\",1),[252,3],[65,195],[16,builtin('__Porffor_strcmp')],[69],[4,64],...internalThrow(_,'TypeError',`Iterator.prototype.find requires a callable`),[26],[11],[68,37],[34,5],[68,37],[97],[4,64],[32,0],[65,72],[32,2],[32,3],[16,builtin('__Porffor_WrapperIterator_prototype_find')],[34,6],[15],[26],[11],...internalThrow(_,'TypeError',`Iterator.prototype.find called on non-iterator`),[26],[68,0],[65,0],[15]]"),
+params:[124,127,124,127],typedParams:1,returns:[124,127],jsLength:1,
+locals:[127,124,127],localNames:["_this","_this#type","predicate","predicate#type","#typeswitch_tmp1","t","#last_type"],
+usesTag:1
+}
+x.__Iterator_prototype_Symbol_iterator$get={
+wasm:()=>eval("[[32,0],[65,37],[15]]"),
+params:[124,127],typedParams:1,returns:[124,127],jsLength:0,
+locals:[],localNames:["_this","_this#type"]
+}
+x.__Iterator_prototype_Symbol_toStringTag$get={
+wasm:(_,{makeString})=>eval("[...makeString(_,\"Iterator\",1),[65,195],[15]]"),
+params:[],typedParams:1,returns:[124,127],jsLength:-1,
+locals:[],localNames:[]
+}
 x.__Porffor_string_bufferStr={
 wasm:()=>eval("[[32,2],[34,4],[252,2],[40,0,0],[183],[33,5],[32,0],[33,6],[32,3],[184],[68,195],[97],[4,64],[32,4],[68,4],[160],[33,7],[68,0],[33,8],[3,64],[32,8],[32,5],[99],[4,64],[32,6],[252,2],[32,7],[32,7],[68,1],[160],[33,7],[252,2],[45,0,0],[59,0,0],[32,6],[68,2],[160],[33,6],[32,8],[68,1],[160],[33,8],[12,1],[11],[11],[5],[32,6],[252,2],[32,4],[68,4],[160],[252,2],[32,5],[68,2],[162],[252,2],[252,10,0,0],[32,6],[32,5],[68,2],[162],[160],[33,6],[11],[32,6],[15]]"),
 params:[124,127,124,127],typedParams:1,returns:[124],returnType:1,jsLength:2,
