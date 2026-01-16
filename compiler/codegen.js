@@ -3080,8 +3080,8 @@ const aliasPrimObjsBC = bc => {
 };
 
 const typeIsIterable = wasm => [
-  // array, set, map, string, bytestring, stringobject, generator, wrapperiterator, object (with Symbol.iterator)
-  ...typeIsOneOf(wasm, [ TYPES.array, TYPES.set, TYPES.map, TYPES.string, TYPES.bytestring, TYPES.stringobject, TYPES.__porffor_generator, TYPES.__porffor_wrapperiterator, TYPES.object ]),
+  // array, set, map, string, bytestring, stringobject, generator, lazy iterators, object (with Symbol.iterator)
+  ...typeIsOneOf(wasm, [ TYPES.array, TYPES.set, TYPES.map, TYPES.string, TYPES.bytestring, TYPES.stringobject, TYPES.__porffor_generator, TYPES.__porffor_wrapperiterator, TYPES.__porffor_takeiterator, TYPES.__porffor_dropiterator, TYPES.__porffor_mapiterator, TYPES.__porffor_filteriterator, TYPES.__porffor_concatiterator, TYPES.object ]),
   // typed array
   ...wasm,
   number(TYPES.uint8clampedarray, Valtype.i32),
@@ -3887,6 +3887,41 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
         protoBC.default = protoBC[TYPES.object];
       }
 
+      // Add Iterator.prototype methods fallback for all iterator types
+      // This handles methods like toArray, forEach, etc. that are defined on Iterator.prototype
+      const iteratorProtoMethod = '__Iterator_prototype_' + protoName;
+      if (builtinFuncs[iteratorProtoMethod]) {
+        const iteratorTypes = [
+          TYPES.__porffor_generator,
+          TYPES.__porffor_wrapperiterator,
+          TYPES.__porffor_takeiterator,
+          TYPES.__porffor_dropiterator,
+          TYPES.__porffor_mapiterator,
+          TYPES.__porffor_filteriterator,
+          TYPES.__porffor_concatiterator
+        ];
+        for (const t of iteratorTypes) {
+          if (t != null && !protoBC[t]) {
+            protoBC[t] = () => generate(scope, {
+              type: 'CallExpression',
+              optional: decl.optional,
+              callee: {
+                type: 'Identifier',
+                name: iteratorProtoMethod
+              },
+              arguments: [
+                {
+                  type: 'Identifier',
+                  name: '#proto_target'
+                },
+                ...decl.arguments
+              ],
+              _protoInternalCall: true
+            });
+          }
+        }
+      }
+
       // alias primitive prototype with primitive object types
       aliasPrimObjsBC(protoBC);
 
@@ -3941,13 +3976,12 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
         ...internalThrow(scope, 'TypeError', 'Cannot spread a non-iterable'),
       [ Opcodes.end ],
 
-      // convert objects with Symbol.iterator to array using for..of (handles generators)
+      // convert objects with Symbol.iterator or lazy iterators to array using for..of (handles generators)
       // skip during precompile since builtins don't spread arbitrary objects
       // Note: we use a Wasm node to bypass type inference and read type dynamically
       ...(!globalThis.precompile ? [
-        [ Opcodes.local_get, localTmp(scope, '#spread#type', Valtype.i32) ],
-        number(TYPES.object, Valtype.i32),
-        [ Opcodes.i32_eq ],
+        ...typeIsOneOf([ [ Opcodes.local_get, localTmp(scope, '#spread#type', Valtype.i32) ] ],
+          [ TYPES.object, TYPES.__porffor_takeiterator, TYPES.__porffor_dropiterator, TYPES.__porffor_mapiterator, TYPES.__porffor_filteriterator, TYPES.__porffor_concatiterator ]),
         [ Opcodes.if, Blocktype.void ],
           // Generate: let #spread_arr = []; for (const #x of <object>) #spread_arr.push(#x);
           // Declare and initialize #spread_arr as a local (drops undefined result)
@@ -6684,6 +6718,23 @@ const generateForOf = (scope, decl) => {
       [ Opcodes.end ],
     ])()),
 
+    // For lazy iterator types, convert to array via toArray() for iteration
+    // Note: Skip during precompile
+    ...(globalThis.precompile ? [] : (() => [
+      ...typeIsOneOf(iterType, [ TYPES.__porffor_takeiterator, TYPES.__porffor_dropiterator, TYPES.__porffor_mapiterator, TYPES.__porffor_filteriterator, TYPES.__porffor_concatiterator ]),
+      [ Opcodes.if, Blocktype.void ],
+        // call Iterator.prototype.toArray on the iterator
+        [ Opcodes.local_get, pointer ],
+        Opcodes.i32_from_u,
+        ...iterType,
+        [ Opcodes.call, includeBuiltin(scope, '__Iterator_prototype_toArray').index ],
+        // stack now has (array_value, array_type)
+        [ Opcodes.local_set, localTmp(scope, '#forof_itertype' + count, Valtype.i32) ],
+        Opcodes.i32_to_u,
+        [ Opcodes.local_set, pointer ],
+      [ Opcodes.end ],
+    ])()),
+
     // get length - special handling for WrapperIterator
     ...typeSwitch(scope, iterType, [
       [ TYPES.__porffor_wrapperiterator, () => [
@@ -6702,6 +6753,12 @@ const generateForOf = (scope, decl) => {
       ] ],
       [ TYPES.__porffor_generator, () => [
         // For generators, we don't know length upfront - use dummy value
+        // The nextWasm case will check the done flag instead
+        number(1, Valtype.i32),
+        [ Opcodes.local_set, length ]
+      ] ],
+      [ [ TYPES.__porffor_takeiterator, TYPES.__porffor_dropiterator, TYPES.__porffor_mapiterator, TYPES.__porffor_filteriterator, TYPES.__porffor_concatiterator ], () => [
+        // For lazy iterators, we don't know length upfront - use dummy value
         // The nextWasm case will check the done flag instead
         number(1, Valtype.i32),
         [ Opcodes.local_set, length ]
