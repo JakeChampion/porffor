@@ -35,6 +35,23 @@ export const WeakMap = function (iterable: any): WeakMap {
     // Note: Spec requires checking if "set" is callable (7a, 7c), but we skip this check
     // because property lookup on builtin objects returns undefined due to architectural
     // limitations. We call __WeakMap_prototype_set directly which always works.
+
+    // Handle objects - check for Symbol.iterator explicitly
+    if (Porffor.type(iterable) == Porffor.TYPES.object) {
+      const iteratorMethod: any = iterable[Symbol.iterator];
+      if (Porffor.type(iteratorMethod) != Porffor.TYPES.function) {
+        throw new TypeError('Object is not iterable');
+      }
+      // Use Array.from to convert iterator to array, then iterate
+      const arr: any[] = Array.from(iterable);
+      for (const x of arr) {
+        if (!Porffor.object.isObject(x)) throw new TypeError('Iterator contains non-object');
+        __WeakMap_prototype_set(out, x[0], x[1]);
+      }
+      return out;
+    }
+
+    // For native iterable types, for..of works directly
     for (const x of iterable) {
       if (!Porffor.object.isObject(x)) throw new TypeError('Iterator contains non-object');
       __WeakMap_prototype_set(out, x[0], x[1]);
