@@ -136,15 +136,25 @@ export const Iterator = function (): void {
 export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
   const t: i32 = Porffor.type(obj);
 
-  // Check if it's a known iterable type
+  // Check if it's a known indexable iterable type (not generators)
   if (t == Porffor.TYPES.array ||
       t == Porffor.TYPES.string ||
       t == Porffor.TYPES.bytestring ||
       t == Porffor.TYPES.stringobject ||
       t == Porffor.TYPES.set ||
-      t == Porffor.TYPES.__porffor_generator ||
       (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
     const storage: any[] = __Porffor_WrapperIterator_create(obj);
+    return __Porffor_WrapperIterator(storage);
+  }
+
+  // Generators need to be eagerly consumed into an array
+  // since WrapperIterator uses index-based iteration
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const result: any[] = [];
+    for (const x of obj) {
+      result.push(x);
+    }
+    const storage: any[] = __Porffor_WrapperIterator_create(result);
     return __Porffor_WrapperIterator(storage);
   }
 
@@ -237,7 +247,7 @@ export const __Porffor_WrapperIterator_prototype_filter = (storage: any[], predi
 };
 
 export const __Porffor_WrapperIterator_prototype_take = (storage: any[], limit: any) => {
-  const n: i32 = Math.trunc(limit);
+  const n: i32 = Math.trunc(+limit);
   if (n < 0) {
     throw new RangeError('Iterator.prototype.take requires a non-negative number');
   }
@@ -259,7 +269,7 @@ export const __Porffor_WrapperIterator_prototype_take = (storage: any[], limit: 
 };
 
 export const __Porffor_WrapperIterator_prototype_drop = (storage: any[], count: any) => {
-  const n: i32 = Math.trunc(count);
+  const n: i32 = Math.trunc(+count);
   if (n < 0) {
     throw new RangeError('Iterator.prototype.drop requires a non-negative number');
   }
@@ -550,12 +560,20 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
   if (t == Porffor.TYPES.string ||
       t == Porffor.TYPES.bytestring ||
       t == Porffor.TYPES.set ||
-      t == Porffor.TYPES.__porffor_generator ||
       (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
     const result: any[] = [];
     const length: i32 = __Porffor_iterator_getLength(iterable);
     for (let i: i32 = 0; i < length; i++) {
       result.push(__Porffor_iterator_getElement(iterable, i));
+    }
+    return result;
+  }
+
+  // Generators need to be consumed using for..of
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const result: any[] = [];
+    for (const x of iterable) {
+      result.push(x);
     }
     return result;
   }
