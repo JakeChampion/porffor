@@ -78,7 +78,7 @@ Porffor.object.isObject(obj)
 - `typeof builtinObj.method` returns `undefined` even when the method works when called
 - For built-in types, check `Porffor.type(x)` instead of relying on property access
 - Array literals in builtins may not store functions correctly; use `Porffor.malloc()` with individual assignments instead
-- Generator functions have limited support - prefer returning arrays when possible
+- Generator closures have a bug: captured variables may become undefined after the first iteration. Single-use generators work fine, but reusing a generator-creating closure may fail on subsequent calls
 
 ### CRITICAL: Never Use `_this: any` in Prototype Methods
 
