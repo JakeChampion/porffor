@@ -249,6 +249,373 @@ const collectYields = (node, yields = []) => {
   return yields;
 };
 
+// Transform generator body into state machine form
+// This enables proper resumption using br_table dispatch
+// Based on regenerator's approach: https://babeljs.io/docs/babel-plugin-transform-regenerator
+const transformGeneratorToStateMachine = (body, func) => {
+  // First, transform loops with yields into flat state transitions
+  // This must happen BEFORE we assign state numbers
+  transformLoopsWithYields(body, func);
+
+  // Collect all yields to assign state numbers
+  const yields = collectYields(body);
+  if (yields.length === 0) return body; // No yields, no transformation needed
+
+  // Assign state numbers: state N resumes after yield N
+  // State 0 is the initial state
+  for (let i = 0; i < yields.length; i++) {
+    yields[i]._yieldState = i;
+    yields[i]._resumeState = i + 1;
+  }
+
+  // Mark yields with their resume states
+  func._yieldCount = yields.length;
+  func._stateCount = yields.length + 1; // +1 for final state (done)
+
+  return body;
+};
+
+// Helper: check if a loop body contains yields
+const loopContainsYield = (node) => {
+  if (!node) return false;
+  if (Array.isArray(node)) {
+    for (const n of node) if (loopContainsYield(n)) return true;
+    return false;
+  }
+  if (typeof node !== 'object') return false;
+
+  // Don't descend into nested functions or nested loops
+  // (nested loops will be handled separately)
+  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression') return false;
+
+  if (node.type === 'YieldExpression') return true;
+
+  for (const key in node) {
+    if (key[0] === '_' || key === 'type' || key === 'loc' || key === 'range') continue;
+    if (loopContainsYield(node[key])) return true;
+  }
+  return false;
+};
+
+// Transform loops with yields into flat state transitions
+// For a for-loop like: for (init; test; update) { before_yield; yield x; after_yield; }
+// We transform into:
+//   init;
+//   _loop_test:
+//   if (!(test)) goto _after_loop;
+//   before_yield;
+//   yield x;
+//   after_yield;
+//   update;
+//   goto _loop_test;
+//   _after_loop:
+//
+// The "goto" is represented as a special marker node that will compile to state transition
+const transformLoopsWithYields = (body, func) => {
+  // Handle BlockStatement nodes
+  if (body && body.type === 'BlockStatement' && body.body) {
+    transformLoopsWithYields(body.body, func);
+    return;
+  }
+  if (!Array.isArray(body)) return;
+
+  for (let i = 0; i < body.length; i++) {
+    const stmt = body[i];
+    if (!stmt || typeof stmt !== 'object') continue;
+
+    // Recursively transform nested structures first
+    if (stmt.type === 'BlockStatement' && stmt.body) {
+      transformLoopsWithYields(stmt.body, func);
+    } else if (stmt.type === 'IfStatement') {
+      if (stmt.consequent) {
+        if (stmt.consequent.type === 'BlockStatement') {
+          transformLoopsWithYields(stmt.consequent.body, func);
+        } else {
+          transformLoopsWithYields([stmt.consequent], func);
+        }
+      }
+      if (stmt.alternate) {
+        if (stmt.alternate.type === 'BlockStatement') {
+          transformLoopsWithYields(stmt.alternate.body, func);
+        } else {
+          transformLoopsWithYields([stmt.alternate], func);
+        }
+      }
+    } else if (stmt.type === 'TryStatement') {
+      if (stmt.block && stmt.block.body) transformLoopsWithYields(stmt.block.body, func);
+      if (stmt.handler && stmt.handler.body && stmt.handler.body.body) {
+        transformLoopsWithYields(stmt.handler.body.body, func);
+      }
+      if (stmt.finalizer && stmt.finalizer.body) {
+        transformLoopsWithYields(stmt.finalizer.body, func);
+      }
+    }
+
+    // Transform ForStatement with yields
+    if (stmt.type === 'ForStatement' && loopContainsYield(stmt.body)) {
+      const transformed = transformForLoop(stmt, func);
+      body.splice(i, 1, ...transformed);
+      i += transformed.length - 1; // Adjust index for inserted statements
+    }
+
+    // Transform WhileStatement with yields
+    if (stmt.type === 'WhileStatement' && loopContainsYield(stmt.body)) {
+      const transformed = transformWhileLoop(stmt, func);
+      body.splice(i, 1, ...transformed);
+      i += transformed.length - 1;
+    }
+
+    // Transform DoWhileStatement with yields
+    if (stmt.type === 'DoWhileStatement' && loopContainsYield(stmt.body)) {
+      const transformed = transformDoWhileLoop(stmt, func);
+      body.splice(i, 1, ...transformed);
+      i += transformed.length - 1;
+    }
+  }
+};
+
+// Generate unique label ID for generator loops
+let generatorLoopId = 0;
+
+// Transform break/continue statements inside generator loop body
+// Returns a new statement (or array of statements) with break/continue converted to gotos
+const transformBreakContinue = (stmt, breakLabel, continueLabel) => {
+  if (!stmt || typeof stmt !== 'object') return stmt;
+
+  // Transform BreakStatement to _GeneratorGotoMarker
+  if (stmt.type === 'BreakStatement' && !stmt.label) {
+    return {
+      type: '_GeneratorGotoMarker',
+      targetLabel: breakLabel
+    };
+  }
+
+  // Transform ContinueStatement to _GeneratorGotoMarker
+  if (stmt.type === 'ContinueStatement' && !stmt.label) {
+    return {
+      type: '_GeneratorGotoMarker',
+      targetLabel: continueLabel
+    };
+  }
+
+  // Don't transform inside nested loops - they have their own break/continue targets
+  if (stmt.type === 'ForStatement' || stmt.type === 'WhileStatement' ||
+      stmt.type === 'DoWhileStatement' || stmt.type === 'ForOfStatement' ||
+      stmt.type === 'ForInStatement') {
+    return stmt;
+  }
+
+  // Recursively transform children
+  if (stmt.type === 'BlockStatement' && stmt.body) {
+    return {
+      ...stmt,
+      body: stmt.body.map(s => transformBreakContinue(s, breakLabel, continueLabel))
+    };
+  }
+
+  if (stmt.type === 'IfStatement') {
+    return {
+      ...stmt,
+      consequent: transformBreakContinue(stmt.consequent, breakLabel, continueLabel),
+      alternate: stmt.alternate ? transformBreakContinue(stmt.alternate, breakLabel, continueLabel) : null
+    };
+  }
+
+  if (stmt.type === 'TryStatement') {
+    return {
+      ...stmt,
+      block: transformBreakContinue(stmt.block, breakLabel, continueLabel),
+      handler: stmt.handler ? {
+        ...stmt.handler,
+        body: transformBreakContinue(stmt.handler.body, breakLabel, continueLabel)
+      } : null,
+      finalizer: stmt.finalizer ? transformBreakContinue(stmt.finalizer, breakLabel, continueLabel) : null
+    };
+  }
+
+  if (stmt.type === 'SwitchStatement') {
+    // Note: break inside switch targets the switch, not outer loops
+    // So we don't transform break here, only continue
+    return {
+      ...stmt,
+      cases: stmt.cases.map(c => ({
+        ...c,
+        consequent: c.consequent.map(s => {
+          // Don't transform break in switch (it targets the switch)
+          if (s.type === 'BreakStatement' && !s.label) return s;
+          return transformBreakContinue(s, breakLabel, continueLabel);
+        })
+      }))
+    };
+  }
+
+  return stmt;
+};
+
+// Transform a for-loop with yields into flat code
+const transformForLoop = (stmt, func) => {
+  const loopId = generatorLoopId++;
+  const testLabel = `__gen_loop_test_${loopId}`;
+  const afterLabel = `__gen_loop_after_${loopId}`;
+
+  const result = [];
+
+  // 1. Init statement (if any)
+  if (stmt.init) {
+    if (stmt.init.type === 'VariableDeclaration') {
+      result.push(stmt.init);
+    } else {
+      result.push({ type: 'ExpressionStatement', expression: stmt.init });
+    }
+  }
+
+  // 2. Loop test label marker (a special node that creates a state boundary)
+  result.push({
+    type: '_GeneratorLoopTestMarker',
+    label: testLabel,
+    afterLabel: afterLabel
+  });
+
+  // 3. Conditional branch: if test is false, goto after loop
+  //    This is a special node that compiles to: test, br_if $after (if false)
+  if (stmt.test) {
+    result.push({
+      type: '_GeneratorConditionalGoto',
+      test: stmt.test,
+      targetLabel: afterLabel,
+      branchIf: false  // branch if test is false
+    });
+  }
+
+  // 4. Loop body - extract statements from block, transforming break/continue
+  if (stmt.body.type === 'BlockStatement') {
+    for (const s of stmt.body.body) {
+      result.push(transformBreakContinue(s, afterLabel, testLabel));
+    }
+  } else {
+    result.push(transformBreakContinue(stmt.body, afterLabel, testLabel));
+  }
+
+  // 5. Update statement (if any)
+  if (stmt.update) {
+    result.push({ type: 'ExpressionStatement', expression: stmt.update });
+  }
+
+  // 6. Goto back to test
+  result.push({
+    type: '_GeneratorGotoMarker',
+    targetLabel: testLabel
+  });
+
+  // 7. After loop label marker
+  result.push({
+    type: '_GeneratorLabelMarker',
+    label: afterLabel
+  });
+
+  return result;
+};
+
+// Transform a while-loop with yields into flat code
+const transformWhileLoop = (stmt, func) => {
+  const loopId = generatorLoopId++;
+  const testLabel = `__gen_loop_test_${loopId}`;
+  const afterLabel = `__gen_loop_after_${loopId}`;
+
+  const result = [];
+
+  // 1. Loop test label marker
+  result.push({
+    type: '_GeneratorLoopTestMarker',
+    label: testLabel,
+    afterLabel: afterLabel
+  });
+
+  // 2. Conditional branch: if test is false, goto after loop
+  result.push({
+    type: '_GeneratorConditionalGoto',
+    test: stmt.test,
+    targetLabel: afterLabel,
+    branchIf: false  // branch if test is false
+  });
+
+  // 3. Loop body - transform break/continue
+  if (stmt.body.type === 'BlockStatement') {
+    for (const s of stmt.body.body) {
+      result.push(transformBreakContinue(s, afterLabel, testLabel));
+    }
+  } else {
+    result.push(transformBreakContinue(stmt.body, afterLabel, testLabel));
+  }
+
+  // 4. Goto back to test
+  result.push({
+    type: '_GeneratorGotoMarker',
+    targetLabel: testLabel
+  });
+
+  // 5. After loop label marker
+  result.push({
+    type: '_GeneratorLabelMarker',
+    label: afterLabel
+  });
+
+  return result;
+};
+
+// Transform a do-while-loop with yields into flat code
+const transformDoWhileLoop = (stmt, func) => {
+  const loopId = generatorLoopId++;
+  const bodyLabel = `__gen_loop_body_${loopId}`;
+  const afterLabel = `__gen_loop_after_${loopId}`;
+
+  const result = [];
+
+  // 1. Body label marker (do-while runs body first)
+  result.push({
+    type: '_GeneratorLoopTestMarker',
+    label: bodyLabel,
+    afterLabel: afterLabel
+  });
+
+  // 2. Loop body - transform break/continue
+  // For do-while, continue should re-check the condition (goto bodyLabel since test is after body)
+  // Actually, continue should skip to the test, which comes after body in our flat structure
+  // We need a test label. For do-while, continue jumps to the test (which is at the end of body)
+  // Let's add a test label for continue to jump to
+  const testLabel = `__gen_loop_test_${loopId}`;
+  if (stmt.body.type === 'BlockStatement') {
+    for (const s of stmt.body.body) {
+      result.push(transformBreakContinue(s, afterLabel, testLabel));
+    }
+  } else {
+    result.push(transformBreakContinue(stmt.body, afterLabel, testLabel));
+  }
+
+  // Test label for continue statements
+  result.push({
+    type: '_GeneratorLabelMarker',
+    label: testLabel
+  });
+
+  // 3. Conditional branch: if test is true, goto body
+  result.push({
+    type: '_GeneratorConditionalGoto',
+    test: stmt.test,
+    targetLabel: bodyLabel,
+    branchIf: true  // branch if test is true
+  });
+
+  // 4. After loop label marker
+  result.push({
+    type: '_GeneratorLabelMarker',
+    label: afterLabel
+  });
+
+  return result;
+};
+
 let doNotMarkFuncRef = false;
 const funcRef = (func, scope = null) => {
   if (!doNotMarkFuncRef) func.referenced = true;
@@ -726,6 +1093,46 @@ const generate = (scope, decl, global = false, name = undefined, valueUnused = f
 
     case 'YieldExpression':
       return cacheAst(decl, generateYield(scope, decl));
+
+    // Generator state machine markers - these create state boundaries for loop transformation
+    // All markers push undefined to the stack so generateBlock's drop mechanism works correctly
+    case '_GeneratorLoopTestMarker':
+      // This marks the start of a loop test in a transformed generator loop
+      // It creates a state boundary that the dispatch can jump to
+      return cacheAst(decl, [
+        [ '#generator_loop_test_marker', decl.label, decl.afterLabel ],
+        number(UNDEFINED) // Push value for drop
+      ]);
+
+    case '_GeneratorGotoMarker':
+      // This marks a "goto" in a transformed generator loop
+      // It will compile to: set state, br $dispatch
+      return cacheAst(decl, [
+        [ '#generator_goto_marker', decl.targetLabel ],
+        number(UNDEFINED) // Push value for drop
+      ]);
+
+    case '_GeneratorConditionalGoto': {
+      // This marks a conditional goto - test and branch if condition is met
+      // branchIf: true = branch if test is truthy, false = branch if test is falsy
+      // Compile the test inline, then add the conditional goto marker
+      const testWasm = generate(scope, decl.test);
+      const out = [
+        ...testWasm,
+        Opcodes.i32_to,  // convert to i32 for branching
+        [ '#generator_conditional_goto', decl.targetLabel, decl.branchIf ],
+        number(UNDEFINED) // Push value for drop
+      ];
+      return cacheAst(decl, out);
+    }
+
+    case '_GeneratorLabelMarker':
+      // This marks a label target in a transformed generator loop
+      // It creates a state boundary
+      return cacheAst(decl, [
+        [ '#generator_label_marker', decl.label ],
+        number(UNDEFINED) // Push value for drop
+      ]);
 
     case 'TemplateLiteral':
       return cacheAst(decl, generateTemplate(scope, decl));
@@ -1219,10 +1626,12 @@ const generateYield = (scope, decl) => {
     [ Opcodes.if, Blocktype.void ],
       // This is the yield to execute
 
-      // Update state to yields_seen (store at offset 0)
+      // Store resume state at offset 0
+      // Use a marker that will be replaced with the actual resume segment number during segment processing
+      // This ensures loop yields always resume to the same segment
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       Opcodes.i32_to_u,
-      [ Opcodes.local_get, scope.locals['#yields_seen'].idx ],
+      [ '#yield_resume_state', yieldState ],
       [ Opcodes.f64_store, 0, 0 ],
 
       // Store yielded value at offset 16 (from temp)
@@ -1243,11 +1652,19 @@ const generateYield = (scope, decl) => {
       number(0, Valtype.i32),
       [ Opcodes.i32_store, 0, 28 ],
 
+      // Marker: save all user locals before returning (for proper resume)
+      // This gets replaced with actual save code after _generatorLocals is known
+      [ '#save_generator_locals' ],
+
       // Return generator
       [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
       ...(scope.returnType != null ? [] : [ number(scope.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
       [ Opcodes.return ],
     [ Opcodes.end ],
+
+    // Marker: end of segment (yield point where we can resume)
+    // The jump table uses this to split body into segments and skip to resume point
+    [ '#yield_segment_marker', yieldState ],
 
     // yields_seen <= state - we're resuming past this yield point
     // Check if yields_seen == state (exact resume point) vs < state (skipping past)
@@ -9794,38 +10211,19 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           extractYieldsFromExpressions(body.body);
         }
 
-        // For state machine: collect yields and assign state numbers
-        const yields = collectYields(body)
-        for (let i = 0; i < yields.length; i++) {
-          yields[i]._yieldState = i;
-        }
-        func._yieldCount = yields.length;
-
-        // Mark statements before the first yield so they only run on state == 0
-        // This prevents pre-yield code from running on every next() call
-        if (body.type === 'BlockStatement' && yields.length > 0) {
-          let firstYieldStmtIdx = -1;
-          for (let i = 0; i < body.body.length; i++) {
-            if (containsYield(body.body[i])) {
-              firstYieldStmtIdx = i;
-              break;
-            }
-          }
-          // Mark all statements before the first yield-containing statement
-          if (firstYieldStmtIdx > 0) {
-            for (let i = 0; i < firstYieldStmtIdx; i++) {
-              body.body[i]._generatorPreYield = true;
-            }
-            func._hasPreYieldStatements = true;
-          }
-        }
+        // Transform generator body into state machine form
+        // This marks yields with state numbers and identifies loops containing yields
+        transformGeneratorToStateMachine(body, func);
 
         // Store user params count for yield slot offset calculation in generateYield
         const userParamsCount = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern').length;
         func._userParamsCount = userParamsCount;
 
-        // Add state local for state machine tracking
+        // Add state local for state machine tracking (resume state, set only on yield)
         allocVar(func, '#generator_state', false, false);
+
+        // Add dispatch_state local for intra-call control flow (gotos within a single next() call)
+        allocVar(func, '#dispatch_state', false, false);
 
         // Add yields_seen counter for runtime yield counting
         allocVar(func, '#yields_seen', false, false);
@@ -9964,12 +10362,60 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         const userParams = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern')
           .map(p => p.type === 'Identifier' ? p.name : p.left.name);
 
-        // Calculate allocation size: base 80 bytes + 12 bytes per param + 12 bytes per yield slot
+        // Identify user locals (variables declared in the generator body, not params or internal)
+        // These need to be saved/restored across yields
+        const userLocals = [];
+        const paramSet = new Set(userParams);
+        for (const [name, local] of Object.entries(func.locals)) {
+          // Skip internal locals (start with #), params, and type locals (odd indices after their value)
+          if (name.startsWith('#')) continue;
+          if (paramSet.has(name)) continue;
+          if (name.endsWith('#type')) continue; // Skip explicit type locals
+          // Only include f64 value locals (even idx), type local is at idx+1
+          if (local.type !== Valtype.f64) continue;
+          userLocals.push(name);
+        }
+
+        // Calculate allocation size: base 80 bytes + 12 bytes per param + 12 bytes per yield slot + 12 bytes per user local
         // Base layout: state(8) + indirect(8) + value(8) + valueType(4) + done(4) + input(8) + inputType(4) +
         //              return_requested(4) + return_value(8) + return_type(4) + throw_requested(4) + throw_value(8) + throw_type(4) + padding(4) = 80
-        // Then: user params (12 bytes each), then yield input slots (12 bytes each)
+        // Then: user params (12 bytes each), then yield input slots (12 bytes each), then user locals (12 bytes each)
         const yieldCount = func._yieldCount ?? 0;
-        const genAllocSize = 80 + userParams.length * 12 + yieldCount * 12;
+        const localsBaseOffset = 80 + userParams.length * 12 + yieldCount * 12;
+        const genAllocSize = localsBaseOffset + userLocals.length * 12;
+
+        // Store generator locals info for use by generateYield
+        func._generatorLocals = userLocals.map((name, i) => ({
+          name,
+          offset: localsBaseOffset + i * 12
+        }));
+
+        // Process pureBodyWasm to replace #save_generator_locals markers
+        // with actual save instructions now that we know what locals exist
+        const processedBodyWasm = [];
+        for (const instr of pureBodyWasm) {
+          if (Array.isArray(instr) && instr[0] === '#save_generator_locals') {
+            // Generate save code for all user locals
+            for (const { name, offset } of func._generatorLocals) {
+              const local = func.locals[name];
+              if (!local) continue;
+              processedBodyWasm.push(
+                // Store value
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                [ Opcodes.local_get, local.idx ],
+                [ Opcodes.f64_store, 0, offset ],
+                // Store type
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                [ Opcodes.local_get, local.idx + 1 ],
+                [ Opcodes.i32_store, 0, offset + 8 ]
+              );
+            }
+          } else {
+            processedBodyWasm.push(instr);
+          }
+        }
 
         // Run preface (parameter initialization including defaults) BEFORE creation check
         // This ensures TDZ errors are thrown at creation time, not step time
@@ -10088,12 +10534,311 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
             ];
           }),
 
-          // Initialize yields_seen counter to 0
+          // Restore user locals from generator object (only if state > 0, i.e., resuming)
+          // We only restore if we're resuming (state > 0) because on first run locals have their initial values
+          [ Opcodes.local_get, func.locals['#generator_state'].idx ],
           number(0),
-          [ Opcodes.local_set, func.locals['#yields_seen'].idx ],
+          [ Opcodes.f64_gt ],
+          [ Opcodes.if, Blocktype.void ],
+            ...func._generatorLocals.flatMap(({ name, offset }) => {
+              const local = func.locals[name];
+              if (!local) return [];
+              return [
+                // Load value
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                [ Opcodes.f64_load, 0, offset ],
+                [ Opcodes.local_set, local.idx ],
+                // Load type
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                [ Opcodes.i32_load, 0, offset + 8 ],
+                [ Opcodes.local_set, local.idx + 1 ]
+              ];
+            }),
+          [ Opcodes.end ],
 
-          // Run body - yields will check yields_seen > state and return when matched
-          ...pureBodyWasm
+          // Build state machine dispatch using br_table with dispatch loop
+          // Based on regenerator's approach: wrap body in dispatch loop, jump to correct state
+          // See: https://babeljs.io/docs/babel-plugin-transform-regenerator
+          ...(() => {
+            // First pass: collect all state boundaries and their labels
+            // State boundaries are created by:
+            // - #yield_segment_marker (after each yield)
+            // - #generator_loop_test_marker (start of loop test)
+            // - #generator_label_marker (label targets like "after loop")
+            const labelToState = new Map(); // label name -> state number
+            const stateToLabel = new Map(); // state number -> label name (for debugging)
+            // State 0 is reserved for the initial segment (code before any markers)
+            // Start assigning marker states from state 1
+            let stateCounter = 1;
+
+            // First, scan to assign state numbers to all labels
+            for (const instr of processedBodyWasm) {
+              if (Array.isArray(instr)) {
+                if (instr[0] === '#generator_loop_test_marker') {
+                  const [, testLabel, afterLabel] = instr;
+                  labelToState.set(testLabel, stateCounter);
+                  stateToLabel.set(stateCounter, testLabel);
+                  stateCounter++;
+                } else if (instr[0] === '#generator_label_marker') {
+                  const [, label] = instr;
+                  labelToState.set(label, stateCounter);
+                  stateToLabel.set(stateCounter, label);
+                  stateCounter++;
+                } else if (instr[0] === '#yield_segment_marker') {
+                  stateCounter++;
+                }
+              }
+            }
+
+            // Second pass: split body into segments
+            // A new segment starts after yield markers and at loop/label markers
+            const segments = [];
+            let currentSegment = [];
+            // Track which segment each yield should resume to
+            const yieldToResumeSegment = new Map();
+
+            for (const instr of processedBodyWasm) {
+              if (Array.isArray(instr)) {
+                if (instr[0] === '#yield_segment_marker') {
+                  const [, yieldState] = instr;
+                  // End current segment, start new one
+                  segments.push(currentSegment);
+                  // The new segment (which starts now) is where this yield resumes
+                  // Its index is segments.length (after the push above)
+                  yieldToResumeSegment.set(yieldState, segments.length);
+                  currentSegment = [];
+                } else if (instr[0] === '#generator_loop_test_marker' || instr[0] === '#generator_label_marker') {
+                  // End current segment (if non-empty), start new one
+                  // But first, add state transition to jump to this label's state
+                  const label = instr[1];
+                  const targetState = labelToState.get(label);
+                  if (currentSegment.length > 0) {
+                    // Add implicit goto to the next state (fall through)
+                    // This will be converted to set state + br $dispatch
+                    currentSegment.push(['#implicit_goto_state', targetState]);
+                    segments.push(currentSegment);
+                  }
+                  currentSegment = [];
+                } else if (instr[0] === '#generator_goto_marker') {
+                  // Explicit goto - add to current segment
+                  const [, targetLabel] = instr;
+                  const targetState = labelToState.get(targetLabel);
+                  if (targetState !== undefined) {
+                    currentSegment.push(['#explicit_goto_state', targetState]);
+                  }
+                } else if (instr[0] === '#generator_conditional_goto') {
+                  // Conditional goto - test is already on stack (compiled before this marker)
+                  // branchIf: true = branch if truthy, false = branch if falsy
+                  const [, targetLabel, branchIf] = instr;
+                  const targetState = labelToState.get(targetLabel);
+                  if (targetState !== undefined) {
+                    currentSegment.push(['#conditional_goto_state', targetState, branchIf]);
+                  }
+                } else {
+                  currentSegment.push(instr);
+                }
+              } else {
+                currentSegment.push(instr);
+              }
+            }
+            segments.push(currentSegment); // Final segment
+
+            // Filter out empty segments and segments that only have drops/undefined
+            const filteredSegments = segments.filter(seg => {
+              const meaningful = seg.filter(instr => {
+                if (!Array.isArray(instr)) return true;
+                // Filter out just drops of undefined
+                if (instr[0] === Opcodes.drop) return false;
+                if (instr[0] === Opcodes.f64_const && instr[1] === 0) return false;
+                return true;
+              });
+              return meaningful.length > 0;
+            });
+
+            if (filteredSegments.length <= 1 && !labelToState.size) {
+              // No yields and no loop transformations, just run the body directly
+              return processedBodyWasm.filter(instr =>
+                !(Array.isArray(instr) && (
+                  instr[0] === '#yield_segment_marker' ||
+                  instr[0] === '#generator_loop_test_marker' ||
+                  instr[0] === '#generator_label_marker' ||
+                  instr[0] === '#generator_goto_marker' ||
+                  instr[0] === '#generator_conditional_goto'
+                ))
+              );
+            }
+
+            // Use segments directly (they may be more than stateCounter if yields don't align with labels)
+            const numStates = Math.max(segments.length, stateCounter + 1);
+            const result = [];
+
+            // Initialize yields_seen to state so that when we jump to segment N,
+            // the first yield we hit will have yields_seen = N+1, and N+1 > N is TRUE
+            result.push(
+              [ Opcodes.local_get, func.locals['#generator_state'].idx ],
+              [ Opcodes.local_set, func.locals['#yields_seen'].idx ]
+            );
+
+            // Initialize dispatch_state from generator_state for initial dispatch
+            // This is used for intra-call control flow (gotos), while generator_state
+            // is only set on yield (resume state)
+            result.push(
+              [ Opcodes.local_get, func.locals['#generator_state'].idx ],
+              [ Opcodes.local_set, func.locals['#dispatch_state'].idx ]
+            );
+
+            // Structure with dispatch LOOP:
+            // loop $dispatch
+            //   block $done
+            //     block $state_n
+            //       ...
+            //       block $state_0
+            //         br_table state -> [0, 1, ..., n]
+            //       end
+            //       segment 0
+            //     end
+            //     segment 1
+            //     ...
+            //   end
+            //   unreachable (should never reach - exits via return or br $done)
+            // end
+
+            // Dispatch loop - allows state transitions to re-dispatch
+            result.push([ Opcodes.loop, Blocktype.void ]); // $dispatch
+
+            // Outer block - br here when done
+            result.push([ Opcodes.block, Blocktype.void ]); // $done
+
+            // Nested blocks for each state
+            for (let i = numStates - 1; i >= 0; i--) {
+              result.push([ Opcodes.block, Blocktype.void ]); // $state_i
+            }
+
+            // br_table dispatch - uses dispatch_state for intra-call control flow
+            const branchTargets = [];
+            for (let i = 0; i < numStates; i++) {
+              branchTargets.push(i);
+            }
+            result.push(
+              [ Opcodes.local_get, func.locals['#dispatch_state'].idx ],
+              Opcodes.i32_trunc_sat_f64_s,
+              [ Opcodes.br_table, ...encodeVector(branchTargets), numStates - 1 ]
+            );
+
+            // After br_table, this is unreachable
+            result.push([ Opcodes.unreachable ]);
+
+            // Close blocks and add segments
+            // Process each segment, converting goto markers to actual br instructions
+            for (let i = 0; i < numStates; i++) {
+              result.push([ Opcodes.end ]); // close $state_i block
+
+              const segment = segments[i] || [];
+              for (const instr of segment) {
+                if (Array.isArray(instr) && (instr[0] === '#explicit_goto_state' || instr[0] === '#implicit_goto_state')) {
+                  const targetState = instr[1];
+                  // Set dispatch_state (NOT generator_state) and br $dispatch
+                  // dispatch_state is for intra-call control flow, generator_state is only set on yield
+                  // After processing state i's end, we're between blocks.
+                  // The segment code runs AFTER the end of state_i block.
+                  // So we're inside: $dispatch > $done > $state_{i+1} > ... > $state_{numStates-1}
+                  // That's: (numStates - 1 - i) state blocks + $done + $dispatch
+                  // Remaining states at depths 0..(remainingStates-1), $done at remainingStates, $dispatch at remainingStates+1
+                  const remainingStates = numStates - 1 - i;
+                  const dispatchDepth = remainingStates + 1; // $dispatch is one past $done
+
+                  result.push(
+                    number(targetState),
+                    [ Opcodes.local_set, func.locals['#dispatch_state'].idx ],
+                    [ Opcodes.br, dispatchDepth ]
+                  );
+                } else if (Array.isArray(instr) && instr[0] === '#conditional_goto_state') {
+                  const [, targetState, branchIf] = instr;
+                  // Test value is already on stack (i32)
+                  // If branchIf is false, we branch when test is falsy (i.e., test == 0)
+                  // If branchIf is true, we branch when test is truthy (i.e., test != 0)
+                  const remainingStates = numStates - 1 - i;
+                  const dispatchDepth = remainingStates + 1; // Same calculation as goto
+
+                  // Use if/then to conditionally set dispatch_state (NOT generator_state) and branch
+                  if (branchIf) {
+                    // Branch if truthy: if (test) { dispatch_state = target; br $dispatch }
+                    result.push(
+                      [ Opcodes.if, Blocktype.void ],
+                        number(targetState),
+                        [ Opcodes.local_set, func.locals['#dispatch_state'].idx ],
+                        [ Opcodes.br, dispatchDepth + 1 ], // +1 for the if block
+                      [ Opcodes.end ]
+                    );
+                  } else {
+                    // Branch if falsy: if (!test) { dispatch_state = target; br $dispatch }
+                    // Since test is already i32, we can use i32.eqz to invert
+                    result.push(
+                      [ Opcodes.i32_eqz ],
+                      [ Opcodes.if, Blocktype.void ],
+                        number(targetState),
+                        [ Opcodes.local_set, func.locals['#dispatch_state'].idx ],
+                        [ Opcodes.br, dispatchDepth + 1 ], // +1 for the if block
+                      [ Opcodes.end ]
+                    );
+                  }
+                } else if (Array.isArray(instr) && instr[0] === '#yield_resume_state') {
+                  // Replace marker with actual resume segment number
+                  const [, yieldState] = instr;
+                  const resumeSegment = yieldToResumeSegment.get(yieldState);
+                  if (resumeSegment !== undefined) {
+                    result.push(number(resumeSegment));
+                  } else {
+                    // Fallback: use yieldState + 1 (old behavior)
+                    result.push(number(yieldState + 1));
+                  }
+                } else {
+                  result.push(instr);
+                }
+              }
+            }
+
+            // Close $done block
+            result.push([ Opcodes.end ]);
+
+            // After $done block, exit dispatch loop
+            // Normal fallthrough here means the generator has completed (all iterations done)
+            // Wasm loops exit normally when there's no br back to the loop label
+
+            // Close $dispatch loop
+            result.push([ Opcodes.end ]);
+
+            // After all segments complete, generator is done
+            // Set value=undefined, done=1 and return the generator object
+            result.push(
+              // Store undefined at offset 16 (value)
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              Opcodes.i32_to_u,
+              number(UNDEFINED),
+              [ Opcodes.f64_store, 0, 16 ],
+
+              // Store type undefined at offset 24
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              Opcodes.i32_to_u,
+              number(TYPES.undefined, Valtype.i32),
+              [ Opcodes.i32_store, 0, 24 ],
+
+              // Store done=1 at offset 28
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              Opcodes.i32_to_u,
+              number(1, Valtype.i32),
+              [ Opcodes.i32_store, 0, 28 ],
+
+              // Return the generator object
+              [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+              ...(func.returnType != null ? [] : [ number(func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
+              [ Opcodes.return ]
+            );
+
+            return result;
+          })()
         );
       } else if (func.async) {
         // make promise at the start
