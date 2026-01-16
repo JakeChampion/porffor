@@ -3332,7 +3332,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       }
 
       // Override generator.next() to use call_indirect for state machine support
-      if (protoName === 'next' && protoBC[TYPES.__porffor_generator]) {
+      // Always add this handler to ensure deterministic compilation during precompile
+      if (protoName === 'next') {
         protoBC[TYPES.__porffor_generator] = () => {
           // Ensure exception tag exists for try-catch around call_indirect
           ensureTag();
@@ -3480,10 +3481,43 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
 
           return out;
         };
+
+        // Always add handlers for lazy iterator types to ensure deterministic precompile
+        // These types have _prototype_next functions that may or may not exist in builtinFuncs
+        // depending on the previous precompile state
+        const lazyIteratorHandlers = {
+          '__porffor_wrapperiterator': '__Porffor_WrapperIterator_prototype_next',
+          '__porffor_takeiterator': '__Porffor_TakeIterator_prototype_next',
+          '__porffor_dropiterator': '__Porffor_DropIterator_prototype_next',
+          '__porffor_mapiterator': '__Porffor_MapIterator_prototype_next',
+          '__porffor_filteriterator': '__Porffor_FilterIterator_prototype_next'
+        };
+        for (const [typeName, builtinName] of Object.entries(lazyIteratorHandlers)) {
+          const type = TYPES[typeName];
+          if (type != null) {
+            protoBC[type] = () => generate(scope, {
+              type: 'CallExpression',
+              optional: decl.optional,
+              callee: {
+                type: 'Identifier',
+                name: builtinName
+              },
+              arguments: [
+                {
+                  type: 'Identifier',
+                  name: '#proto_target'
+                },
+                ...decl.arguments
+              ],
+              _protoInternalCall: true
+            });
+          }
+        }
       }
 
       // Override generator.throw() to properly inject exception at yield point
-      if (protoName === 'throw' && protoBC[TYPES.__porffor_generator]) {
+      // Always add this handler to ensure deterministic compilation during precompile
+      if (protoName === 'throw') {
         protoBC[TYPES.__porffor_generator] = () => {
           // Ensure exception tag exists for try-catch around call_indirect
           ensureTag();
@@ -3662,7 +3696,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       }
 
       // Override generator.return() to run finally blocks before completing
-      if (protoName === 'return' && protoBC[TYPES.__porffor_generator]) {
+      // Always add this handler to ensure deterministic compilation during precompile
+      if (protoName === 'return') {
         protoBC[TYPES.__porffor_generator] = () => {
           const out = [];
           const genLocal = localTmp(scope, '#gen_return_gen');
@@ -3823,6 +3858,26 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
 
       // alias primitive prototype with primitive object types
       aliasPrimObjsBC(protoBC);
+
+      // For .next() calls, ensure all iterator types are in usedTypes to get
+      // deterministic type switch generation during precompile
+      if (protoName === 'next') {
+        const iteratorTypes = [
+          TYPES.__porffor_generator,
+          TYPES.__porffor_wrapperiterator,
+          TYPES.__porffor_takeiterator,
+          TYPES.__porffor_dropiterator,
+          TYPES.__porffor_mapiterator,
+          TYPES.__porffor_filteriterator
+        ];
+        for (const t of iteratorTypes) {
+          if (t != null) {
+            usedTypes.add(t);
+            scope.usedTypes ??= new Set();
+            scope.usedTypes.add(t);
+          }
+        }
+      }
 
       return [
         ...out,

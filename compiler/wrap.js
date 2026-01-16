@@ -326,7 +326,11 @@ ${flags & 0b0001 ? `    get func idx: ${get}
       return out;
     }
 
-    case TYPES.__porffor_wrapperiterator: {
+    case TYPES.__porffor_wrapperiterator:
+    case TYPES.__porffor_takeiterator:
+    case TYPES.__porffor_dropiterator:
+    case TYPES.__porffor_mapiterator:
+    case TYPES.__porffor_filteriterator: {
       const out = { type: 'Iterator' };
       Object.defineProperty(out, Symbol.for('nodejs.util.inspect.custom'), {
         value(depth, opts, inspect) {
