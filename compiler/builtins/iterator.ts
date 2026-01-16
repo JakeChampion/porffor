@@ -560,6 +560,24 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
     return result;
   }
 
+  // Handle objects with Symbol.iterator explicitly
+  // This is needed because precompiled code doesn't include object handling in for..of
+  if (t == Porffor.TYPES.object) {
+    const iteratorMethod: any = iterable[Symbol.iterator];
+    if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
+      // Get the iterator and use for..of on it (not on the original object)
+      const iterator: any = iteratorMethod.call(iterable);
+      const result: any[] = [];
+      for (const x of iterator) {
+        result.push(x);
+      }
+      // Dummy reference to ensure __Porffor_object_getIterator is compiled
+      // This function is needed for runtime for..of on objects in user code
+      if (false) __Porffor_object_getIterator(iterable);
+      return result;
+    }
+  }
+
   throw new TypeError('Value is not iterable');
 };
 

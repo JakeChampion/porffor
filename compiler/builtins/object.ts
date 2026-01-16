@@ -702,6 +702,26 @@ export const __Object_groupBy = (items: any, callbackFn: any): object => {
 
   const out: object = {};
 
+  // Handle objects with Symbol.iterator explicitly
+  // This is needed because precompiled code doesn't include object handling in for..of
+  if (Porffor.type(items) == Porffor.TYPES.object) {
+    const iteratorMethod: any = items[Symbol.iterator];
+    if (Porffor.type(iteratorMethod) != Porffor.TYPES.function) {
+      throw new TypeError('items is not iterable');
+    }
+    const arr: any[] = Array.from(items);
+    let i: i32 = 0;
+    for (const x of arr) {
+      const k: any = callbackFn(x, i++);
+      if (!__Object_hasOwn(out, k)) {
+        const keyArr: any[] = Porffor.malloc();
+        out[k] = keyArr;
+      }
+      Porffor.array.fastPush(out[k], x);
+    }
+    return out;
+  }
+
   let i: i32 = 0;
   for (const x of items) {
     const k: any = callbackFn(x, i++);

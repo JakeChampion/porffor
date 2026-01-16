@@ -6570,8 +6570,9 @@ const generateForOf = (scope, decl) => {
 
     // For objects with Symbol.iterator, get the iterator and use its type for iteration
     // This allows generator-based iterators to work properly via the generator iteration path
-    // Skip during precompile since builtins don't iterate over arbitrary objects
-    ...(!globalThis.precompile ? [
+    // Note: Skip during precompile because __Porffor_object_getIterator isn't compiled yet
+    // The function call is wrapped to avoid evaluating includeBuiltin during precompile
+    ...(globalThis.precompile ? [] : (() => [
       ...iterType,
       number(TYPES.object, Valtype.i32),
       [ Opcodes.i32_eq ],
@@ -6588,7 +6589,7 @@ const generateForOf = (scope, decl) => {
         Opcodes.i32_to_u,
         [ Opcodes.local_set, pointer ],
       [ Opcodes.end ],
-    ] : []),
+    ])()),
 
     // get length - special handling for WrapperIterator
     ...typeSwitch(scope, iterType, [

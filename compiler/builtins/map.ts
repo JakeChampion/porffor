@@ -110,6 +110,22 @@ export const Map = function (iterable: any): Map {
     // Note: Spec requires checking if "set" is callable (7a, 7c), but we skip this check
     // because property lookup on builtin objects returns undefined due to architectural
     // limitations. We call __Map_prototype_set directly which always works.
+
+    // Handle objects with Symbol.iterator using Array.from
+    // to avoid for..of type issues in precompiled builtins
+    if (Porffor.type(iterable) == Porffor.TYPES.object) {
+      const iteratorMethod: any = iterable[Symbol.iterator];
+      if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
+        // Use Array.from to convert iterator to array, then iterate array
+        const arr: any[] = Array.from(iterable);
+        for (const x of arr) {
+          if (!Porffor.object.isObject(x)) throw new TypeError('Iterator contains non-object');
+          __Map_prototype_set(out, x[0], x[1]);
+        }
+        return out;
+      }
+    }
+
     for (const x of iterable) {
       if (!Porffor.object.isObject(x)) throw new TypeError('Iterator contains non-object');
       __Map_prototype_set(out, x[0], x[1]);
@@ -125,6 +141,26 @@ export const __Map_groupBy = (items: any, callbackFn: any): Map => {
   if (Porffor.type(callbackFn) != Porffor.TYPES.function) throw new TypeError('callbackFn is not a function');
 
   const out: Map = new Map();
+
+  // Handle objects with Symbol.iterator explicitly
+  // This is needed because precompiled code doesn't include object handling in for..of
+  if (Porffor.type(items) == Porffor.TYPES.object) {
+    const iteratorMethod: any = items[Symbol.iterator];
+    if (Porffor.type(iteratorMethod) != Porffor.TYPES.function) {
+      throw new TypeError('items is not iterable');
+    }
+    const arr: any[] = Array.from(items);
+    let i: i32 = 0;
+    for (const x of arr) {
+      const key: any = callbackFn(x, i++);
+      if (!__Map_prototype_has(out, key)) {
+        const keyArr: any[] = Porffor.malloc();
+        __Map_prototype_set(out, key, keyArr);
+      }
+      Porffor.array.fastPush(__Map_prototype_get(out, key), x);
+    }
+    return out;
+  }
 
   let i: i32 = 0;
   for (const x of items) {

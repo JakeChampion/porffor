@@ -63,6 +63,17 @@ export default async () => {
         out[i++] = x;
       }
       len = i;
+    } else if (Porffor.type(arg) == Porffor.TYPES.object) {
+      // Handle objects with Symbol.iterator
+      const iteratorMethod: any = arg[Symbol.iterator];
+      if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
+        const iter: any = iteratorMethod.call(arg);
+        let i: i32 = 0;
+        for (const x of iter) {
+          out[i++] = x;
+        }
+        len = i;
+      }
     } else if (Porffor.type(arg) == Porffor.TYPES.number) {
       len = Math.trunc(arg);
     }
@@ -103,6 +114,26 @@ export const __${name}_from = (arg: any, mapFn: any): ${name} => {
       }
     }
     len = i;
+  } else if (Porffor.type(arg) == Porffor.TYPES.object) {
+    // Handle objects with Symbol.iterator
+    const iteratorMethod: any = arg[Symbol.iterator];
+    if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
+      const iter: any = iteratorMethod.call(arg);
+      let i: i32 = 0;
+      if (Porffor.type(mapFn) != Porffor.TYPES.undefined) {
+        if (Porffor.type(mapFn) != Porffor.TYPES.function) throw new TypeError('Called Array.from with a non-function mapFn');
+
+        for (const x of iter) {
+          arr[i] = mapFn(x, i);
+          i++;
+        }
+      } else {
+        for (const x of iter) {
+          arr[i++] = x;
+        }
+      }
+      len = i;
+    }
   }
 
   arr.length = len;
