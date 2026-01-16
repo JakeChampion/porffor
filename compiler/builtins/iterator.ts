@@ -150,7 +150,7 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
   // Generators need to be eagerly consumed into an array
   // since WrapperIterator uses index-based iteration
   if (t == Porffor.TYPES.__porffor_generator) {
-    const result: any[] = [];
+    const result: any[] = Porffor.malloc();
     for (const x of obj) {
       result.push(x);
     }
@@ -171,7 +171,7 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
       // Call Symbol.iterator to get the iterator
       const iter: any = iteratorMethod.call(obj);
       // Eagerly consume the iterator into an array (since WrapperIterator uses index-based iteration)
-      const result: any[] = [];
+      const result: any[] = Porffor.malloc();
       for (const x of iter) {
         result.push(x);
       }
@@ -183,7 +183,7 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
     const next: any = obj.next;
     if (typeof next === 'function') {
       // Eagerly consume the iterator into an array
-      const result: any[] = [];
+      const result: any[] = Porffor.malloc();
       let iterResult: any = next.call(obj);
       while (!iterResult.done) {
         result.push(iterResult.value);
@@ -209,7 +209,7 @@ export const __Porffor_WrapperIterator_prototype_map = (storage: any[], mapper: 
   const length: i32 = __Porffor_iterator_getLength(iterable);
 
   // Collect all mapped values into a new array
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   for (let i: i32 = index; i < length; i++) {
     const value: any = __Porffor_iterator_getElement(iterable, i);
     result.push(mapper(value, i));
@@ -232,7 +232,7 @@ export const __Porffor_WrapperIterator_prototype_filter = (storage: any[], predi
   let index: i32 = storage[1];
   const length: i32 = __Porffor_iterator_getLength(iterable);
 
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   for (let i: i32 = index; i < length; i++) {
     const value: any = __Porffor_iterator_getElement(iterable, i);
     if (predicate(value, i)) {
@@ -256,7 +256,7 @@ export const __Porffor_WrapperIterator_prototype_take = (storage: any[], limit: 
   let index: i32 = storage[1];
   const length: i32 = __Porffor_iterator_getLength(iterable);
 
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   const endIndex: i32 = index + n < length ? index + n : length;
   for (let i: i32 = index; i < endIndex; i++) {
     result.push(__Porffor_iterator_getElement(iterable, i));
@@ -278,7 +278,7 @@ export const __Porffor_WrapperIterator_prototype_drop = (storage: any[], count: 
   let index: i32 = storage[1];
   const length: i32 = __Porffor_iterator_getLength(iterable);
 
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   const newStart: i32 = index + n < length ? index + n : length;
   for (let i: i32 = newStart; i < length; i++) {
     result.push(__Porffor_iterator_getElement(iterable, i));
@@ -299,7 +299,7 @@ export const __Porffor_WrapperIterator_prototype_flatMap = (storage: any[], mapp
   let index: i32 = storage[1];
   const length: i32 = __Porffor_iterator_getLength(iterable);
 
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   for (let i: i32 = index; i < length; i++) {
     const value: any = __Porffor_iterator_getElement(iterable, i);
     const mapped: any = mapper(value, i);
@@ -354,7 +354,7 @@ export const __Porffor_WrapperIterator_prototype_toArray = (storage: any[]) => {
   let index: i32 = storage[1];
   const length: i32 = __Porffor_iterator_getLength(iterable);
 
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   for (let i: i32 = index; i < length; i++) {
     result.push(__Porffor_iterator_getElement(iterable, i));
   }
@@ -467,7 +467,7 @@ export const __Porffor_WrapperIterator_prototype_Symbol_toStringTag$get = () => 
 // Iterator.concat - concatenates multiple iterables into one iterator
 // NOTE: Has known bug due to Porffor variable capture issue in builtins
 export const __Iterator_concat = (...iterables: any[]): __Porffor_WrapperIterator => {
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   const numIterables: i32 = iterables.length;
 
   for (let idx: i32 = 0; idx < numIterables; idx++) {
@@ -545,7 +545,7 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
   if (t == Porffor.TYPES.array) {
     // Already an array, return copy
     const arr: any[] = iterable as any[];
-    const result: any[] = [];
+    const result: any[] = Porffor.malloc();
     const len: i32 = arr.length;
     for (let i: i32 = 0; i < len; i++) {
       result.push(arr[i]);
@@ -561,7 +561,7 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
       t == Porffor.TYPES.bytestring ||
       t == Porffor.TYPES.set ||
       (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
-    const result: any[] = [];
+    const result: any[] = Porffor.malloc();
     const length: i32 = __Porffor_iterator_getLength(iterable);
     for (let i: i32 = 0; i < length; i++) {
       result.push(__Porffor_iterator_getElement(iterable, i));
@@ -571,7 +571,7 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
 
   // Generators need to be consumed using for..of
   if (t == Porffor.TYPES.__porffor_generator) {
-    const result: any[] = [];
+    const result: any[] = Porffor.malloc();
     for (const x of iterable) {
       result.push(x);
     }
@@ -585,7 +585,7 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
     if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
       // Get the iterator and use for..of on it (not on the original object)
       const iterator: any = iteratorMethod.call(iterable);
-      const result: any[] = [];
+      const result: any[] = Porffor.malloc();
       for (const x of iterator) {
         result.push(x);
       }
@@ -661,9 +661,9 @@ export const __Iterator_zip = (iterables: any[], options: any = undefined): __Po
   }
 
   // Build result array of tuples
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   for (let j: i32 = 0; j < resultLength; j++) {
-    const tuple: any[] = [];
+    const tuple: any[] = Porffor.malloc();
     for (let i: i32 = 0; i < numIterables; i++) {
       if (j < lengths[i]) {
         const arr: any[] = arrays[i];
@@ -743,7 +743,7 @@ export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): _
   }
 
   // Build result array of objects
-  const result: any[] = [];
+  const result: any[] = Porffor.malloc();
   for (let j: i32 = 0; j < resultLength; j++) {
     const obj: object = {};
     for (let i: i32 = 0; i < numKeys; i++) {
