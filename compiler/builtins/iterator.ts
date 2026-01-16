@@ -153,8 +153,23 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
     return obj;
   }
 
-  // Check if it's an iterator-like object with a next() method
+  // Check if object has Symbol.iterator or is iterator-like with next() method
   if (t == Porffor.TYPES.object) {
+    // First check for Symbol.iterator (iterable protocol)
+    const iteratorMethod: any = obj[Symbol.iterator];
+    if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
+      // Call Symbol.iterator to get the iterator
+      const iter: any = iteratorMethod.call(obj);
+      // Eagerly consume the iterator into an array (since WrapperIterator uses index-based iteration)
+      const result: any[] = [];
+      for (const x of iter) {
+        result.push(x);
+      }
+      const storage: any[] = __Porffor_WrapperIterator_create(result);
+      return __Porffor_WrapperIterator(storage);
+    }
+
+    // Fall back to iterator-like object with next() method
     const next: any = obj.next;
     if (typeof next === 'function') {
       // Eagerly consume the iterator into an array

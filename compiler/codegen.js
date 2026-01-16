@@ -3848,21 +3848,62 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
         ...internalThrow(scope, 'TypeError', 'Cannot spread a non-iterable'),
       [ Opcodes.end ],
 
-      // convert objects with Symbol.iterator to array (only if builtin is available)
-      ...('__Porffor_iterableToArray' in builtinFuncs ? [
+      // convert objects with Symbol.iterator to array using for..of (handles generators)
+      // skip during precompile since builtins don't spread arbitrary objects
+      // Note: we use a Wasm node to bypass type inference and read type dynamically
+      ...(!globalThis.precompile ? [
         [ Opcodes.local_get, localTmp(scope, '#spread#type', Valtype.i32) ],
         number(TYPES.object, Valtype.i32),
         [ Opcodes.i32_eq ],
         [ Opcodes.if, Blocktype.void ],
-          // call __Porffor_iterableToArray(obj) to convert to array
-          // #spread is already f64, pass directly with type
-          [ Opcodes.local_get, localTmp(scope, '#spread') ],
-          number(TYPES.object, Valtype.i32),
-          [ Opcodes.call, includeBuiltin(scope, '__Porffor_iterableToArray').index ],
-          // function returns f64 (array pointer), store directly
+          // Generate: let #spread_arr = []; for (const #x of <object>) #spread_arr.push(#x);
+          // Declare and initialize #spread_arr as a local (drops undefined result)
+          ...generate(scope, {
+            type: 'VariableDeclaration',
+            declarations: [{
+              type: 'VariableDeclarator',
+              id: { type: 'Identifier', name: '#spread_arr' },
+              init: { type: 'ArrayExpression', elements: [] }
+            }],
+            kind: 'let'
+          }),
+          [ Opcodes.drop ],
+          // For..of loop to collect elements - use Wasm node to bypass type inference
+          ...generate(scope, {
+            type: 'ForOfStatement',
+            left: {
+              type: 'VariableDeclaration',
+              declarations: [{ type: 'VariableDeclarator', id: { type: 'Identifier', name: '#spread_elem' } }],
+              kind: 'const'
+            },
+            // Use Wasm node with dynamic type to bypass cached type inference
+            right: {
+              type: 'Wasm',
+              wasm: [ [ Opcodes.local_get, localTmp(scope, '#spread') ] ],
+              _type: [ [ Opcodes.local_get, localTmp(scope, '#spread#type', Valtype.i32) ] ]
+            },
+            body: {
+              type: 'BlockStatement',
+              body: [{
+                type: 'ExpressionStatement',
+                expression: {
+                  type: 'CallExpression',
+                  callee: {
+                    type: 'MemberExpression',
+                    object: { type: 'Identifier', name: '#spread_arr' },
+                    property: { type: 'Identifier', name: 'push' }
+                  },
+                  arguments: [{ type: 'Identifier', name: '#spread_elem' }]
+                }
+              }]
+            }
+          }),
+          [ Opcodes.drop ], // drop for..of result (undefined)
+          // use #spread_arr as the new spread source
+          ...generate(scope, { type: 'Identifier', name: '#spread_arr' }),
           [ Opcodes.local_set, localTmp(scope, '#spread') ],
           // update type to array
-          number(TYPES.array, Valtype.i32),
+          ...getNodeType(scope, { type: 'Identifier', name: '#spread_arr' }),
           [ Opcodes.local_set, localTmp(scope, '#spread#type', Valtype.i32) ],
         [ Opcodes.end ]
       ] : [])
@@ -9784,11 +9825,15 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // Note: On step calls, parameters will be restored from memory, overwriting these values
         wasm.push(...prefaceWasm);
 
-        // Check if this is creation call (gen local is 0) or step call
+        // Check if this is creation call or step call
+        // Creation: #this is NOT a generator (type != __porffor_generator)
+        // Step: #this IS the generator object (type == __porffor_generator)
+        // This fixes generators called via indirect calls (arr[0](), obj.gen()) where
+        // #this is set to the receiver object instead of 0
         wasm.push(
-          [ Opcodes.local_get, func.locals['#generator_out'].idx ],
-          Opcodes.i32_to_u,
-          [ Opcodes.i32_eqz ],
+          [ Opcodes.local_get, func.locals['#this'].idx + 1 ], // #this#type
+          number(TYPES.__porffor_generator, Valtype.i32),
+          [ Opcodes.i32_ne ],
           [ Opcodes.if, Blocktype.void ],
             // Creation call: allocate generator object
             number(genAllocSize, Valtype.i32),

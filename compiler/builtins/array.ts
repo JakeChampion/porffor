@@ -99,6 +99,30 @@ export const __Array_from = (arg: any, mapFn: any, thisArg: any): any[] => {
   }
 
   if (Porffor.type(arg) == Porffor.TYPES.object) {
+    // Check if object has Symbol.iterator (making it iterable)
+    const iteratorMethod: any = (arg as object)[Symbol.iterator];
+    if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
+      // Object is iterable - call Symbol.iterator to get iterator and use for..of
+      const iter: any = iteratorMethod.call(arg);
+      let i: i32 = 0;
+      if (Porffor.type(mapFn) != Porffor.TYPES.undefined) {
+        if (Porffor.type(mapFn) != Porffor.TYPES.function) throw new TypeError('Called Array.from with a non-function mapFn');
+
+        for (const x of iter) {
+          out[i] = mapFn.call(thisArg, x, i);
+          i++;
+        }
+      } else {
+        for (const x of iter) {
+          out[i++] = x;
+        }
+      }
+
+      out.length = i;
+      return out;
+    }
+
+    // Fall back to array-like handling (using length property)
     let len: i32 = ecma262.ToIntegerOrInfinity((arg as object)['length']);
     if (len > 4294967295) throw new RangeError('Invalid array length');
     if (len < 0) len = 0;
