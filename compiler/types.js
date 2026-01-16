@@ -76,6 +76,7 @@ registerInternalType('__Porffor_TakeIterator');
 registerInternalType('__Porffor_DropIterator');
 registerInternalType('__Porffor_MapIterator');
 registerInternalType('__Porffor_FilterIterator');
+registerInternalType('__Porffor_ConcatIterator');
 
 for (const x of [ '', 'Aggregate', 'Type', 'Reference', 'Syntax', 'Range', 'Eval', 'URI', 'Suppressed', 'Test262' ])
   registerInternalType(`${x}Error`);

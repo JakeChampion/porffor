@@ -3519,7 +3519,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
           '__porffor_takeiterator': '__Porffor_TakeIterator_prototype_next',
           '__porffor_dropiterator': '__Porffor_DropIterator_prototype_next',
           '__porffor_mapiterator': '__Porffor_MapIterator_prototype_next',
-          '__porffor_filteriterator': '__Porffor_FilterIterator_prototype_next'
+          '__porffor_filteriterator': '__Porffor_FilterIterator_prototype_next',
+          '__porffor_concatiterator': '__Porffor_ConcatIterator_prototype_next'
         };
         for (const [typeName, builtinName] of Object.entries(lazyIteratorHandlers)) {
           const type = TYPES[typeName];
@@ -3898,7 +3899,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
           TYPES.__porffor_takeiterator,
           TYPES.__porffor_dropiterator,
           TYPES.__porffor_mapiterator,
-          TYPES.__porffor_filteriterator
+          TYPES.__porffor_filteriterator,
+          TYPES.__porffor_concatiterator
         ];
         for (const t of iteratorTypes) {
           if (t != null) {

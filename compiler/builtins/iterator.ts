@@ -334,6 +334,99 @@ export const __Porffor_FilterIterator_prototype_Symbol_toStringTag$get = () => {
 };
 
 
+// ============================================================================
+// ConcatIterator - lazy iterator that concatenates multiple iterables
+// Storage: [0] = array of iterables, [1] = current iterable index, [2] = current iterator, [3] = current iterator's next method
+// ============================================================================
+
+export const __Porffor_ConcatIterator = (storage: any[]): __Porffor_ConcatIterator => {
+  return storage as __Porffor_ConcatIterator;
+};
+
+export const __Porffor_ConcatIterator_prototype_next = (storage: any[]) => {
+  const iterables: any[] = storage[0];
+  let iterableIndex: i32 = storage[1];
+  let currentIterator: any = storage[2];
+  let currentNext: any = storage[3];
+  const numIterables: i32 = iterables.length;
+
+  // Create result object once, outside the loop
+  const result: object = {};
+
+  while (iterableIndex < numIterables) {
+    // If we don't have a current iterator, get one from the current iterable
+    if (currentIterator === undefined || currentIterator === null) {
+      const iterable: any = iterables[iterableIndex];
+      const t: i32 = Porffor.type(iterable);
+
+      if (t == Porffor.TYPES.object) {
+        // Object with Symbol.iterator
+        const iteratorMethod: any = iterable[Symbol.iterator];
+        if (typeof iteratorMethod !== 'function') {
+          throw new TypeError('Iterator.concat requires iterable arguments');
+        }
+        currentIterator = iteratorMethod.call(iterable);
+        currentNext = currentIterator.next;
+        storage[2] = currentIterator;
+        storage[3] = currentNext;
+      } else {
+        // For arrays, strings, and other native iterables - use Iterator.from
+        const wrapper: any = __Iterator_from(iterable);
+        currentIterator = wrapper;
+        currentNext = null;
+        storage[2] = currentIterator;
+        storage[3] = currentNext;
+      }
+    }
+
+    // Get next value from current iterator
+    let sourceResult: any;
+    if (currentNext !== null && currentNext !== undefined) {
+      // Object iterator with next method
+      sourceResult = currentNext.call(currentIterator);
+    } else {
+      // WrapperIterator or similar - use .next()
+      sourceResult = currentIterator.next();
+    }
+
+    if (!sourceResult.done) {
+      // Return a fresh result object (per spec requirement)
+      result.value = sourceResult.value;
+      result.done = false;
+      return result;
+    }
+
+    // Current iterator is exhausted, move to next iterable
+    iterableIndex++;
+    storage[1] = iterableIndex;
+    currentIterator = null;
+    currentNext = null;
+    storage[2] = currentIterator;
+    storage[3] = currentNext;
+  }
+
+  // All iterables exhausted
+  result.value = undefined;
+  result.done = true;
+  return result;
+};
+
+export const __Porffor_ConcatIterator_prototype_return = (storage: any[], value: any): object => {
+  const result: object = {};
+  result.value = value;
+  result.done = true;
+  return result;
+};
+
+export const __Porffor_ConcatIterator_prototype_Symbol_iterator$get = (storage: any[]) => {
+  return storage as __Porffor_ConcatIterator;
+};
+
+export const __Porffor_ConcatIterator_prototype_Symbol_toStringTag$get = () => {
+  return 'Iterator';
+};
+
+
 // Iterator constructor - abstract, cannot be directly constructed
 export const Iterator = function (): void {
   throw new TypeError('Abstract class Iterator not directly constructable');
@@ -671,61 +764,45 @@ export const __Porffor_WrapperIterator_prototype_Symbol_toStringTag$get = () => 
   return 'Iterator';
 };
 
-// Iterator.concat - concatenates multiple iterables into one iterator
-// NOTE: Has known bug due to Porffor variable capture issue in builtins
-export const __Iterator_concat = (...iterables: any[]): __Porffor_WrapperIterator => {
-  const result: any[] = Porffor.malloc();
+// Iterator.concat - concatenates multiple iterables into one lazy iterator
+export const __Iterator_concat = (...iterables: any[]): __Porffor_ConcatIterator => {
+  // Validate all arguments are iterable before creating the iterator
   const numIterables: i32 = iterables.length;
-
   for (let idx: i32 = 0; idx < numIterables; idx++) {
     const iterable: any = iterables[idx];
     const t: i32 = Porffor.type(iterable);
 
-    if (t == Porffor.TYPES.array) {
-      const arr: any[] = iterable as any[];
-      const arrLen: i32 = arr.length;
-      for (let j: i32 = 0; j < arrLen; j++) {
-        result.push(arr[j]);
-      }
-    } else if (t == Porffor.TYPES.__porffor_wrapperiterator) {
-      const arr: any[] = __Porffor_WrapperIterator_prototype_toArray(iterable as any[]);
-      const arrLen: i32 = arr.length;
-      for (let j: i32 = 0; j < arrLen; j++) {
-        result.push(arr[j]);
-      }
-    } else if (t == Porffor.TYPES.string ||
-               t == Porffor.TYPES.bytestring ||
-               t == Porffor.TYPES.set ||
-               t == Porffor.TYPES.__porffor_generator ||
-               (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
-      const length: i32 = __Porffor_iterator_getLength(iterable);
-      for (let i: i32 = 0; i < length; i++) {
-        result.push(__Porffor_iterator_getElement(iterable, i));
-      }
-    } else if (t == Porffor.TYPES.object) {
-      // Check for Symbol.iterator on objects
+    // Check that it's an iterable type
+    if (t == Porffor.TYPES.object) {
       const iteratorMethod: any = iterable[Symbol.iterator];
       if (typeof iteratorMethod !== 'function') {
         throw new TypeError('Iterator.concat requires iterable arguments');
       }
-      // Call the iterator method to get the iterator
-      const iterator: any = iteratorMethod.call(iterable);
-      // Get the next method and iterate
-      const next: any = iterator.next;
-      if (typeof next !== 'function') {
-        throw new TypeError('Iterator.concat requires iterable arguments');
-      }
-      let iterResult: any = next.call(iterator);
-      while (!iterResult.done) {
-        result.push(iterResult.value);
-        iterResult = next.call(iterator);
-      }
-    } else {
+    } else if (!(t == Porffor.TYPES.array ||
+                 t == Porffor.TYPES.string ||
+                 t == Porffor.TYPES.bytestring ||
+                 t == Porffor.TYPES.set ||
+                 t == Porffor.TYPES.__porffor_generator ||
+                 t == Porffor.TYPES.__porffor_wrapperiterator ||
+                 t == Porffor.TYPES.__porffor_takeiterator ||
+                 t == Porffor.TYPES.__porffor_dropiterator ||
+                 t == Porffor.TYPES.__porffor_mapiterator ||
+                 t == Porffor.TYPES.__porffor_filteriterator ||
+                 (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array))) {
       throw new TypeError('Iterator.concat requires iterable arguments');
     }
   }
 
-  return __Iterator_from(result);
+  // Create lazy ConcatIterator
+  // Storage: [0] = iterables array, [1] = current index, [2] = current iterator, [3] = current next method
+  // Note: Array literals don't work correctly in builtins for storing arbitrary values
+  const storage: any[] = Porffor.malloc();
+  storage.length = 4;
+  storage[0] = iterables;
+  storage[1] = 0;
+  storage[2] = null;
+  storage[3] = null;
+  return __Porffor_ConcatIterator(storage);
 };
 
 // Helper to get iterator from an object's Symbol.iterator
