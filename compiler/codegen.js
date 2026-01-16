@@ -249,13 +249,54 @@ const collectYields = (node, yields = []) => {
   return yields;
 };
 
+// Helper: check if any yield is inside a try block
+const hasYieldInsideTry = (node, inTry = false) => {
+  if (!node) return false;
+  if (Array.isArray(node)) {
+    for (const n of node) if (hasYieldInsideTry(n, inTry)) return true;
+    return false;
+  }
+  if (typeof node !== 'object') return false;
+
+  // Don't descend into nested functions
+  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression') return false;
+
+  // Check if we're entering a try statement
+  // Yields in ANY part of try-catch-finally break WebAssembly structure
+  // because catch/finally are all inside the WebAssembly try-catch-end block
+  if (node.type === 'TryStatement') {
+    // Check all parts with inTry=true
+    if (hasYieldInsideTry(node.block, true)) return true;
+    if (node.handler && hasYieldInsideTry(node.handler.body, true)) return true;
+    if (node.finalizer && hasYieldInsideTry(node.finalizer, true)) return true;
+    return false;
+  }
+
+  // Found a yield inside a try block
+  if (node.type === 'YieldExpression' && inTry) return true;
+
+  for (const key in node) {
+    if (key[0] === '_' || key === 'type' || key === 'loc' || key === 'range') continue;
+    if (hasYieldInsideTry(node[key], inTry)) return true;
+  }
+  return false;
+};
+
 // Transform generator body into state machine form
 // This enables proper resumption using br_table dispatch
 // Based on regenerator's approach: https://babeljs.io/docs/babel-plugin-transform-regenerator
 const transformGeneratorToStateMachine = (body, func) => {
+  // Check if there are yields inside try blocks - if so, mark the function
+  // so we use a different code generation strategy
+  func._hasYieldInTry = hasYieldInsideTry(body);
+
   // First, transform loops with yields into flat state transitions
   // This must happen BEFORE we assign state numbers
-  transformLoopsWithYields(body, func);
+  // But only if there are no yields inside try blocks (otherwise we use linear approach)
+  if (!func._hasYieldInTry) {
+    transformLoopsWithYields(body, func);
+  }
 
   // Collect all yields to assign state numbers
   const yields = collectYields(body);
@@ -10594,21 +10635,40 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
 
             // Second pass: split body into segments
             // A new segment starts after yield markers and at loop/label markers
+            // IMPORTANT: We cannot create segment boundaries inside try-catch blocks
+            // because that would break the WebAssembly block structure
             const segments = [];
             let currentSegment = [];
             // Track which segment each yield should resume to
             const yieldToResumeSegment = new Map();
+            // Track try-catch depth to avoid splitting inside try blocks
+            let tryDepth = 0;
 
             for (const instr of processedBodyWasm) {
               if (Array.isArray(instr)) {
+                // Track try-catch depth
+                if (instr[0] === Opcodes.try) {
+                  tryDepth++;
+                } else if (instr[0] === Opcodes.end && tryDepth > 0) {
+                  // This end might close a try block - we decrement conservatively
+                  // (This is imperfect but errs on the side of not splitting)
+                  tryDepth--;
+                }
+
                 if (instr[0] === '#yield_segment_marker') {
                   const [, yieldState] = instr;
-                  // End current segment, start new one
-                  segments.push(currentSegment);
-                  // The new segment (which starts now) is where this yield resumes
-                  // Its index is segments.length (after the push above)
-                  yieldToResumeSegment.set(yieldState, segments.length);
-                  currentSegment = [];
+                  // Only create segment boundary if not inside a try block
+                  if (tryDepth === 0) {
+                    // End current segment, start new one
+                    segments.push(currentSegment);
+                    // The new segment (which starts now) is where this yield resumes
+                    // Its index is segments.length (after the push above)
+                    yieldToResumeSegment.set(yieldState, segments.length);
+                    currentSegment = [];
+                  } else {
+                    // Inside try block - don't split, just skip the marker
+                    // The yield will use counter-based resume instead of segment-based
+                  }
                 } else if (instr[0] === '#generator_loop_test_marker' || instr[0] === '#generator_label_marker') {
                   // End current segment (if non-empty), start new one
                   // But first, add state transition to jump to this label's state
@@ -10668,6 +10728,72 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
                   instr[0] === '#generator_conditional_goto'
                 ))
               );
+            }
+
+            // If there are yields inside try blocks, we cannot use segment-based dispatch
+            // because it would break the try-catch block structure in WebAssembly.
+            // Fall back to the linear approach which keeps try-catch intact.
+            // This uses the yields_seen counter to skip already-executed yields.
+            if (func._hasYieldInTry) {
+              const result = [];
+
+              // Initialize yields_seen to 0 for counter-based approach
+              // Unlike segment-based (which jumps directly to the resume point),
+              // counter-based re-executes from the beginning and skips yields
+              // where yields_seen <= state after incrementing.
+              result.push(
+                number(0),
+                [ Opcodes.local_set, func.locals['#yields_seen'].idx ]
+              );
+
+              // Process the body, filtering out segment markers and replacing resume state markers
+              for (const instr of processedBodyWasm) {
+                if (Array.isArray(instr)) {
+                  if (instr[0] === '#yield_segment_marker' ||
+                      instr[0] === '#generator_loop_test_marker' ||
+                      instr[0] === '#generator_label_marker' ||
+                      instr[0] === '#generator_goto_marker' ||
+                      instr[0] === '#generator_conditional_goto') {
+                    // Skip these markers
+                    continue;
+                  }
+                  if (instr[0] === '#yield_resume_state') {
+                    // Replace with the actual resume state (yieldState + 1)
+                    const [, yieldState] = instr;
+                    result.push(number(yieldState + 1));
+                    continue;
+                  }
+                }
+                result.push(instr);
+              }
+
+              // Add completion code: set done=1, value=undefined, and return
+              result.push(
+                // Store undefined at offset 16 (value)
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                number(UNDEFINED),
+                [ Opcodes.f64_store, 0, 16 ],
+
+                // Store type undefined at offset 24
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                number(TYPES.undefined, Valtype.i32),
+                [ Opcodes.i32_store, 0, 24 ],
+
+                // Store done=1 at offset 28
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                Opcodes.i32_to_u,
+                number(1, Valtype.i32),
+                [ Opcodes.i32_store, 0, 28 ],
+
+                // Return the generator object
+                [ Opcodes.local_get, func.locals['#generator_out'].idx ],
+                ...(func.returnType != null ? [] : [ number(func.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator, Valtype.i32) ]),
+                [ Opcodes.return ]
+              );
+
+              return result;
             }
 
             // Use segments directly (they may be more than stateCounter if yields don't align with labels)
