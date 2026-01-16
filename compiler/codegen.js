@@ -249,6 +249,70 @@ const collectYields = (node, yields = []) => {
   return yields;
 };
 
+// Helper: check if any yield is used as an expression value (not just a statement)
+// Yields inside expressions break segment-based dispatch because values on the stack
+// before the yield are not preserved when jumping to the resume segment
+const hasYieldAsExpression = (node, inExpression = false) => {
+  if (!node) return false;
+  if (Array.isArray(node)) {
+    for (const n of node) if (hasYieldAsExpression(n, inExpression)) return true;
+    return false;
+  }
+  if (typeof node !== 'object') return false;
+
+  // Don't descend into nested functions
+  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression' || node.type === 'GeneratorExpression') return false;
+
+  // YieldExpression as a statement (inside ExpressionStatement) is fine
+  // YieldExpression anywhere else is used as an expression value
+  if (node.type === 'YieldExpression') {
+    return inExpression;
+  }
+
+  // ExpressionStatement: yield inside is at statement level
+  if (node.type === 'ExpressionStatement') {
+    // The expression inside might be just a yield (fine) or something containing yield (check it)
+    // If expression is a YieldExpression directly, it's fine (inExpression=false)
+    // If expression is something else containing a yield, it's used as expression
+    if (node.expression.type === 'YieldExpression') {
+      // Direct yield statement - check the argument only
+      return hasYieldAsExpression(node.expression.argument, true);
+    }
+    // Not a direct yield, so any yield inside is in expression context
+    return hasYieldAsExpression(node.expression, true);
+  }
+
+  // For other statements, children are in expression context if they're not statements themselves
+  for (const key in node) {
+    if (key[0] === '_' || key === 'type' || key === 'loc' || key === 'range') continue;
+    const child = node[key];
+    if (!child || typeof child !== 'object') continue;
+
+    // Block bodies contain statements, not expressions
+    if (key === 'body' && (node.type === 'BlockStatement' || node.type === 'Program' ||
+        node.type.endsWith('Statement') || node.type.endsWith('Declaration'))) {
+      if (hasYieldAsExpression(child, false)) return true;
+    } else if (key === 'consequent' && node.type === 'IfStatement') {
+      if (hasYieldAsExpression(child, false)) return true;
+    } else if (key === 'alternate' && node.type === 'IfStatement') {
+      if (hasYieldAsExpression(child, false)) return true;
+    } else if (key === 'block' && node.type === 'TryStatement') {
+      if (hasYieldAsExpression(child, false)) return true;
+    } else if (key === 'handler' && node.type === 'TryStatement') {
+      if (hasYieldAsExpression(child, false)) return true;
+    } else if (key === 'finalizer' && node.type === 'TryStatement') {
+      if (hasYieldAsExpression(child, false)) return true;
+    } else if (key === 'cases' && node.type === 'SwitchStatement') {
+      if (hasYieldAsExpression(child, false)) return true;
+    } else {
+      // Everything else is expression context
+      if (hasYieldAsExpression(child, true)) return true;
+    }
+  }
+  return false;
+};
+
 // Helper: check if any yield is inside a try block
 const hasYieldInsideTry = (node, inTry = false) => {
   if (!node) return false;
@@ -287,14 +351,18 @@ const hasYieldInsideTry = (node, inTry = false) => {
 // This enables proper resumption using br_table dispatch
 // Based on regenerator's approach: https://babeljs.io/docs/babel-plugin-transform-regenerator
 const transformGeneratorToStateMachine = (body, func) => {
-  // Check if there are yields inside try blocks - if so, mark the function
-  // so we use a different code generation strategy
+  // Check if there are yields inside try blocks or used as expression values
+  // In both cases, we need to use counter-based dispatch instead of segment-based
+  // because segment-based can't handle:
+  // 1. Try-catch structure being split across segments
+  // 2. Values on the stack before yield that need to be preserved
   func._hasYieldInTry = hasYieldInsideTry(body);
+  func._hasYieldAsExpr = hasYieldAsExpression(body);
 
   // First, transform loops with yields into flat state transitions
   // This must happen BEFORE we assign state numbers
-  // But only if there are no yields inside try blocks (otherwise we use linear approach)
-  if (!func._hasYieldInTry) {
+  // Only if we can use segment-based dispatch (no try yields or expression yields)
+  if (!func._hasYieldInTry && !func._hasYieldAsExpr) {
     transformLoopsWithYields(body, func);
   }
 
@@ -10730,11 +10798,13 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
               );
             }
 
-            // If there are yields inside try blocks, we cannot use segment-based dispatch
-            // because it would break the try-catch block structure in WebAssembly.
-            // Fall back to the linear approach which keeps try-catch intact.
+            // If there are yields inside try blocks or used as expression values,
+            // we cannot use segment-based dispatch because:
+            // 1. Try-catch structure would be broken by splitting
+            // 2. Values on the stack before yield can't be preserved across segments
+            // Fall back to the linear approach which keeps structure intact.
             // This uses the yields_seen counter to skip already-executed yields.
-            if (func._hasYieldInTry) {
+            if (func._hasYieldInTry || func._hasYieldAsExpr) {
               const result = [];
 
               // Initialize yields_seen to 0 for counter-based approach
