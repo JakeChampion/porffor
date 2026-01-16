@@ -786,6 +786,7 @@ export const __Iterator_prototype_map = (_this: __Porffor_WrapperIterator, mappe
     return __Porffor_WrapperIterator_prototype_map(_this as any[], mapper);
   }
   if (t == Porffor.TYPES.__porffor_generator) {
+    // Eagerly convert generator to WrapperIterator, then map
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_map(wrapper, mapper);
   }
@@ -803,6 +804,7 @@ export const __Iterator_prototype_filter = (_this: __Porffor_WrapperIterator, pr
     return __Porffor_WrapperIterator_prototype_filter(_this as any[], predicate);
   }
   if (t == Porffor.TYPES.__porffor_generator) {
+    // Eagerly convert generator to WrapperIterator, then filter
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_filter(wrapper, predicate);
   }
@@ -816,6 +818,7 @@ export const __Iterator_prototype_take = (_this: __Porffor_WrapperIterator, limi
     return __Porffor_WrapperIterator_prototype_take(_this as any[], limit);
   }
   if (t == Porffor.TYPES.__porffor_generator) {
+    // Eagerly convert generator to WrapperIterator, then take
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_take(wrapper, limit);
   }
@@ -829,6 +832,7 @@ export const __Iterator_prototype_drop = (_this: __Porffor_WrapperIterator, coun
     return __Porffor_WrapperIterator_prototype_drop(_this as any[], count);
   }
   if (t == Porffor.TYPES.__porffor_generator) {
+    // Eagerly convert generator to WrapperIterator, then drop
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_drop(wrapper, count);
   }

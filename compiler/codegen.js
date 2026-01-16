@@ -1265,7 +1265,7 @@ const generateYield = (scope, decl) => {
         [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
         Opcodes.i32_to_u,
         [ Opcodes.i32_load, 0, 72 ],
-        [ Opcodes.throw, 0 ],
+        [ Opcodes.throw, globalThis.precompile ? 1 : 0 ],
       [ Opcodes.end ],
 
       // Check return_requested (offset 44) - for generator.return()
@@ -1277,7 +1277,7 @@ const generateYield = (scope, decl) => {
           // Inside try-finally: throw marker to trigger finally block
           [ Opcodes.local_get, scope.locals['#generator_out'].idx ],
           number(255, Valtype.i32), // Special type marker for return request
-          [ Opcodes.throw, 0 ],
+          [ Opcodes.throw, globalThis.precompile ? 1 : 0 ],
         ] : [
           // Not in try-finally: complete generator immediately
           // Clear return_requested
@@ -3334,6 +3334,9 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       // Override generator.next() to use call_indirect for state machine support
       if (protoName === 'next' && protoBC[TYPES.__porffor_generator]) {
         protoBC[TYPES.__porffor_generator] = () => {
+          // Ensure exception tag exists for try-catch around call_indirect
+          ensureTag();
+
           // Generator memory layout:
           // - offset 0-7: state (f64)
           // - offset 8-15: indirect index (f64)
@@ -3446,7 +3449,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
                 number(1, Valtype.i32),
                 [ Opcodes.i32_store, 0, 28 ],
                 // Rethrow
-                [ Opcodes.throw, 0 ],
+                [ Opcodes.throw, globalThis.precompile ? 1 : 0 ],
               [ Opcodes.end ],
             [ Opcodes.else ],
               // Generator is already done - set value to undefined
@@ -3482,6 +3485,9 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       // Override generator.throw() to properly inject exception at yield point
       if (protoName === 'throw' && protoBC[TYPES.__porffor_generator]) {
         protoBC[TYPES.__porffor_generator] = () => {
+          // Ensure exception tag exists for try-catch around call_indirect
+          ensureTag();
+
           const out = [];
           const genLocal = localTmp(scope, '#gen_throw_gen');
           const throwValLocal = localTmp(scope, '#gen_throw_val');
@@ -3519,7 +3525,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               // Already done - throw the exception
               [ Opcodes.local_get, throwValLocal ],
               [ Opcodes.local_get, throwTypeLocal ],
-              [ Opcodes.throw, 0 ],
+              [ Opcodes.throw, globalThis.precompile ? 1 : 0 ],
             [ Opcodes.end ]
           );
 
@@ -3555,7 +3561,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               [ Opcodes.i32_store, 0, 28 ], // done = 1
               [ Opcodes.local_get, throwValLocal ],
               [ Opcodes.local_get, throwTypeLocal ],
-              [ Opcodes.throw, 0 ],
+              [ Opcodes.throw, globalThis.precompile ? 1 : 0 ],
             [ Opcodes.end ]
           );
 
@@ -3619,7 +3625,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               Opcodes.i32_to_u,
               number(1, Valtype.i32),
               [ Opcodes.i32_store, 0, 28 ], // done = 1
-              [ Opcodes.throw, 0 ], // rethrow
+              [ Opcodes.throw, globalThis.precompile ? 1 : 0 ], // rethrow
             [ Opcodes.end ]
           );
 
