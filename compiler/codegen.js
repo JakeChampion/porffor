@@ -751,6 +751,33 @@ const generate = (scope, decl, global = false, name = undefined, valueUnused = f
         }
       }
 
+      // Also mark any function with the export name as exported, even if it was already in funcsBefore
+      // This handles two cases:
+      // 1. A function was added via includeBuiltin (internal=true) before its export was processed
+      // 2. generateFunc added a new func which was filtered out because funcsBefore.includes(name)
+      {
+        // Get export name(s) from the declaration
+        let exportNames = [];
+        if (decl.declaration.type === 'FunctionDeclaration' && decl.declaration.id) {
+          exportNames.push(decl.declaration.id.name);
+        } else if (decl.declaration.type === 'VariableDeclaration') {
+          // Arrow functions: export const foo = () => ...
+          for (const d of decl.declaration.declarations) {
+            if (d.id?.name) exportNames.push(d.id.name);
+          }
+        }
+
+        for (const exportName of exportNames) {
+          // Find all funcs with this name and mark them as exports
+          for (const f of funcs) {
+            if (f.name === exportName && !f.export) {
+              f.export = true;
+              f.generate?.();
+            }
+          }
+        }
+      }
+
       return cacheAst(decl, [ number(UNDEFINED) ]);
 
     case 'TSAsExpression':
@@ -3484,7 +3511,9 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
 
         // Always add handlers for lazy iterator types to ensure deterministic precompile
         // These types have _prototype_next functions that may or may not exist in builtinFuncs
-        // depending on the previous precompile state
+        // depending on the previous precompile state.
+        // During precompile, we use _skipBuiltinLookup to prevent includeBuiltin from being called,
+        // which would add the function as internal and prevent it from being properly exported.
         const lazyIteratorHandlers = {
           '__porffor_wrapperiterator': '__Porffor_WrapperIterator_prototype_next',
           '__porffor_takeiterator': '__Porffor_TakeIterator_prototype_next',
@@ -3509,7 +3538,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
                 },
                 ...decl.arguments
               ],
-              _protoInternalCall: true
+              _protoInternalCall: true,
+              _skipBuiltinLookup: globalThis.precompile // Skip builtinFuncs lookup during precompile
             });
           }
         }

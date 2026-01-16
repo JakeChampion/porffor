@@ -129,9 +129,7 @@ export const __Porffor_WrapperIterator_prototype_throw = (storage: any[], error:
 
 // ============================================================================
 // TakeIterator - lazy iterator that yields first N items from source
-// Storage: [0] = WrapperIterator source, [1] = remaining count
-// NOTE: Source MUST be a WrapperIterator to ensure deterministic precompile.
-// The Iterator.prototype methods handle converting other types to WrapperIterator.
+// Storage: [0] = source iterator (WrapperIterator or generator), [1] = remaining count
 // ============================================================================
 
 export const __Porffor_TakeIterator = (storage: any[]): __Porffor_TakeIterator => {
@@ -148,9 +146,9 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
     return result;
   }
 
-  // Source is always a WrapperIterator - call directly to avoid protoBC dispatch
-  const source: any[] = storage[0];
-  const sourceResult: any = __Porffor_WrapperIterator_prototype_next(source);
+  const source: any = storage[0];
+  // Use source.next() for all iterator types - codegen.js ensures deterministic dispatch
+  const sourceResult: any = source.next();
 
   if (sourceResult.done) {
     result.value = undefined;
@@ -185,8 +183,7 @@ export const __Porffor_TakeIterator_prototype_Symbol_toStringTag$get = () => {
 
 // ============================================================================
 // DropIterator - lazy iterator that skips first N items from source
-// Storage: [0] = WrapperIterator source, [1] = remaining to drop
-// NOTE: Source MUST be a WrapperIterator to ensure deterministic precompile.
+// Storage: [0] = source iterator (WrapperIterator or generator), [1] = remaining to drop
 // ============================================================================
 
 export const __Porffor_DropIterator = (storage: any[]): __Porffor_DropIterator => {
@@ -195,12 +192,12 @@ export const __Porffor_DropIterator = (storage: any[]): __Porffor_DropIterator =
 
 export const __Porffor_DropIterator_prototype_next = (storage: any[]): object => {
   let toDrop: i32 = storage[1];
-  // Source is always a WrapperIterator
-  const source: any[] = storage[0];
+  const source: any = storage[0];
 
   // Drop items if needed
   while (toDrop > 0) {
-    const dropResult: any = __Porffor_WrapperIterator_prototype_next(source);
+    // Use source.next() for all iterator types - codegen.js ensures deterministic dispatch
+    const dropResult: any = source.next();
     if (dropResult.done) {
       storage[1] = 0;
       const result: object = {};
@@ -213,7 +210,7 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
   }
 
   // Get next item from source
-  const sourceResult: any = __Porffor_WrapperIterator_prototype_next(source);
+  const sourceResult: any = source.next();
 
   const result: object = {};
   if (sourceResult.done) {
@@ -246,8 +243,7 @@ export const __Porffor_DropIterator_prototype_Symbol_toStringTag$get = () => {
 
 // ============================================================================
 // MapIterator - lazy iterator that transforms items via mapper function
-// Storage: [0] = WrapperIterator source, [1] = mapper function
-// NOTE: Source MUST be a WrapperIterator to ensure deterministic precompile.
+// Storage: [0] = source iterator (WrapperIterator or generator), [1] = mapper function
 // ============================================================================
 
 export const __Porffor_MapIterator = (storage: any[]): __Porffor_MapIterator => {
@@ -255,11 +251,11 @@ export const __Porffor_MapIterator = (storage: any[]): __Porffor_MapIterator => 
 };
 
 export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => {
-  // Source is always a WrapperIterator
-  const source: any[] = storage[0];
+  const source: any = storage[0];
   const mapper: Function = storage[1];
 
-  const sourceResult: any = __Porffor_WrapperIterator_prototype_next(source);
+  // Use source.next() for all iterator types - codegen.js ensures deterministic dispatch
+  const sourceResult: any = source.next();
 
   const result: object = {};
   if (sourceResult.done) {
@@ -291,8 +287,7 @@ export const __Porffor_MapIterator_prototype_Symbol_toStringTag$get = () => {
 
 // ============================================================================
 // FilterIterator - lazy iterator that yields only items matching predicate
-// Storage: [0] = WrapperIterator source, [1] = predicate function
-// NOTE: Source MUST be a WrapperIterator to ensure deterministic precompile.
+// Storage: [0] = source iterator (WrapperIterator or generator), [1] = predicate function
 // ============================================================================
 
 export const __Porffor_FilterIterator = (storage: any[]): __Porffor_FilterIterator => {
@@ -300,12 +295,12 @@ export const __Porffor_FilterIterator = (storage: any[]): __Porffor_FilterIterat
 };
 
 export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object => {
-  // Source is always a WrapperIterator
-  const source: any[] = storage[0];
+  const source: any = storage[0];
   const predicate: Function = storage[1];
 
   while (true) {
-    const sourceResult: any = __Porffor_WrapperIterator_prototype_next(source);
+    // Use source.next() for all iterator types - codegen.js ensures deterministic dispatch
+    const sourceResult: any = source.next();
 
     if (sourceResult.done) {
       const result: object = {};
@@ -994,15 +989,14 @@ export const __Iterator_prototype_map = (_this: __Porffor_WrapperIterator, mappe
   }
 
   const t: i32 = Porffor.type(_this);
-  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
-    // For WrapperIterator, use lazy MapIterator
+  if (t == Porffor.TYPES.__porffor_wrapperiterator ||
+      t == Porffor.TYPES.__porffor_generator ||
+      t == Porffor.TYPES.__porffor_takeiterator ||
+      t == Porffor.TYPES.__porffor_dropiterator ||
+      t == Porffor.TYPES.__porffor_mapiterator ||
+      t == Porffor.TYPES.__porffor_filteriterator) {
+    // Create lazy MapIterator wrapping the source directly
     const storage: any[] = [_this, mapper];
-    return __Porffor_MapIterator(storage);
-  }
-  if (t == Porffor.TYPES.__porffor_generator) {
-    // Convert generator to WrapperIterator first (eager), then create lazy MapIterator
-    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
-    const storage: any[] = [wrapper, mapper];
     return __Porffor_MapIterator(storage);
   }
 
@@ -1015,15 +1009,14 @@ export const __Iterator_prototype_filter = (_this: __Porffor_WrapperIterator, pr
   }
 
   const t: i32 = Porffor.type(_this);
-  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
-    // For WrapperIterator, use lazy FilterIterator
+  if (t == Porffor.TYPES.__porffor_wrapperiterator ||
+      t == Porffor.TYPES.__porffor_generator ||
+      t == Porffor.TYPES.__porffor_takeiterator ||
+      t == Porffor.TYPES.__porffor_dropiterator ||
+      t == Porffor.TYPES.__porffor_mapiterator ||
+      t == Porffor.TYPES.__porffor_filteriterator) {
+    // Create lazy FilterIterator wrapping the source directly
     const storage: any[] = [_this, predicate];
-    return __Porffor_FilterIterator(storage);
-  }
-  if (t == Porffor.TYPES.__porffor_generator) {
-    // Convert generator to WrapperIterator first (eager), then create lazy FilterIterator
-    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
-    const storage: any[] = [wrapper, predicate];
     return __Porffor_FilterIterator(storage);
   }
 
@@ -1032,15 +1025,14 @@ export const __Iterator_prototype_filter = (_this: __Porffor_WrapperIterator, pr
 
 export const __Iterator_prototype_take = (_this: __Porffor_WrapperIterator, limit: any) => {
   const t: i32 = Porffor.type(_this);
-  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
-    // For WrapperIterator, use lazy TakeIterator
+  if (t == Porffor.TYPES.__porffor_wrapperiterator ||
+      t == Porffor.TYPES.__porffor_generator ||
+      t == Porffor.TYPES.__porffor_takeiterator ||
+      t == Porffor.TYPES.__porffor_dropiterator ||
+      t == Porffor.TYPES.__porffor_mapiterator ||
+      t == Porffor.TYPES.__porffor_filteriterator) {
+    // Create lazy TakeIterator wrapping the source directly
     const storage: any[] = [_this, limit];
-    return __Porffor_TakeIterator(storage);
-  }
-  if (t == Porffor.TYPES.__porffor_generator) {
-    // Convert generator to WrapperIterator first (eager), then create lazy TakeIterator
-    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
-    const storage: any[] = [wrapper, limit];
     return __Porffor_TakeIterator(storage);
   }
 
@@ -1049,15 +1041,14 @@ export const __Iterator_prototype_take = (_this: __Porffor_WrapperIterator, limi
 
 export const __Iterator_prototype_drop = (_this: __Porffor_WrapperIterator, count: any) => {
   const t: i32 = Porffor.type(_this);
-  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
-    // For WrapperIterator, use lazy DropIterator
+  if (t == Porffor.TYPES.__porffor_wrapperiterator ||
+      t == Porffor.TYPES.__porffor_generator ||
+      t == Porffor.TYPES.__porffor_takeiterator ||
+      t == Porffor.TYPES.__porffor_dropiterator ||
+      t == Porffor.TYPES.__porffor_mapiterator ||
+      t == Porffor.TYPES.__porffor_filteriterator) {
+    // Create lazy DropIterator wrapping the source directly
     const storage: any[] = [_this, count];
-    return __Porffor_DropIterator(storage);
-  }
-  if (t == Porffor.TYPES.__porffor_generator) {
-    // Convert generator to WrapperIterator first (eager), then create lazy DropIterator
-    const wrapper: any[] = __Iterator_toWrapperIterator(_this);
-    const storage: any[] = [wrapper, count];
     return __Porffor_DropIterator(storage);
   }
 
