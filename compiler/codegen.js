@@ -10476,12 +10476,15 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         const userLocals = [];
         const paramSet = new Set(userParams);
         for (const [name, local] of Object.entries(func.locals)) {
-          // Skip internal locals (start with #), params, and type locals (odd indices after their value)
+          // Skip internal locals (start with # or __), params, and type locals (odd indices after their value)
           if (name.startsWith('#')) continue;
+          if (name.startsWith('__')) continue; // Skip temp locals like __tmpop_left_0
           if (paramSet.has(name)) continue;
           if (name.endsWith('#type')) continue; // Skip explicit type locals
-          // Only include f64 value locals (even idx), type local is at idx+1
+          // Only include f64 value locals that have a corresponding type local
           if (local.type !== Valtype.f64) continue;
+          // Check that a type local exists at idx+1 (user-declared locals have this, temp locals don't)
+          if (!func.locals[name + '#type']) continue;
           userLocals.push(name);
         }
 
