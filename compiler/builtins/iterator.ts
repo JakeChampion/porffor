@@ -68,9 +68,9 @@ export const __Porffor_iterator_getElement = (iterable: any, index: i32): any =>
     return (iterable as any[])[index];
   }
 
-  // Strings
+  // Strings - don't cast, let Porffor handle based on actual runtime type
   if (t == Porffor.TYPES.string || t == Porffor.TYPES.bytestring || t == Porffor.TYPES.stringobject) {
-    return (iterable as string)[index];
+    return iterable[index];
   }
 
   // Sets - convert to array first (inefficient but works)
