@@ -2712,6 +2712,26 @@ const generateBinaryExp = (scope, decl) => {
     // try hacky version for built-ins first
     const rightName = decl.right.name;
     if (rightName) {
+      // Special case for Iterator - check if type is any iterator type
+      if (rightName === 'Iterator') {
+        const out = generate(scope, decl.left);
+        out.push([ Opcodes.drop ]);
+        out.push(
+          ...typeIsOneOf(getNodeType(scope, decl.left), [
+            TYPES.__porffor_generator,
+            TYPES.__porffor_asyncgenerator,
+            TYPES.__porffor_wrapperiterator,
+            TYPES.__porffor_takeiterator,
+            TYPES.__porffor_dropiterator,
+            TYPES.__porffor_mapiterator,
+            TYPES.__porffor_filteriterator,
+            TYPES.__porffor_concatiterator
+          ]),
+          Opcodes.i32_from_u
+        );
+        return out;
+      }
+
       let checkType = TYPES[rightName.toLowerCase()];
       if (checkType != null && rightName === TYPE_NAMES[checkType] && !rightName.endsWith('Error')) {
         const out = generate(scope, decl.left);
