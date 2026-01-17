@@ -381,6 +381,20 @@ const transformGeneratorToStateMachine = (body, func) => {
   func._yieldCount = yields.length;
   func._stateCount = yields.length + 1; // +1 for final state (done)
 
+  // Mark statements that appear before the first yield as pre-yield statements
+  // These must be skipped when resuming (state > 0) in counter-based mode
+  // This is essential for generators with yields inside try blocks
+  const stmts = body.type === 'BlockStatement' ? body.body : (Array.isArray(body) ? body : [body]);
+  for (const stmt of stmts) {
+    if (containsYield(stmt)) {
+      // Found first statement containing yield, stop marking
+      break;
+    }
+    // Mark this statement as pre-yield
+    stmt._generatorPreYield = true;
+    func._hasPreYieldStatements = true;
+  }
+
   return body;
 };
 
