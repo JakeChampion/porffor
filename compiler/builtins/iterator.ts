@@ -559,10 +559,11 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
   const counter: i32 = storage[4];
   storage[4] = counter + 1;
 
-  // Per spec: If mapper throws, close the underlying iterator (IfAbruptCloseIterator)
+  // Per spec: If getting value or mapper throws, close the underlying iterator (IfAbruptCloseIterator)
   let mapped: any;
   try {
-    mapped = mapper(sourceResult.value, counter);
+    const value: any = sourceResult.value;  // May throw if has throwing getter
+    mapped = mapper(value, counter);
   } catch (e) {
     // Close underlying iterator before re-throwing (suppress close errors per spec)
     try {
@@ -739,10 +740,12 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
     const counter: i32 = storage[4];
     storage[4] = counter + 1;
 
-    // Per spec: If predicate throws, close the underlying iterator (IfAbruptCloseIterator)
+    // Per spec: If getting value or predicate throws, close the underlying iterator (IfAbruptCloseIterator)
+    let value: any;
     let matches: boolean;
     try {
-      matches = predicate(sourceResult.value, counter);
+      value = sourceResult.value;  // May throw if has throwing getter
+      matches = predicate(value, counter);
     } catch (e) {
       storage[2] = false;
       // Close underlying iterator before re-throwing (suppress close errors per spec)
@@ -757,7 +760,7 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
     if (matches) {
       storage[2] = false;
       const result: object = {};
-      result.value = sourceResult.value;
+      result.value = value;
       result.done = false;
       return result;
     }
