@@ -10941,9 +10941,11 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
                     continue;
                   }
                   if (instr[0] === '#yield_resume_state') {
-                    // Replace with the actual resume state (yieldState + 1)
-                    const [, yieldState] = instr;
-                    result.push(number(yieldState + 1));
+                    // Replace with runtime yields_seen value
+                    // For nested yields like `yield yield 1`, the resume state must be
+                    // the current yields_seen count (set at runtime), not a compile-time constant.
+                    // This ensures the outer yield executes after the inner yield completes.
+                    result.push([ Opcodes.local_get, func.locals['#yields_seen'].idx ]);
                     continue;
                   }
                 }
