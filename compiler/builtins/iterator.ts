@@ -211,6 +211,18 @@ export const __Porffor_TakeIterator_prototype_Symbol_toStringTag$get = () => {
   return 'Iterator';
 };
 
+export const __Porffor_TakeIterator_prototype_toArray = (storage: any[]): any[] => {
+  const out: any[] = Porffor.malloc();
+  let len: i32 = 0;
+  while (true) {
+    const result: any = __Porffor_TakeIterator_prototype_next(storage);
+    if (result.done) break;
+    out[len++] = result.value;
+  }
+  out.length = len;
+  return out;
+};
+
 
 // ============================================================================
 // DropIterator - lazy iterator that skips first N items from source
@@ -308,6 +320,18 @@ export const __Porffor_DropIterator_prototype_Symbol_toStringTag$get = () => {
   return 'Iterator';
 };
 
+export const __Porffor_DropIterator_prototype_toArray = (storage: any[]): any[] => {
+  const out: any[] = Porffor.malloc();
+  let len: i32 = 0;
+  while (true) {
+    const result: any = __Porffor_DropIterator_prototype_next(storage);
+    if (result.done) break;
+    out[len++] = result.value;
+  }
+  out.length = len;
+  return out;
+};
+
 
 // ============================================================================
 // MapIterator - lazy iterator that transforms items via mapper function
@@ -349,7 +373,11 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
     return result;
   }
 
-  result.value = mapper(sourceResult.value);
+  // Get counter and increment it
+  const counter: i32 = storage[4];
+  storage[4] = counter + 1;
+
+  result.value = mapper(sourceResult.value, counter);
   result.done = false;
   return result;
 };
@@ -380,6 +408,18 @@ export const __Porffor_MapIterator_prototype_Symbol_iterator$get = (storage: any
 
 export const __Porffor_MapIterator_prototype_Symbol_toStringTag$get = () => {
   return 'Iterator';
+};
+
+export const __Porffor_MapIterator_prototype_toArray = (storage: any[]): any[] => {
+  const out: any[] = Porffor.malloc();
+  let len: i32 = 0;
+  while (true) {
+    const result: any = __Porffor_MapIterator_prototype_next(storage);
+    if (result.done) break;
+    out[len++] = result.value;
+  }
+  out.length = len;
+  return out;
 };
 
 
@@ -423,7 +463,11 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
       return result;
     }
 
-    if (predicate(sourceResult.value)) {
+    // Get counter and increment it
+    const counter: i32 = storage[4];
+    storage[4] = counter + 1;
+
+    if (predicate(sourceResult.value, counter)) {
       storage[2] = false;
       const result: object = {};
       result.value = sourceResult.value;
@@ -459,6 +503,18 @@ export const __Porffor_FilterIterator_prototype_Symbol_iterator$get = (storage: 
 
 export const __Porffor_FilterIterator_prototype_Symbol_toStringTag$get = () => {
   return 'Iterator';
+};
+
+export const __Porffor_FilterIterator_prototype_toArray = (storage: any[]): any[] => {
+  const out: any[] = Porffor.malloc();
+  let len: i32 = 0;
+  while (true) {
+    const result: any = __Porffor_FilterIterator_prototype_next(storage);
+    if (result.done) break;
+    out[len++] = result.value;
+  }
+  out.length = len;
+  return out;
 };
 
 
@@ -549,6 +605,18 @@ export const __Porffor_ConcatIterator_prototype_Symbol_iterator$get = (storage: 
 
 export const __Porffor_ConcatIterator_prototype_Symbol_toStringTag$get = () => {
   return 'Iterator';
+};
+
+export const __Porffor_ConcatIterator_prototype_toArray = (storage: any[]): any[] => {
+  const out: any[] = Porffor.malloc();
+  let len: i32 = 0;
+  while (true) {
+    const result: any = __Porffor_ConcatIterator_prototype_next(storage);
+    if (result.done) break;
+    out[len++] = result.value;
+  }
+  out.length = len;
+  return out;
 };
 
 
@@ -1224,7 +1292,8 @@ export const __Iterator_prototype_map = (_this: any, mapper: any) => {
     if (t == Porffor.TYPES.object) {
       storage[3] = _this.next;
     }
-    storage.length = 4;
+    storage[4] = 0; // counter for mapper calls
+    storage.length = 5;
     return __Porffor_MapIterator(storage);
   }
 
@@ -1248,7 +1317,7 @@ export const __Iterator_prototype_filter = (_this: any, predicate: any) => {
       t == Porffor.TYPES.object) {
     // Create lazy FilterIterator wrapping the source directly
     // Use Porffor.malloc() for dynamic allocation (static array literals reuse same memory)
-    // Storage: [0] = source, [1] = predicate, [2] = executing flag, [3] = cached next method (for objects)
+    // Storage: [0] = source, [1] = predicate, [2] = executing flag, [3] = cached next method (for objects), [4] = counter
     const storage: any[] = Porffor.malloc();
     storage[0] = _this;
     storage[1] = predicate;
@@ -1257,7 +1326,8 @@ export const __Iterator_prototype_filter = (_this: any, predicate: any) => {
     if (t == Porffor.TYPES.object) {
       storage[3] = _this.next;
     }
-    storage.length = 4;
+    storage[4] = 0; // counter for predicate calls
+    storage.length = 5;
     return __Porffor_FilterIterator(storage);
   }
 
@@ -1266,6 +1336,12 @@ export const __Iterator_prototype_filter = (_this: any, predicate: any) => {
 
 export const __Iterator_prototype_take = (_this: any, limit: any) => {
   if (_this == null) throw new TypeError('Iterator.prototype.take called on null or undefined');
+  // Per spec: ToNumber then ToIntegerOrInfinity, throw RangeError if NaN or negative
+  const numLimit: number = +limit;
+  if (Number.isNaN(numLimit)) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const intLimit: i32 = Math.trunc(numLimit);
+  if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator ||
       t == Porffor.TYPES.__porffor_generator ||
@@ -1280,7 +1356,7 @@ export const __Iterator_prototype_take = (_this: any, limit: any) => {
     // Storage: [0] = source, [1] = limit, [2] = executing flag, [3] = cached next method (for objects)
     const storage: any[] = Porffor.malloc();
     storage[0] = _this;
-    storage[1] = limit;
+    storage[1] = intLimit;
     storage[2] = false;
     // Per spec, cache the next method at creation time (GetIteratorDirect)
     if (t == Porffor.TYPES.object) {
@@ -1295,6 +1371,12 @@ export const __Iterator_prototype_take = (_this: any, limit: any) => {
 
 export const __Iterator_prototype_drop = (_this: any, count: any) => {
   if (_this == null) throw new TypeError('Iterator.prototype.drop called on null or undefined');
+  // Per spec: ToNumber then ToIntegerOrInfinity, throw RangeError if NaN or negative
+  const numCount: number = +count;
+  if (Number.isNaN(numCount)) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const intCount: i32 = Math.trunc(numCount);
+  if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator ||
       t == Porffor.TYPES.__porffor_generator ||
@@ -1309,7 +1391,7 @@ export const __Iterator_prototype_drop = (_this: any, count: any) => {
     // Storage: [0] = source, [1] = count, [2] = executing flag, [3] = cached next method (for objects)
     const storage: any[] = Porffor.malloc();
     storage[0] = _this;
-    storage[1] = count;
+    storage[1] = intCount;
     storage[2] = false;
     // Per spec, cache the next method at creation time (GetIteratorDirect)
     if (t == Porffor.TYPES.object) {

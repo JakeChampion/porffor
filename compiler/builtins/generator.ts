@@ -229,11 +229,13 @@ export const __Porffor_Generator_prototype_map = (_this: any, mapper: any) => {
     throw new TypeError('Iterator.prototype.map requires a callable');
   }
   // Create lazy MapIterator wrapping the generator directly
+  // Storage: [0] = source, [1] = mapper, [2] = executing flag, [3] = cached next (unused for generators), [4] = counter
   const storage: any[] = Porffor.malloc();
   storage[0] = _this;
   storage[1] = mapper;
   storage[2] = false; // executing flag
-  storage.length = 3;
+  storage[4] = 0; // counter
+  storage.length = 5;
   return storage as __Porffor_MapIterator;
 };
 
@@ -242,29 +244,43 @@ export const __Porffor_Generator_prototype_filter = (_this: any, predicate: any)
     throw new TypeError('Iterator.prototype.filter requires a callable');
   }
   // Create lazy FilterIterator wrapping the generator directly
+  // Storage: [0] = source, [1] = predicate, [2] = executing flag, [3] = cached next (unused for generators), [4] = counter
   const storage: any[] = Porffor.malloc();
   storage[0] = _this;
   storage[1] = predicate;
   storage[2] = false; // executing flag
-  storage.length = 3;
+  storage[4] = 0; // counter
+  storage.length = 5;
   return storage as __Porffor_FilterIterator;
 };
 
 export const __Porffor_Generator_prototype_take = (_this: any, limit: any) => {
+  // Per spec: ToNumber then ToIntegerOrInfinity, throw RangeError if NaN or negative
+  const numLimit: number = +limit;
+  if (Number.isNaN(numLimit)) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const intLimit: i32 = Math.trunc(numLimit);
+  if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+
   // Create lazy TakeIterator wrapping the generator directly
   const storage: any[] = Porffor.malloc();
   storage[0] = _this;
-  storage[1] = limit;
+  storage[1] = intLimit;
   storage[2] = false; // executing flag
   storage.length = 3;
   return storage as __Porffor_TakeIterator;
 };
 
 export const __Porffor_Generator_prototype_drop = (_this: any, count: any) => {
+  // Per spec: ToNumber then ToIntegerOrInfinity, throw RangeError if NaN or negative
+  const numCount: number = +count;
+  if (Number.isNaN(numCount)) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const intCount: i32 = Math.trunc(numCount);
+  if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+
   // Create lazy DropIterator wrapping the generator directly
   const storage: any[] = Porffor.malloc();
   storage[0] = _this;
-  storage[1] = count;
+  storage[1] = intCount;
   storage[2] = false; // executing flag
   storage.length = 3;
   return storage as __Porffor_DropIterator;
