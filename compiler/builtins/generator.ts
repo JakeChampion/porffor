@@ -222,27 +222,52 @@ export const __Porffor_AsyncGenerator_prototype_throw = async (gen: any[], value
 };
 
 // Iterator.prototype methods for generators
-// These convert the generator to a WrapperIterator and then call the corresponding method
-// This allows generators to have Iterator.prototype behavior per spec
+// Use lazy iterator types directly to support infinite generators
 
 export const __Porffor_Generator_prototype_map = (_this: any, mapper: any) => {
-  const wrapper: any = __Iterator_from(_this);
-  return __Porffor_WrapperIterator_prototype_map(wrapper, mapper);
+  if (typeof mapper !== 'function') {
+    throw new TypeError('Iterator.prototype.map requires a callable');
+  }
+  // Create lazy MapIterator wrapping the generator directly
+  const storage: any[] = Porffor.malloc();
+  storage[0] = _this;
+  storage[1] = mapper;
+  storage[2] = false; // executing flag
+  storage.length = 3;
+  return storage as __Porffor_MapIterator;
 };
 
 export const __Porffor_Generator_prototype_filter = (_this: any, predicate: any) => {
-  const wrapper: any = __Iterator_from(_this);
-  return __Porffor_WrapperIterator_prototype_filter(wrapper, predicate);
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.filter requires a callable');
+  }
+  // Create lazy FilterIterator wrapping the generator directly
+  const storage: any[] = Porffor.malloc();
+  storage[0] = _this;
+  storage[1] = predicate;
+  storage[2] = false; // executing flag
+  storage.length = 3;
+  return storage as __Porffor_FilterIterator;
 };
 
 export const __Porffor_Generator_prototype_take = (_this: any, limit: any) => {
-  const wrapper: any = __Iterator_from(_this);
-  return __Porffor_WrapperIterator_prototype_take(wrapper, limit);
+  // Create lazy TakeIterator wrapping the generator directly
+  const storage: any[] = Porffor.malloc();
+  storage[0] = _this;
+  storage[1] = limit;
+  storage[2] = false; // executing flag
+  storage.length = 3;
+  return storage as __Porffor_TakeIterator;
 };
 
 export const __Porffor_Generator_prototype_drop = (_this: any, count: any) => {
-  const wrapper: any = __Iterator_from(_this);
-  return __Porffor_WrapperIterator_prototype_drop(wrapper, count);
+  // Create lazy DropIterator wrapping the generator directly
+  const storage: any[] = Porffor.malloc();
+  storage[0] = _this;
+  storage[1] = count;
+  storage[2] = false; // executing flag
+  storage.length = 3;
+  return storage as __Porffor_DropIterator;
 };
 
 export const __Porffor_Generator_prototype_flatMap = (_this: any, mapper: any) => {

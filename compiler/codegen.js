@@ -7302,8 +7302,7 @@ const generateForOf = (scope, decl) => {
     ])()),
 
     // For lazy iterator types, convert to array via toArray() for iteration
-    // Note: Skip during precompile
-    ...(globalThis.precompile ? [] : (() => [
+    ...(() => [
       ...typeIsOneOf(iterType, [ TYPES.__porffor_takeiterator, TYPES.__porffor_dropiterator, TYPES.__porffor_mapiterator, TYPES.__porffor_filteriterator, TYPES.__porffor_concatiterator ]),
       [ Opcodes.if, Blocktype.void ],
         // call Iterator.prototype.toArray on the iterator
@@ -7316,7 +7315,7 @@ const generateForOf = (scope, decl) => {
         Opcodes.i32_to_u,
         [ Opcodes.local_set, pointer ],
       [ Opcodes.end ],
-    ])()),
+    ])(),
 
     // get length - special handling for WrapperIterator
     ...typeSwitch(scope, iterType, [

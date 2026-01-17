@@ -72,13 +72,19 @@ export const __Array_from = (arg: any, mapFn: any, thisArg: any): any[] => {
 
   let out: any[] = Porffor.malloc();
 
+  const t: i32 = Porffor.type(arg);
   if (Porffor.fastOr(
-    Porffor.type(arg) == Porffor.TYPES.array,
-    (Porffor.type(arg) | 0b10000000) == Porffor.TYPES.bytestring,
-    Porffor.type(arg) == Porffor.TYPES.set,
-    Porffor.fastAnd(Porffor.type(arg) >= Porffor.TYPES.uint8clampedarray, Porffor.type(arg) <= Porffor.TYPES.float64array),
-    Porffor.type(arg) == Porffor.TYPES.__porffor_generator,
-    Porffor.type(arg) == Porffor.TYPES.__porffor_wrapperiterator
+    t == Porffor.TYPES.array,
+    (t | 0b10000000) == Porffor.TYPES.bytestring,
+    t == Porffor.TYPES.set,
+    Porffor.fastAnd(t >= Porffor.TYPES.uint8clampedarray, t <= Porffor.TYPES.float64array),
+    t == Porffor.TYPES.__porffor_generator,
+    t == Porffor.TYPES.__porffor_wrapperiterator,
+    t == Porffor.TYPES.__porffor_takeiterator,
+    t == Porffor.TYPES.__porffor_dropiterator,
+    t == Porffor.TYPES.__porffor_mapiterator,
+    t == Porffor.TYPES.__porffor_filteriterator,
+    t == Porffor.TYPES.__porffor_concatiterator
   )) {
     let i: i32 = 0;
     if (Porffor.type(mapFn) != Porffor.TYPES.undefined) {
@@ -160,14 +166,20 @@ export const __Array_fromAsync = async (asyncItems: any, mapFn: any = undefined)
   const out: any[] = Porffor.malloc();
   let i: i32 = 0;
 
-  // Handle iterables (arrays, strings, sets, typed arrays, generators, wrapper iterators)
+  // Handle iterables (arrays, strings, sets, typed arrays, generators, wrapper iterators, lazy iterators)
+  const asyncT: i32 = Porffor.type(asyncItems);
   if (Porffor.fastOr(
-    Porffor.type(asyncItems) == Porffor.TYPES.array,
-    (Porffor.type(asyncItems) | 0b10000000) == Porffor.TYPES.bytestring,
-    Porffor.type(asyncItems) == Porffor.TYPES.set,
-    Porffor.fastAnd(Porffor.type(asyncItems) >= Porffor.TYPES.uint8clampedarray, Porffor.type(asyncItems) <= Porffor.TYPES.float64array),
-    Porffor.type(asyncItems) == Porffor.TYPES.__porffor_generator,
-    Porffor.type(asyncItems) == Porffor.TYPES.__porffor_wrapperiterator
+    asyncT == Porffor.TYPES.array,
+    (asyncT | 0b10000000) == Porffor.TYPES.bytestring,
+    asyncT == Porffor.TYPES.set,
+    Porffor.fastAnd(asyncT >= Porffor.TYPES.uint8clampedarray, asyncT <= Porffor.TYPES.float64array),
+    asyncT == Porffor.TYPES.__porffor_generator,
+    asyncT == Porffor.TYPES.__porffor_wrapperiterator,
+    asyncT == Porffor.TYPES.__porffor_takeiterator,
+    asyncT == Porffor.TYPES.__porffor_dropiterator,
+    asyncT == Porffor.TYPES.__porffor_mapiterator,
+    asyncT == Porffor.TYPES.__porffor_filteriterator,
+    asyncT == Porffor.TYPES.__porffor_concatiterator
   )) {
     if (hasMapFn) {
       for (const x of asyncItems) {
