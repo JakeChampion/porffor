@@ -158,8 +158,19 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
   let remaining: i32 = storage[1];
   const result: object = {};
 
-  // Already closed (remaining = -1) or exhausted (remaining = 0)
-  if (remaining <= 0) {
+  // Already closed (remaining = -1)
+  if (remaining < 0) {
+    result.value = undefined;
+    result.done = true;
+    return result;
+  }
+
+  // Per spec: If remaining is 0, close the underlying iterator and return done
+  // This handles take(0) - first next() call should close iterator immediately
+  if (remaining == 0) {
+    storage[1] = -1; // Mark as closed
+    // Close the underlying iterator per spec (IteratorClose)
+    __Porffor_iterator_return(storage[0], undefined);
     result.value = undefined;
     result.done = true;
     return result;
@@ -188,18 +199,8 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
   remaining--;
   storage[1] = remaining;
 
-  // If this was the last item (remaining now 0), close the underlying iterator
-  if (remaining == 0) {
-    // Call return on underlying iterator (IteratorClose) per spec
-    if (Porffor.type(source) == Porffor.TYPES.object) {
-      const returnMethod: any = source.return;
-      if (returnMethod != null) {
-        returnMethod.call(source);
-      }
-    } else if (source.return != null) {
-      source.return();
-    }
-  }
+  // Note: Per spec, we do NOT close here when remaining becomes 0.
+  // The close happens on the NEXT call to next() when remaining IS 0 at the start.
 
   return result;
 };
