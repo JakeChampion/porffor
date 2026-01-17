@@ -155,15 +155,9 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
   storage[2] = true;
 
   const source: any = storage[0];
+  const cachedNext: any = storage[3];
 
-  // For object sources, use the cached next method from storage[3]
-  let sourceResult: any;
-  if (Porffor.type(source) == Porffor.TYPES.object) {
-    const nextMethod: any = storage[3];
-    sourceResult = nextMethod.call(source);
-  } else {
-    sourceResult = source.next();
-  }
+  const sourceResult: any = __Porffor_iterator_next(source, cachedNext);
 
   // Clear executing flag
   storage[2] = false;
@@ -223,6 +217,88 @@ export const __Porffor_TakeIterator_prototype_toArray = (storage: any[]): any[] 
   return out;
 };
 
+export const __Porffor_TakeIterator_prototype_map = (_this: any, mapper: any) => {
+  if (typeof mapper !== 'function') {
+    throw new TypeError('Iterator.prototype.map requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = mapper;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_MapIterator;
+};
+
+export const __Porffor_TakeIterator_prototype_filter = (_this: any, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.filter requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = predicate;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_FilterIterator;
+};
+
+export const __Porffor_TakeIterator_prototype_take = (_this: any, limit: any) => {
+  const numLimit: number = +limit;
+  if (Number.isNaN(numLimit)) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const intLimit: i32 = Math.trunc(numLimit);
+  if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intLimit;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_TakeIterator;
+};
+
+export const __Porffor_TakeIterator_prototype_drop = (_this: any, count: any) => {
+  const numCount: number = +count;
+  if (Number.isNaN(numCount)) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const intCount: i32 = Math.trunc(numCount);
+  if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intCount;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_DropIterator;
+};
+
+export const __Porffor_TakeIterator_prototype_flatMap = (_this: any, mapper: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
+};
+
+export const __Porffor_TakeIterator_prototype_reduce = (_this: any, reducer: any, initialValue: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_reduce(wrapper, reducer, initialValue);
+};
+
+export const __Porffor_TakeIterator_prototype_forEach = (_this: any, callback: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_forEach(wrapper, callback);
+};
+
+export const __Porffor_TakeIterator_prototype_some = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_some(wrapper, predicate);
+};
+
+export const __Porffor_TakeIterator_prototype_every = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_every(wrapper, predicate);
+};
+
+export const __Porffor_TakeIterator_prototype_find = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_find(wrapper, predicate);
+};
+
 
 // ============================================================================
 // DropIterator - lazy iterator that skips first N items from source
@@ -244,18 +320,11 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
 
   let toDrop: i32 = storage[1];
   const source: any = storage[0];
-
-  // For object sources, use the cached next method from storage[3]
-  const nextMethod: any = Porffor.type(source) == Porffor.TYPES.object ? storage[3] : null;
+  const cachedNext: any = storage[3];
 
   // Drop items if needed
   while (toDrop > 0) {
-    let dropResult: any;
-    if (nextMethod != null) {
-      dropResult = nextMethod.call(source);
-    } else {
-      dropResult = source.next();
-    }
+    const dropResult: any = __Porffor_iterator_next(source, cachedNext);
     if (dropResult.done) {
       storage[1] = 0;
       storage[2] = false;
@@ -269,12 +338,7 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
   }
 
   // Get next item from source
-  let sourceResult: any;
-  if (nextMethod != null) {
-    sourceResult = nextMethod.call(source);
-  } else {
-    sourceResult = source.next();
-  }
+  const sourceResult: any = __Porffor_iterator_next(source, cachedNext);
 
   // Clear executing flag before returning
   storage[2] = false;
@@ -332,6 +396,88 @@ export const __Porffor_DropIterator_prototype_toArray = (storage: any[]): any[] 
   return out;
 };
 
+export const __Porffor_DropIterator_prototype_map = (_this: any, mapper: any) => {
+  if (typeof mapper !== 'function') {
+    throw new TypeError('Iterator.prototype.map requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = mapper;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_MapIterator;
+};
+
+export const __Porffor_DropIterator_prototype_filter = (_this: any, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.filter requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = predicate;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_FilterIterator;
+};
+
+export const __Porffor_DropIterator_prototype_take = (_this: any, limit: any) => {
+  const numLimit: number = +limit;
+  if (Number.isNaN(numLimit)) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const intLimit: i32 = Math.trunc(numLimit);
+  if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intLimit;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_TakeIterator;
+};
+
+export const __Porffor_DropIterator_prototype_drop = (_this: any, count: any) => {
+  const numCount: number = +count;
+  if (Number.isNaN(numCount)) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const intCount: i32 = Math.trunc(numCount);
+  if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intCount;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_DropIterator;
+};
+
+export const __Porffor_DropIterator_prototype_flatMap = (_this: any, mapper: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
+};
+
+export const __Porffor_DropIterator_prototype_reduce = (_this: any, reducer: any, initialValue: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_reduce(wrapper, reducer, initialValue);
+};
+
+export const __Porffor_DropIterator_prototype_forEach = (_this: any, callback: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_forEach(wrapper, callback);
+};
+
+export const __Porffor_DropIterator_prototype_some = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_some(wrapper, predicate);
+};
+
+export const __Porffor_DropIterator_prototype_every = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_every(wrapper, predicate);
+};
+
+export const __Porffor_DropIterator_prototype_find = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_find(wrapper, predicate);
+};
+
 
 // ============================================================================
 // MapIterator - lazy iterator that transforms items via mapper function
@@ -353,15 +499,10 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
 
   const source: any = storage[0];
   const mapper: Function = storage[1];
+  const cachedNext: any = storage[3];
 
-  // For object sources, use the cached next method from storage[3]
-  let sourceResult: any;
-  if (Porffor.type(source) == Porffor.TYPES.object) {
-    const nextMethod: any = storage[3];
-    sourceResult = nextMethod.call(source);
-  } else {
-    sourceResult = source.next();
-  }
+  // Get next result from source
+  const sourceResult: any = __Porffor_iterator_next(source, cachedNext);
 
   // Clear executing flag
   storage[2] = false;
@@ -422,6 +563,88 @@ export const __Porffor_MapIterator_prototype_toArray = (storage: any[]): any[] =
   return out;
 };
 
+export const __Porffor_MapIterator_prototype_map = (_this: any, mapper: any) => {
+  if (typeof mapper !== 'function') {
+    throw new TypeError('Iterator.prototype.map requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = mapper;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_MapIterator;
+};
+
+export const __Porffor_MapIterator_prototype_filter = (_this: any, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.filter requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = predicate;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_FilterIterator;
+};
+
+export const __Porffor_MapIterator_prototype_take = (_this: any, limit: any) => {
+  const numLimit: number = +limit;
+  if (Number.isNaN(numLimit)) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const intLimit: i32 = Math.trunc(numLimit);
+  if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intLimit;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_TakeIterator;
+};
+
+export const __Porffor_MapIterator_prototype_drop = (_this: any, count: any) => {
+  const numCount: number = +count;
+  if (Number.isNaN(numCount)) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const intCount: i32 = Math.trunc(numCount);
+  if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intCount;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_DropIterator;
+};
+
+export const __Porffor_MapIterator_prototype_flatMap = (_this: any, mapper: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
+};
+
+export const __Porffor_MapIterator_prototype_reduce = (_this: any, reducer: any, initialValue: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_reduce(wrapper, reducer, initialValue);
+};
+
+export const __Porffor_MapIterator_prototype_forEach = (_this: any, callback: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_forEach(wrapper, callback);
+};
+
+export const __Porffor_MapIterator_prototype_some = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_some(wrapper, predicate);
+};
+
+export const __Porffor_MapIterator_prototype_every = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_every(wrapper, predicate);
+};
+
+export const __Porffor_MapIterator_prototype_find = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_find(wrapper, predicate);
+};
+
 
 // ============================================================================
 // FilterIterator - lazy iterator that yields only items matching predicate
@@ -443,17 +666,10 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
 
   const source: any = storage[0];
   const predicate: Function = storage[1];
-
-  // For object sources, use the cached next method from storage[3]
-  const nextMethod: any = Porffor.type(source) == Porffor.TYPES.object ? storage[3] : null;
+  const cachedNext: any = storage[3];
 
   while (true) {
-    let sourceResult: any;
-    if (nextMethod != null) {
-      sourceResult = nextMethod.call(source);
-    } else {
-      sourceResult = source.next();
-    }
+    const sourceResult: any = __Porffor_iterator_next(source, cachedNext);
 
     if (sourceResult.done) {
       storage[2] = false;
@@ -517,6 +733,88 @@ export const __Porffor_FilterIterator_prototype_toArray = (storage: any[]): any[
   return out;
 };
 
+export const __Porffor_FilterIterator_prototype_map = (_this: any, mapper: any) => {
+  if (typeof mapper !== 'function') {
+    throw new TypeError('Iterator.prototype.map requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = mapper;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_MapIterator;
+};
+
+export const __Porffor_FilterIterator_prototype_filter = (_this: any, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.filter requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = predicate;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_FilterIterator;
+};
+
+export const __Porffor_FilterIterator_prototype_take = (_this: any, limit: any) => {
+  const numLimit: number = +limit;
+  if (Number.isNaN(numLimit)) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const intLimit: i32 = Math.trunc(numLimit);
+  if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intLimit;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_TakeIterator;
+};
+
+export const __Porffor_FilterIterator_prototype_drop = (_this: any, count: any) => {
+  const numCount: number = +count;
+  if (Number.isNaN(numCount)) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const intCount: i32 = Math.trunc(numCount);
+  if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intCount;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_DropIterator;
+};
+
+export const __Porffor_FilterIterator_prototype_flatMap = (_this: any, mapper: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
+};
+
+export const __Porffor_FilterIterator_prototype_reduce = (_this: any, reducer: any, initialValue: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_reduce(wrapper, reducer, initialValue);
+};
+
+export const __Porffor_FilterIterator_prototype_forEach = (_this: any, callback: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_forEach(wrapper, callback);
+};
+
+export const __Porffor_FilterIterator_prototype_some = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_some(wrapper, predicate);
+};
+
+export const __Porffor_FilterIterator_prototype_every = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_every(wrapper, predicate);
+};
+
+export const __Porffor_FilterIterator_prototype_find = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_find(wrapper, predicate);
+};
+
 
 // ============================================================================
 // ConcatIterator - lazy iterator that concatenates multiple iterables
@@ -561,14 +859,7 @@ export const __Porffor_ConcatIterator_prototype_next = (storage: any[]) => {
     }
 
     // Get next value from current iterator
-    let sourceResult: any;
-    if (currentNext !== null && currentNext !== undefined) {
-      // Object iterator with next method
-      sourceResult = currentNext.call(currentIterator);
-    } else {
-      // WrapperIterator or similar - use .next()
-      sourceResult = currentIterator.next();
-    }
+    const sourceResult: any = __Porffor_iterator_next(currentIterator, currentNext);
 
     if (!sourceResult.done) {
       // Return a fresh result object (per spec requirement)
@@ -617,6 +908,129 @@ export const __Porffor_ConcatIterator_prototype_toArray = (storage: any[]): any[
   }
   out.length = len;
   return out;
+};
+
+export const __Porffor_ConcatIterator_prototype_map = (_this: any, mapper: any) => {
+  if (typeof mapper !== 'function') {
+    throw new TypeError('Iterator.prototype.map requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = mapper;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_MapIterator;
+};
+
+export const __Porffor_ConcatIterator_prototype_filter = (_this: any, predicate: any) => {
+  if (typeof predicate !== 'function') {
+    throw new TypeError('Iterator.prototype.filter requires a callable');
+  }
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = predicate;
+  newStorage[2] = false;
+  newStorage[4] = 0;
+  newStorage.length = 5;
+  return newStorage as __Porffor_FilterIterator;
+};
+
+export const __Porffor_ConcatIterator_prototype_take = (_this: any, limit: any) => {
+  const numLimit: number = +limit;
+  if (Number.isNaN(numLimit)) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const intLimit: i32 = Math.trunc(numLimit);
+  if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intLimit;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_TakeIterator;
+};
+
+export const __Porffor_ConcatIterator_prototype_drop = (_this: any, count: any) => {
+  const numCount: number = +count;
+  if (Number.isNaN(numCount)) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const intCount: i32 = Math.trunc(numCount);
+  if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  const newStorage: any[] = Porffor.malloc();
+  newStorage[0] = _this;
+  newStorage[1] = intCount;
+  newStorage[2] = false;
+  newStorage.length = 3;
+  return newStorage as __Porffor_DropIterator;
+};
+
+export const __Porffor_ConcatIterator_prototype_flatMap = (_this: any, mapper: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
+};
+
+export const __Porffor_ConcatIterator_prototype_reduce = (_this: any, reducer: any, initialValue: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_reduce(wrapper, reducer, initialValue);
+};
+
+export const __Porffor_ConcatIterator_prototype_forEach = (_this: any, callback: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_forEach(wrapper, callback);
+};
+
+export const __Porffor_ConcatIterator_prototype_some = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_some(wrapper, predicate);
+};
+
+export const __Porffor_ConcatIterator_prototype_every = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_every(wrapper, predicate);
+};
+
+export const __Porffor_ConcatIterator_prototype_find = (_this: any, predicate: any) => {
+  const wrapper: any = __Iterator_from(_this);
+  return __Porffor_WrapperIterator_prototype_find(wrapper, predicate);
+};
+
+
+// Helper to call next on a source iterator based on its type
+// This handles the case where the source is another lazy iterator type
+// and method calls don't work due to Porffor's internal type system
+// NOTE: This must be defined AFTER all lazy iterator _prototype_next functions
+export const __Porffor_iterator_next = (source: any, cachedNextMethod: any): any => {
+  const sourceType: i32 = Porffor.type(source);
+
+  if (sourceType == Porffor.TYPES.object) {
+    // For plain objects, use cached next method
+    return cachedNextMethod.call(source);
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_mapiterator) {
+    return __Porffor_MapIterator_prototype_next(source);
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_filteriterator) {
+    return __Porffor_FilterIterator_prototype_next(source);
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_takeiterator) {
+    return __Porffor_TakeIterator_prototype_next(source);
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_dropiterator) {
+    return __Porffor_DropIterator_prototype_next(source);
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_wrapperiterator) {
+    return __Porffor_WrapperIterator_prototype_next(source);
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_concatiterator) {
+    return __Porffor_ConcatIterator_prototype_next(source);
+  }
+
+  // For generators and other types, use method call
+  return source.next();
 };
 
 
@@ -1404,7 +1818,7 @@ export const __Iterator_prototype_drop = (_this: any, count: any) => {
   throw new TypeError('Iterator.prototype.drop called on non-iterator');
 };
 
-export const __Iterator_prototype_flatMap = (_this: __Porffor_WrapperIterator, mapper: any) => {
+export const __Iterator_prototype_flatMap = (_this: any, mapper: any) => {
   if (typeof mapper !== 'function') {
     throw new TypeError('Iterator.prototype.flatMap requires a callable');
   }
@@ -1421,7 +1835,7 @@ export const __Iterator_prototype_flatMap = (_this: __Porffor_WrapperIterator, m
   throw new TypeError('Iterator.prototype.flatMap called on non-iterator');
 };
 
-export const __Iterator_prototype_reduce = (_this: __Porffor_WrapperIterator, reducer: any, initialValue: any) => {
+export const __Iterator_prototype_reduce = (_this: any, reducer: any, initialValue: any) => {
   if (typeof reducer !== 'function') {
     throw new TypeError('Iterator.prototype.reduce requires a callable');
   }
@@ -1550,7 +1964,7 @@ export const __Iterator_prototype_toArray = (_this: any) => {
   throw new TypeError('Iterator.prototype.toArray called on non-iterator');
 };
 
-export const __Iterator_prototype_forEach = (_this: __Porffor_WrapperIterator, callback: any) => {
+export const __Iterator_prototype_forEach = (_this: any, callback: any) => {
   if (typeof callback !== 'function') {
     throw new TypeError('Iterator.prototype.forEach requires a callable');
   }
@@ -1581,7 +1995,7 @@ export const __Iterator_prototype_forEach = (_this: __Porffor_WrapperIterator, c
   throw new TypeError('Iterator.prototype.forEach called on non-iterator');
 };
 
-export const __Iterator_prototype_some = (_this: __Porffor_WrapperIterator, predicate: any) => {
+export const __Iterator_prototype_some = (_this: any, predicate: any) => {
   if (typeof predicate !== 'function') {
     throw new TypeError('Iterator.prototype.some requires a callable');
   }
@@ -1612,7 +2026,7 @@ export const __Iterator_prototype_some = (_this: __Porffor_WrapperIterator, pred
   throw new TypeError('Iterator.prototype.some called on non-iterator');
 };
 
-export const __Iterator_prototype_every = (_this: __Porffor_WrapperIterator, predicate: any) => {
+export const __Iterator_prototype_every = (_this: any, predicate: any) => {
   if (typeof predicate !== 'function') {
     throw new TypeError('Iterator.prototype.every requires a callable');
   }
@@ -1643,7 +2057,7 @@ export const __Iterator_prototype_every = (_this: __Porffor_WrapperIterator, pre
   throw new TypeError('Iterator.prototype.every called on non-iterator');
 };
 
-export const __Iterator_prototype_find = (_this: __Porffor_WrapperIterator, predicate: any) => {
+export const __Iterator_prototype_find = (_this: any, predicate: any) => {
   if (typeof predicate !== 'function') {
     throw new TypeError('Iterator.prototype.find requires a callable');
   }

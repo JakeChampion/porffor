@@ -4485,16 +4485,16 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       // Add Iterator.prototype methods fallback for all iterator types
       // This handles methods like toArray, forEach, etc. that are defined on Iterator.prototype
       const iteratorProtoMethod = '__Iterator_prototype_' + protoName;
+      const iteratorTypes = [
+        TYPES.__porffor_generator,
+        TYPES.__porffor_wrapperiterator,
+        TYPES.__porffor_takeiterator,
+        TYPES.__porffor_dropiterator,
+        TYPES.__porffor_mapiterator,
+        TYPES.__porffor_filteriterator,
+        TYPES.__porffor_concatiterator
+      ];
       if (builtinFuncs[iteratorProtoMethod]) {
-        const iteratorTypes = [
-          TYPES.__porffor_generator,
-          TYPES.__porffor_wrapperiterator,
-          TYPES.__porffor_takeiterator,
-          TYPES.__porffor_dropiterator,
-          TYPES.__porffor_mapiterator,
-          TYPES.__porffor_filteriterator,
-          TYPES.__porffor_concatiterator
-        ];
         for (const t of iteratorTypes) {
           if (t != null && !protoBC[t]) {
             protoBC[t] = () => generate(scope, {
@@ -4520,18 +4520,10 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       // alias primitive prototype with primitive object types
       aliasPrimObjsBC(protoBC);
 
-      // For .next() calls, ensure all iterator types are in usedTypes to get
-      // deterministic type switch generation during precompile
-      if (protoName === 'next') {
-        const iteratorTypes = [
-          TYPES.__porffor_generator,
-          TYPES.__porffor_wrapperiterator,
-          TYPES.__porffor_takeiterator,
-          TYPES.__porffor_dropiterator,
-          TYPES.__porffor_mapiterator,
-          TYPES.__porffor_filteriterator,
-          TYPES.__porffor_concatiterator
-        ];
+      // For iterator prototype method calls, ensure all iterator types are in usedTypes
+      // so the type switch cases are generated for them
+      const hasIteratorProtoHandlers = iteratorTypes.some(t => t != null && protoBC[t]);
+      if (hasIteratorProtoHandlers) {
         for (const t of iteratorTypes) {
           if (t != null) {
             usedTypes.add(t);
