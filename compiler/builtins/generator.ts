@@ -229,13 +229,13 @@ export const __Porffor_Generator_prototype_map = (_this: any, mapper: any) => {
     throw new TypeError('Iterator.prototype.map requires a callable');
   }
   // Create lazy MapIterator wrapping the generator directly
-  // Storage: [0] = source, [1] = mapper, [2] = executing flag, [3] = cached next (unused for generators), [4] = counter
+  // Storage: [0] = source, [1] = mapper, [2] = executing flag, [3] = cached next (unused for generators), [4] = counter, [5] = closed
   const storage: any[] = Porffor.malloc();
   storage[0] = _this;
   storage[1] = mapper;
   storage[2] = false; // executing flag
   storage[4] = 0; // counter
-  storage.length = 5;
+  storage.length = 6;
   return storage as __Porffor_MapIterator;
 };
 
@@ -244,13 +244,13 @@ export const __Porffor_Generator_prototype_filter = (_this: any, predicate: any)
     throw new TypeError('Iterator.prototype.filter requires a callable');
   }
   // Create lazy FilterIterator wrapping the generator directly
-  // Storage: [0] = source, [1] = predicate, [2] = executing flag, [3] = cached next (unused for generators), [4] = counter
+  // Storage: [0] = source, [1] = predicate, [2] = executing flag, [3] = cached next (unused for generators), [4] = counter, [5] = closed
   const storage: any[] = Porffor.malloc();
   storage[0] = _this;
   storage[1] = predicate;
   storage[2] = false; // executing flag
   storage[4] = 0; // counter
-  storage.length = 5;
+  storage.length = 6;
   return storage as __Porffor_FilterIterator;
 };
 
@@ -262,11 +262,12 @@ export const __Porffor_Generator_prototype_take = (_this: any, limit: any) => {
   if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
 
   // Create lazy TakeIterator wrapping the generator directly
+  // Storage: [0] = source, [1] = remaining, [2] = executing flag, [3] = closed
   const storage: any[] = Porffor.malloc();
   storage[0] = _this;
   storage[1] = intLimit;
   storage[2] = false; // executing flag
-  storage.length = 3;
+  storage.length = 4;
   return storage as __Porffor_TakeIterator;
 };
 
@@ -278,11 +279,12 @@ export const __Porffor_Generator_prototype_drop = (_this: any, count: any) => {
   if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
 
   // Create lazy DropIterator wrapping the generator directly
+  // Storage: [0] = source, [1] = remaining, [2] = executing flag, [3] = closed
   const storage: any[] = Porffor.malloc();
   storage[0] = _this;
   storage[1] = intCount;
   storage[2] = false; // executing flag
-  storage.length = 3;
+  storage.length = 4;
   return storage as __Porffor_DropIterator;
 };
 

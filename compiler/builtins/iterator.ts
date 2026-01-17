@@ -145,6 +145,7 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
   let remaining: i32 = storage[1];
   const result: object = {};
 
+  // Already closed (remaining = -1) or exhausted (remaining = 0)
   if (remaining <= 0) {
     result.value = undefined;
     result.done = true;
@@ -155,9 +156,7 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
   storage[2] = true;
 
   const source: any = storage[0];
-  const cachedNext: any = storage[3];
-
-  const sourceResult: any = __Porffor_iterator_next(source, cachedNext);
+  const sourceResult: any = __Porffor_iterator_next(source, null);
 
   // Clear executing flag
   storage[2] = false;
@@ -165,18 +164,45 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
   if (sourceResult.done) {
     result.value = undefined;
     result.done = true;
-    storage[1] = 0;
+    storage[1] = -1; // Mark as closed
     return result;
   }
 
   result.value = sourceResult.value;
   result.done = false;
-  storage[1] = remaining - 1;
+  remaining--;
+  storage[1] = remaining;
+
+  // If this was the last item (remaining now 0), close the underlying iterator
+  if (remaining == 0) {
+    // Call return on underlying iterator (IteratorClose) per spec
+    if (Porffor.type(source) == Porffor.TYPES.object) {
+      const returnMethod: any = source.return;
+      if (returnMethod != null) {
+        returnMethod.call(source);
+      }
+    } else if (source.return != null) {
+      source.return();
+    }
+  }
 
   return result;
 };
 
 export const __Porffor_TakeIterator_prototype_return = (storage: any[], value: any): object => {
+  const result: object = {};
+  result.value = value;
+  result.done = true;
+
+  // Check if already closed - if so, don't forward return again
+  const remaining: i32 = storage[1];
+  if (remaining < 0) {
+    return result;
+  }
+
+  // Mark as closed
+  storage[1] = -1;
+
   // Forward to underlying iterator's return if it exists
   const source: any = storage[0];
   if (source != null) {
@@ -190,10 +216,6 @@ export const __Porffor_TakeIterator_prototype_return = (storage: any[], value: a
     }
   }
 
-  storage[1] = 0; // Mark as exhausted
-  const result: object = {};
-  result.value = value;
-  result.done = true;
   return result;
 };
 
@@ -226,7 +248,7 @@ export const __Porffor_TakeIterator_prototype_map = (_this: any, mapper: any) =>
   newStorage[1] = mapper;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_MapIterator;
 };
 
@@ -239,7 +261,7 @@ export const __Porffor_TakeIterator_prototype_filter = (_this: any, predicate: a
   newStorage[1] = predicate;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_FilterIterator;
 };
 
@@ -252,7 +274,7 @@ export const __Porffor_TakeIterator_prototype_take = (_this: any, limit: any) =>
   newStorage[0] = _this;
   newStorage[1] = intLimit;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_TakeIterator;
 };
 
@@ -265,7 +287,7 @@ export const __Porffor_TakeIterator_prototype_drop = (_this: any, count: any) =>
   newStorage[0] = _this;
   newStorage[1] = intCount;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_DropIterator;
 };
 
@@ -315,20 +337,29 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
     throw new TypeError('Generator is already executing');
   }
 
+  const result: object = {};
+
+  // Already closed
+  if (storage[3]) {
+    result.value = undefined;
+    result.done = true;
+    return result;
+  }
+
   // Mark as executing
   storage[2] = true;
 
   let toDrop: i32 = storage[1];
   const source: any = storage[0];
-  const cachedNext: any = storage[3];
 
   // Drop items if needed
   while (toDrop > 0) {
-    const dropResult: any = __Porffor_iterator_next(source, cachedNext);
+    const dropResult: any = __Porffor_iterator_next(source, null);
     if (dropResult.done) {
       storage[1] = 0;
       storage[2] = false;
-      const result: object = {};
+      // Mark as closed when exhausted
+      storage[3] = true;
       result.value = undefined;
       result.done = true;
       return result;
@@ -338,13 +369,14 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
   }
 
   // Get next item from source
-  const sourceResult: any = __Porffor_iterator_next(source, cachedNext);
+  const sourceResult: any = __Porffor_iterator_next(source, null);
 
   // Clear executing flag before returning
   storage[2] = false;
 
-  const result: object = {};
   if (sourceResult.done) {
+    // Mark as closed when exhausted
+    storage[3] = true;
     result.value = undefined;
     result.done = true;
     return result;
@@ -356,6 +388,19 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
 };
 
 export const __Porffor_DropIterator_prototype_return = (storage: any[], value: any): object => {
+  const result: object = {};
+  result.value = value;
+  result.done = true;
+
+  // Check if already closed - if so, don't forward return again
+  if (storage[3]) {
+    return result;
+  }
+
+  // Mark as closed
+  storage[3] = true;
+  storage[1] = 0;
+
   // Forward to underlying iterator's return if it exists
   const source: any = storage[0];
   if (source != null) {
@@ -369,10 +414,6 @@ export const __Porffor_DropIterator_prototype_return = (storage: any[], value: a
     }
   }
 
-  storage[1] = 0;
-  const result: object = {};
-  result.value = value;
-  result.done = true;
   return result;
 };
 
@@ -405,7 +446,7 @@ export const __Porffor_DropIterator_prototype_map = (_this: any, mapper: any) =>
   newStorage[1] = mapper;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_MapIterator;
 };
 
@@ -418,7 +459,7 @@ export const __Porffor_DropIterator_prototype_filter = (_this: any, predicate: a
   newStorage[1] = predicate;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_FilterIterator;
 };
 
@@ -431,7 +472,7 @@ export const __Porffor_DropIterator_prototype_take = (_this: any, limit: any) =>
   newStorage[0] = _this;
   newStorage[1] = intLimit;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_TakeIterator;
 };
 
@@ -444,7 +485,7 @@ export const __Porffor_DropIterator_prototype_drop = (_this: any, count: any) =>
   newStorage[0] = _this;
   newStorage[1] = intCount;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_DropIterator;
 };
 
@@ -509,6 +550,8 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
 
   const result: object = {};
   if (sourceResult.done) {
+    // Mark as closed when exhausted - prevents return() from forwarding
+    storage[5] = true;
     result.value = undefined;
     result.done = true;
     return result;
@@ -524,6 +567,18 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
 };
 
 export const __Porffor_MapIterator_prototype_return = (storage: any[], value: any): object => {
+  const result: object = {};
+  result.value = value;
+  result.done = true;
+
+  // Check if already closed - if so, don't forward return again
+  if (storage[5]) {
+    return result;
+  }
+
+  // Mark as closed
+  storage[5] = true;
+
   // Forward to underlying iterator's return if it exists
   const source: any = storage[0];
   if (source != null) {
@@ -537,9 +592,6 @@ export const __Porffor_MapIterator_prototype_return = (storage: any[], value: an
     }
   }
 
-  const result: object = {};
-  result.value = value;
-  result.done = true;
   return result;
 };
 
@@ -572,7 +624,7 @@ export const __Porffor_MapIterator_prototype_map = (_this: any, mapper: any) => 
   newStorage[1] = mapper;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_MapIterator;
 };
 
@@ -585,7 +637,7 @@ export const __Porffor_MapIterator_prototype_filter = (_this: any, predicate: an
   newStorage[1] = predicate;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_FilterIterator;
 };
 
@@ -598,7 +650,7 @@ export const __Porffor_MapIterator_prototype_take = (_this: any, limit: any) => 
   newStorage[0] = _this;
   newStorage[1] = intLimit;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_TakeIterator;
 };
 
@@ -611,7 +663,7 @@ export const __Porffor_MapIterator_prototype_drop = (_this: any, count: any) => 
   newStorage[0] = _this;
   newStorage[1] = intCount;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_DropIterator;
 };
 
@@ -673,6 +725,8 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
 
     if (sourceResult.done) {
       storage[2] = false;
+      // Mark as closed when exhausted - prevents return() from forwarding
+      storage[5] = true;
       const result: object = {};
       result.value = undefined;
       result.done = true;
@@ -694,6 +748,18 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
 };
 
 export const __Porffor_FilterIterator_prototype_return = (storage: any[], value: any): object => {
+  const result: object = {};
+  result.value = value;
+  result.done = true;
+
+  // Check if already closed - if so, don't forward return again
+  if (storage[5]) {
+    return result;
+  }
+
+  // Mark as closed
+  storage[5] = true;
+
   // Forward to underlying iterator's return if it exists
   const source: any = storage[0];
   if (source != null) {
@@ -707,9 +773,6 @@ export const __Porffor_FilterIterator_prototype_return = (storage: any[], value:
     }
   }
 
-  const result: object = {};
-  result.value = value;
-  result.done = true;
   return result;
 };
 
@@ -742,7 +805,7 @@ export const __Porffor_FilterIterator_prototype_map = (_this: any, mapper: any) 
   newStorage[1] = mapper;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_MapIterator;
 };
 
@@ -755,7 +818,7 @@ export const __Porffor_FilterIterator_prototype_filter = (_this: any, predicate:
   newStorage[1] = predicate;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_FilterIterator;
 };
 
@@ -768,7 +831,7 @@ export const __Porffor_FilterIterator_prototype_take = (_this: any, limit: any) 
   newStorage[0] = _this;
   newStorage[1] = intLimit;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_TakeIterator;
 };
 
@@ -781,7 +844,7 @@ export const __Porffor_FilterIterator_prototype_drop = (_this: any, count: any) 
   newStorage[0] = _this;
   newStorage[1] = intCount;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_DropIterator;
 };
 
@@ -919,7 +982,7 @@ export const __Porffor_ConcatIterator_prototype_map = (_this: any, mapper: any) 
   newStorage[1] = mapper;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_MapIterator;
 };
 
@@ -932,7 +995,7 @@ export const __Porffor_ConcatIterator_prototype_filter = (_this: any, predicate:
   newStorage[1] = predicate;
   newStorage[2] = false;
   newStorage[4] = 0;
-  newStorage.length = 5;
+  newStorage.length = 6;
   return newStorage as __Porffor_FilterIterator;
 };
 
@@ -945,7 +1008,7 @@ export const __Porffor_ConcatIterator_prototype_take = (_this: any, limit: any) 
   newStorage[0] = _this;
   newStorage[1] = intLimit;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_TakeIterator;
 };
 
@@ -958,7 +1021,7 @@ export const __Porffor_ConcatIterator_prototype_drop = (_this: any, count: any) 
   newStorage[0] = _this;
   newStorage[1] = intCount;
   newStorage[2] = false;
-  newStorage.length = 3;
+  newStorage.length = 4;
   return newStorage as __Porffor_DropIterator;
 };
 
