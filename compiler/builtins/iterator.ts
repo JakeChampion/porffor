@@ -564,8 +564,12 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
   try {
     mapped = mapper(sourceResult.value, counter);
   } catch (e) {
-    // Close underlying iterator before re-throwing
-    __Porffor_iterator_return(source, undefined);
+    // Close underlying iterator before re-throwing (suppress close errors per spec)
+    try {
+      __Porffor_iterator_return(source, undefined);
+    } catch (_) {
+      // Per spec: if closing throws, suppress it and throw the original error
+    }
     throw e;
   }
 
@@ -741,8 +745,12 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
       matches = predicate(sourceResult.value, counter);
     } catch (e) {
       storage[2] = false;
-      // Close underlying iterator before re-throwing
-      __Porffor_iterator_return(source, undefined);
+      // Close underlying iterator before re-throwing (suppress close errors per spec)
+      try {
+        __Porffor_iterator_return(source, undefined);
+      } catch (_) {
+        // Per spec: if closing throws, suppress it and throw the original error
+      }
       throw e;
     }
 
@@ -2044,7 +2052,11 @@ export const __Iterator_prototype_reduce = (_this: any, reducer: any, initialVal
         try {
           accumulator = reducer(accumulator, value, index);
         } catch (e) {
-          __Porffor_iterator_return(_this, undefined);
+          try {
+            __Porffor_iterator_return(_this, undefined);
+          } catch (_) {
+            // Per spec: suppress close errors
+          }
           throw e;
         }
       }
@@ -2174,7 +2186,11 @@ export const __Iterator_prototype_forEach = (_this: any, callback: any) => {
       try {
         callback(result.value, index++);
       } catch (e) {
-        __Porffor_iterator_return(_this, undefined);
+        try {
+          __Porffor_iterator_return(_this, undefined);
+        } catch (_) {
+          // Per spec: suppress close errors
+        }
         throw e;
       }
     }
@@ -2214,7 +2230,11 @@ export const __Iterator_prototype_some = (_this: any, predicate: any) => {
       try {
         matches = predicate(result.value, index++);
       } catch (e) {
-        __Porffor_iterator_return(_this, undefined);
+        try {
+          __Porffor_iterator_return(_this, undefined);
+        } catch (_) {
+          // Per spec: suppress close errors
+        }
         throw e;
       }
       if (matches) {
@@ -2259,7 +2279,11 @@ export const __Iterator_prototype_every = (_this: any, predicate: any) => {
       try {
         matches = predicate(result.value, index++);
       } catch (e) {
-        __Porffor_iterator_return(_this, undefined);
+        try {
+          __Porffor_iterator_return(_this, undefined);
+        } catch (_) {
+          // Per spec: suppress close errors
+        }
         throw e;
       }
       if (!matches) {
@@ -2305,7 +2329,11 @@ export const __Iterator_prototype_find = (_this: any, predicate: any) => {
       try {
         matches = predicate(value, index++);
       } catch (e) {
-        __Porffor_iterator_return(_this, undefined);
+        try {
+          __Porffor_iterator_return(_this, undefined);
+        } catch (_) {
+          // Per spec: suppress close errors
+        }
         throw e;
       }
       if (matches) {
