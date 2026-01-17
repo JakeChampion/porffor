@@ -1206,6 +1206,7 @@ export const __Iterator_toWrapperIterator = (it: any): any[] => {
 // These are the spec-compliant Iterator.prototype methods that work on any iterator
 
 export const __Iterator_prototype_map = (_this: any, mapper: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.map called on null or undefined');
   if (typeof mapper !== 'function') {
     throw new TypeError('Iterator.prototype.map requires a callable');
   }
@@ -1234,6 +1235,7 @@ export const __Iterator_prototype_map = (_this: any, mapper: any) => {
 };
 
 export const __Iterator_prototype_filter = (_this: any, predicate: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.filter called on null or undefined');
   if (typeof predicate !== 'function') {
     throw new TypeError('Iterator.prototype.filter requires a callable');
   }
@@ -1262,6 +1264,7 @@ export const __Iterator_prototype_filter = (_this: any, predicate: any) => {
 };
 
 export const __Iterator_prototype_take = (_this: any, limit: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.take called on null or undefined');
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator ||
       t == Porffor.TYPES.__porffor_generator ||
@@ -1286,6 +1289,7 @@ export const __Iterator_prototype_take = (_this: any, limit: any) => {
 };
 
 export const __Iterator_prototype_drop = (_this: any, count: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.drop called on null or undefined');
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator ||
       t == Porffor.TYPES.__porffor_generator ||
@@ -1310,6 +1314,7 @@ export const __Iterator_prototype_drop = (_this: any, count: any) => {
 };
 
 export const __Iterator_prototype_flatMap = (_this: __Porffor_WrapperIterator, mapper: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.flatMap called on null or undefined');
   if (typeof mapper !== 'function') {
     throw new TypeError('Iterator.prototype.flatMap requires a callable');
   }
@@ -1327,6 +1332,7 @@ export const __Iterator_prototype_flatMap = (_this: __Porffor_WrapperIterator, m
 };
 
 export const __Iterator_prototype_reduce = (_this: __Porffor_WrapperIterator, reducer: any, initialValue: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.reduce called on null or undefined');
   if (typeof reducer !== 'function') {
     throw new TypeError('Iterator.prototype.reduce requires a callable');
   }
@@ -1370,6 +1376,7 @@ export const __Iterator_prototype_reduce = (_this: __Porffor_WrapperIterator, re
 };
 
 export const __Iterator_prototype_toArray = (_this: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.toArray called on null or undefined');
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator) {
     return __Porffor_WrapperIterator_prototype_toArray(_this as any[]);
@@ -1455,6 +1462,7 @@ export const __Iterator_prototype_toArray = (_this: any) => {
 };
 
 export const __Iterator_prototype_forEach = (_this: __Porffor_WrapperIterator, callback: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.forEach called on null or undefined');
   if (typeof callback !== 'function') {
     throw new TypeError('Iterator.prototype.forEach requires a callable');
   }
@@ -1486,6 +1494,7 @@ export const __Iterator_prototype_forEach = (_this: __Porffor_WrapperIterator, c
 };
 
 export const __Iterator_prototype_some = (_this: __Porffor_WrapperIterator, predicate: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.some called on null or undefined');
   if (typeof predicate !== 'function') {
     throw new TypeError('Iterator.prototype.some requires a callable');
   }
@@ -1517,6 +1526,7 @@ export const __Iterator_prototype_some = (_this: __Porffor_WrapperIterator, pred
 };
 
 export const __Iterator_prototype_every = (_this: __Porffor_WrapperIterator, predicate: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.every called on null or undefined');
   if (typeof predicate !== 'function') {
     throw new TypeError('Iterator.prototype.every requires a callable');
   }
@@ -1548,6 +1558,7 @@ export const __Iterator_prototype_every = (_this: __Porffor_WrapperIterator, pre
 };
 
 export const __Iterator_prototype_find = (_this: __Porffor_WrapperIterator, predicate: any) => {
+  if (_this == null) throw new TypeError('Iterator.prototype.find called on null or undefined');
   if (typeof predicate !== 'function') {
     throw new TypeError('Iterator.prototype.find requires a callable');
   }
