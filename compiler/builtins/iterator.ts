@@ -319,6 +319,12 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
 };
 
 export const __Porffor_FilterIterator_prototype_return = (storage: any[], value: any): object => {
+  // Forward to underlying iterator's return if it exists
+  const source: any = storage[0];
+  if (source != null && source.return != null) {
+    source.return(value);
+  }
+
   const result: object = {};
   result.value = value;
   result.done = true;
