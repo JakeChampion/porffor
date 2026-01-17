@@ -559,7 +559,17 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
   const counter: i32 = storage[4];
   storage[4] = counter + 1;
 
-  result.value = mapper(sourceResult.value, counter);
+  // Per spec: If mapper throws, close the underlying iterator (IfAbruptCloseIterator)
+  let mapped: any;
+  try {
+    mapped = mapper(sourceResult.value, counter);
+  } catch (e) {
+    // Close underlying iterator before re-throwing
+    __Porffor_iterator_return(source, undefined);
+    throw e;
+  }
+
+  result.value = mapped;
   result.done = false;
   return result;
 };
@@ -725,7 +735,18 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
     const counter: i32 = storage[4];
     storage[4] = counter + 1;
 
-    if (predicate(sourceResult.value, counter)) {
+    // Per spec: If predicate throws, close the underlying iterator (IfAbruptCloseIterator)
+    let matches: boolean;
+    try {
+      matches = predicate(sourceResult.value, counter);
+    } catch (e) {
+      storage[2] = false;
+      // Close underlying iterator before re-throwing
+      __Porffor_iterator_return(source, undefined);
+      throw e;
+    }
+
+    if (matches) {
       storage[2] = false;
       const result: object = {};
       result.value = sourceResult.value;
