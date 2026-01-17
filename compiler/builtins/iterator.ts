@@ -169,7 +169,9 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
   storage[2] = true;
 
   const source: any = storage[0];
-  const sourceResult: any = __Porffor_iterator_next(source, null);
+  // Use cached next method from storage[3] for plain objects
+  const cachedNext: any = storage[3];
+  const sourceResult: any = __Porffor_iterator_next(source, cachedNext);
 
   // Clear executing flag
   storage[2] = false;
@@ -216,18 +218,8 @@ export const __Porffor_TakeIterator_prototype_return = (storage: any[], value: a
   // Mark as closed
   storage[1] = -1;
 
-  // Forward to underlying iterator's return if it exists
-  const source: any = storage[0];
-  if (source != null) {
-    if (Porffor.type(source) == Porffor.TYPES.object) {
-      const returnMethod: any = source.return;
-      if (returnMethod != null) {
-        returnMethod.call(source, value);
-      }
-    } else if (source.return != null) {
-      source.return(value);
-    }
-  }
+  // Forward to underlying iterator's return using helper
+  __Porffor_iterator_return(storage[0], value);
 
   return result;
 };
@@ -364,10 +356,12 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
 
   let toDrop: i32 = storage[1];
   const source: any = storage[0];
+  // Use cached next method from storage[4] for plain objects
+  const cachedNext: any = storage[4];
 
   // Drop items if needed
   while (toDrop > 0) {
-    const dropResult: any = __Porffor_iterator_next(source, null);
+    const dropResult: any = __Porffor_iterator_next(source, cachedNext);
     if (dropResult.done) {
       storage[1] = 0;
       storage[2] = false;
@@ -382,7 +376,7 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
   }
 
   // Get next item from source
-  const sourceResult: any = __Porffor_iterator_next(source, null);
+  const sourceResult: any = __Porffor_iterator_next(source, cachedNext);
 
   // Clear executing flag before returning
   storage[2] = false;
@@ -414,18 +408,8 @@ export const __Porffor_DropIterator_prototype_return = (storage: any[], value: a
   storage[3] = true;
   storage[1] = 0;
 
-  // Forward to underlying iterator's return if it exists
-  const source: any = storage[0];
-  if (source != null) {
-    if (Porffor.type(source) == Porffor.TYPES.object) {
-      const returnMethod: any = source.return;
-      if (returnMethod != null) {
-        returnMethod.call(source, value);
-      }
-    } else if (source.return != null) {
-      source.return(value);
-    }
-  }
+  // Forward to underlying iterator's return using helper
+  __Porffor_iterator_return(storage[0], value);
 
   return result;
 };
@@ -592,18 +576,8 @@ export const __Porffor_MapIterator_prototype_return = (storage: any[], value: an
   // Mark as closed
   storage[5] = true;
 
-  // Forward to underlying iterator's return if it exists
-  const source: any = storage[0];
-  if (source != null) {
-    if (Porffor.type(source) == Porffor.TYPES.object) {
-      const returnMethod: any = source.return;
-      if (returnMethod != null) {
-        returnMethod.call(source, value);
-      }
-    } else if (source.return != null) {
-      source.return(value);
-    }
-  }
+  // Forward to underlying iterator's return using helper
+  __Porffor_iterator_return(storage[0], value);
 
   return result;
 };
@@ -773,18 +747,8 @@ export const __Porffor_FilterIterator_prototype_return = (storage: any[], value:
   // Mark as closed
   storage[5] = true;
 
-  // Forward to underlying iterator's return if it exists
-  const source: any = storage[0];
-  if (source != null) {
-    if (Porffor.type(source) == Porffor.TYPES.object) {
-      const returnMethod: any = source.return;
-      if (returnMethod != null) {
-        returnMethod.call(source, value);
-      }
-    } else if (source.return != null) {
-      source.return(value);
-    }
-  }
+  // Forward to underlying iterator's return using helper
+  __Porffor_iterator_return(storage[0], value);
 
   return result;
 };
@@ -1107,6 +1071,57 @@ export const __Porffor_iterator_next = (source: any, cachedNextMethod: any): any
 
   // For generators and other types, use method call
   return source.next();
+};
+
+// Helper to call return on any iterator type, forwarding through the chain
+export const __Porffor_iterator_return = (source: any, value: any): void => {
+  if (source == null) return;
+
+  const sourceType: i32 = Porffor.type(source);
+
+  if (sourceType == Porffor.TYPES.object) {
+    // For plain objects, check for return method and call it
+    const returnMethod: any = source.return;
+    if (returnMethod != null) {
+      returnMethod.call(source, value);
+    }
+    return;
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_mapiterator) {
+    __Porffor_MapIterator_prototype_return(source, value);
+    return;
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_filteriterator) {
+    __Porffor_FilterIterator_prototype_return(source, value);
+    return;
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_takeiterator) {
+    __Porffor_TakeIterator_prototype_return(source, value);
+    return;
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_dropiterator) {
+    __Porffor_DropIterator_prototype_return(source, value);
+    return;
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_wrapperiterator) {
+    __Porffor_WrapperIterator_prototype_return(source, value);
+    return;
+  }
+
+  if (sourceType == Porffor.TYPES.__porffor_concatiterator) {
+    __Porffor_ConcatIterator_prototype_return(source, value);
+    return;
+  }
+
+  // For generators and other types, check for return method
+  if (source.return != null) {
+    source.return(value);
+  }
 };
 
 
@@ -1935,16 +1950,17 @@ export const __Iterator_prototype_drop = (_this: any, count: any) => {
       t == Porffor.TYPES.object) {
     // Create lazy DropIterator wrapping the source directly
     // Use Porffor.malloc() for dynamic allocation (static array literals reuse same memory)
-    // Storage: [0] = source, [1] = count, [2] = executing flag, [3] = cached next method (for objects)
+    // Storage: [0] = source, [1] = count, [2] = executing flag, [3] = closed flag, [4] = cached next method (for objects)
     const storage: any[] = Porffor.malloc();
     storage[0] = _this;
     storage[1] = intCount;
     storage[2] = false;
+    storage[3] = false; // closed flag
     // Per spec, cache the next method at creation time (GetIteratorDirect)
     if (t == Porffor.TYPES.object) {
-      storage[3] = _this.next;
+      storage[4] = _this.next;
     }
-    storage.length = 4;
+    storage.length = 5;
     return __Porffor_DropIterator(storage);
   }
 
