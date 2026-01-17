@@ -11137,9 +11137,14 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
                   if (instr[0] === '#yield_segment_marker' ||
                       instr[0] === '#generator_loop_test_marker' ||
                       instr[0] === '#generator_label_marker' ||
-                      instr[0] === '#generator_goto_marker' ||
-                      instr[0] === '#generator_conditional_goto') {
+                      instr[0] === '#generator_goto_marker') {
                     // Skip these markers
+                    continue;
+                  }
+                  if (instr[0] === '#generator_conditional_goto') {
+                    // Skip this marker but drop the test value that was pushed for it
+                    // The test wasm generates a value that was meant to be consumed by the conditional goto
+                    result.push([ Opcodes.drop ]);
                     continue;
                   }
                   if (instr[0] === '#yield_resume_state') {
