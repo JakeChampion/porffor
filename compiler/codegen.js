@@ -390,6 +390,12 @@ const transformGeneratorToStateMachine = (body, func) => {
       // Found first statement containing yield, stop marking
       break;
     }
+    // Generator state machine markers should not be marked as pre-yield
+    // They define segment boundaries and control flow that must run on every call
+    if (stmt.type === '_GeneratorLoopTestMarker' || stmt.type === '_GeneratorGotoMarker' ||
+        stmt.type === '_GeneratorConditionalGoto' || stmt.type === '_GeneratorLabelMarker') {
+      break;
+    }
     // Mark this statement as pre-yield
     stmt._generatorPreYield = true;
     func._hasPreYieldStatements = true;
