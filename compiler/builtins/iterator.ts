@@ -424,9 +424,13 @@ export const __Porffor_ConcatIterator_prototype_Symbol_toStringTag$get = () => {
 };
 
 
-// Iterator constructor - abstract, cannot be directly constructed
+// Iterator constructor - abstract, cannot be directly constructed but can be subclassed
 export const Iterator = function (): void {
-  throw new TypeError('Abstract class Iterator not directly constructable');
+  // Allow subclass construction (new.target !== Iterator)
+  // Throw only for direct construction (new.target === Iterator)
+  if (new.target === Iterator) {
+    throw new TypeError('Abstract class Iterator not directly constructable');
+  }
 };
 
 // Iterator.from - creates an iterator from an iterable or iterator-like

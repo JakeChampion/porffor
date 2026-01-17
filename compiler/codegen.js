@@ -4725,9 +4725,14 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       sup = true;
     }
 
-    const newTargetWasm = decl._newTargetWasm ?? createNewTarget(scope, decl, [
+    // For super() calls, pass through the current function's new.target (the original constructor)
+    // For regular new calls, create a new.target pointing to the callee
+    const newTargetWasm = decl._newTargetWasm ?? (sup && scope.locals['#newtarget'] ? [
+      [ Opcodes.local_get, scope.locals['#newtarget'].idx ],
+      [ Opcodes.local_get, scope.locals['#newtarget#type'].idx ]
+    ] : createNewTarget(scope, decl, [
       [ Opcodes.local_get, calleeLocal ]
-    ], callAsNew);
+    ], callAsNew));
     const thisWasm = decl._thisWasm ?? knownThis ?? createThisArg(scope, decl);
 
     out = [

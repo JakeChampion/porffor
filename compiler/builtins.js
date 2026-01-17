@@ -561,6 +561,24 @@ export const BuiltinVars = ({ builtinFuncs }) => {
     });
   }
 
+  // Iterator - the abstract iterator constructor
+  // Iterator.prototype = __Iterator_prototype
+  {
+    const protoValue = (scope, { builtin }) => [
+      [ Opcodes.call, builtin('#get___Iterator_prototype') ],
+      Opcodes.i32_from_u
+    ];
+    protoValue.type = TYPES.object;
+    object('Iterator', {
+      prototype: {
+        value: protoValue,
+        writable: false,
+        enumerable: false,
+        configurable: false
+      }
+    });
+  }
+
   object('Number', {
     ...props({
       writable: false,

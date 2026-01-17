@@ -2470,9 +2470,9 @@ params:[],typedParams:1,returns:[124,127],jsLength:-1,
 locals:[],localNames:[]
 }
 x.Iterator={
-wasm:(_,{internalThrow})=>eval("[...internalThrow(_,'TypeError',`Abstract class Iterator not directly constructable`),[26],[15]]"),
+wasm:(_,{builtin,internalThrow})=>eval("[[32,0],[32,1],[33,4],[16,builtin('#get_Iterator')],[184],[97],[32,4],[65,128],[114],[65,6],[65,128],[114],[70],[113],[4,64],...internalThrow(_,'TypeError',`Abstract class Iterator not directly constructable`),[26],[11],[15]]"),
 params:[124,127,124,127],typedParams:1,returns:[],returnType:0,jsLength:0,
-locals:[],localNames:["#newtarget","#newtarget#type","#this","#this#type"],
+locals:[127],localNames:["#newtarget","#newtarget#type","#this","#this#type","#binexp_left_type_0"],
 constr:1,usesTag:1
 }
 x.__Iterator_from={
