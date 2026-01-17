@@ -147,8 +147,15 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
   }
 
   const source: any = storage[0];
-  // Use source.next() for all iterator types - codegen.js ensures deterministic dispatch
-  const sourceResult: any = source.next();
+
+  // For object sources, get and call next method directly
+  let sourceResult: any;
+  if (Porffor.type(source) == Porffor.TYPES.object) {
+    const nextMethod: any = source.next;
+    sourceResult = nextMethod.call(source);
+  } else {
+    sourceResult = source.next();
+  }
 
   if (sourceResult.done) {
     result.value = undefined;
@@ -165,6 +172,19 @@ export const __Porffor_TakeIterator_prototype_next = (storage: any[]): object =>
 };
 
 export const __Porffor_TakeIterator_prototype_return = (storage: any[], value: any): object => {
+  // Forward to underlying iterator's return if it exists
+  const source: any = storage[0];
+  if (source != null) {
+    if (Porffor.type(source) == Porffor.TYPES.object) {
+      const returnMethod: any = source.return;
+      if (returnMethod != null) {
+        returnMethod.call(source, value);
+      }
+    } else if (source.return != null) {
+      source.return(value);
+    }
+  }
+
   storage[1] = 0; // Mark as exhausted
   const result: object = {};
   result.value = value;
@@ -194,10 +214,20 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
   let toDrop: i32 = storage[1];
   const source: any = storage[0];
 
+  // For object sources, get next method directly
+  let nextMethod: any;
+  if (Porffor.type(source) == Porffor.TYPES.object) {
+    nextMethod = source.next;
+  }
+
   // Drop items if needed
   while (toDrop > 0) {
-    // Use source.next() for all iterator types - codegen.js ensures deterministic dispatch
-    const dropResult: any = source.next();
+    let dropResult: any;
+    if (nextMethod != null) {
+      dropResult = nextMethod.call(source);
+    } else {
+      dropResult = source.next();
+    }
     if (dropResult.done) {
       storage[1] = 0;
       const result: object = {};
@@ -210,7 +240,12 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
   }
 
   // Get next item from source
-  const sourceResult: any = source.next();
+  let sourceResult: any;
+  if (nextMethod != null) {
+    sourceResult = nextMethod.call(source);
+  } else {
+    sourceResult = source.next();
+  }
 
   const result: object = {};
   if (sourceResult.done) {
@@ -225,6 +260,19 @@ export const __Porffor_DropIterator_prototype_next = (storage: any[]): object =>
 };
 
 export const __Porffor_DropIterator_prototype_return = (storage: any[], value: any): object => {
+  // Forward to underlying iterator's return if it exists
+  const source: any = storage[0];
+  if (source != null) {
+    if (Porffor.type(source) == Porffor.TYPES.object) {
+      const returnMethod: any = source.return;
+      if (returnMethod != null) {
+        returnMethod.call(source, value);
+      }
+    } else if (source.return != null) {
+      source.return(value);
+    }
+  }
+
   storage[1] = 0;
   const result: object = {};
   result.value = value;
@@ -254,8 +302,14 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
   const source: any = storage[0];
   const mapper: Function = storage[1];
 
-  // Use source.next() for all iterator types - codegen.js ensures deterministic dispatch
-  const sourceResult: any = source.next();
+  // For object sources, get and call next method directly
+  let sourceResult: any;
+  if (Porffor.type(source) == Porffor.TYPES.object) {
+    const nextMethod: any = source.next;
+    sourceResult = nextMethod.call(source);
+  } else {
+    sourceResult = source.next();
+  }
 
   const result: object = {};
   if (sourceResult.done) {
@@ -270,6 +324,19 @@ export const __Porffor_MapIterator_prototype_next = (storage: any[]): object => 
 };
 
 export const __Porffor_MapIterator_prototype_return = (storage: any[], value: any): object => {
+  // Forward to underlying iterator's return if it exists
+  const source: any = storage[0];
+  if (source != null) {
+    if (Porffor.type(source) == Porffor.TYPES.object) {
+      const returnMethod: any = source.return;
+      if (returnMethod != null) {
+        returnMethod.call(source, value);
+      }
+    } else if (source.return != null) {
+      source.return(value);
+    }
+  }
+
   const result: object = {};
   result.value = value;
   result.done = true;
@@ -298,9 +365,20 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
   const source: any = storage[0];
   const predicate: Function = storage[1];
 
+  // For object sources, we need to get and call next method directly
+  // to handle plain iterator objects and user-defined classes
+  let nextMethod: any;
+  if (Porffor.type(source) == Porffor.TYPES.object) {
+    nextMethod = source.next;
+  }
+
   while (true) {
-    // Use source.next() for all iterator types - codegen.js ensures deterministic dispatch
-    const sourceResult: any = source.next();
+    let sourceResult: any;
+    if (nextMethod != null) {
+      sourceResult = nextMethod.call(source);
+    } else {
+      sourceResult = source.next();
+    }
 
     if (sourceResult.done) {
       const result: object = {};
@@ -321,8 +399,15 @@ export const __Porffor_FilterIterator_prototype_next = (storage: any[]): object 
 export const __Porffor_FilterIterator_prototype_return = (storage: any[], value: any): object => {
   // Forward to underlying iterator's return if it exists
   const source: any = storage[0];
-  if (source != null && source.return != null) {
-    source.return(value);
+  if (source != null) {
+    if (Porffor.type(source) == Porffor.TYPES.object) {
+      const returnMethod: any = source.return;
+      if (returnMethod != null) {
+        returnMethod.call(source, value);
+      }
+    } else if (source.return != null) {
+      source.return(value);
+    }
   }
 
   const result: object = {};
@@ -1076,7 +1161,7 @@ export const __Iterator_toWrapperIterator = (it: any): any[] => {
 // Iterator.prototype methods
 // These are the spec-compliant Iterator.prototype methods that work on any iterator
 
-export const __Iterator_prototype_map = (_this: __Porffor_WrapperIterator, mapper: any) => {
+export const __Iterator_prototype_map = (_this: any, mapper: any) => {
   if (typeof mapper !== 'function') {
     throw new TypeError('Iterator.prototype.map requires a callable');
   }
@@ -1087,16 +1172,22 @@ export const __Iterator_prototype_map = (_this: __Porffor_WrapperIterator, mappe
       t == Porffor.TYPES.__porffor_takeiterator ||
       t == Porffor.TYPES.__porffor_dropiterator ||
       t == Porffor.TYPES.__porffor_mapiterator ||
-      t == Porffor.TYPES.__porffor_filteriterator) {
+      t == Porffor.TYPES.__porffor_filteriterator ||
+      t == Porffor.TYPES.__porffor_concatiterator ||
+      t == Porffor.TYPES.object) {
     // Create lazy MapIterator wrapping the source directly
-    const storage: any[] = [_this, mapper];
+    // Use Porffor.malloc() for dynamic allocation (static array literals reuse same memory)
+    const storage: any[] = Porffor.malloc();
+    storage[0] = _this;
+    storage[1] = mapper;
+    storage.length = 2;
     return __Porffor_MapIterator(storage);
   }
 
   throw new TypeError('Iterator.prototype.map called on non-iterator');
 };
 
-export const __Iterator_prototype_filter = (_this: __Porffor_WrapperIterator, predicate: any) => {
+export const __Iterator_prototype_filter = (_this: any, predicate: any) => {
   if (typeof predicate !== 'function') {
     throw new TypeError('Iterator.prototype.filter requires a callable');
   }
@@ -1107,41 +1198,59 @@ export const __Iterator_prototype_filter = (_this: __Porffor_WrapperIterator, pr
       t == Porffor.TYPES.__porffor_takeiterator ||
       t == Porffor.TYPES.__porffor_dropiterator ||
       t == Porffor.TYPES.__porffor_mapiterator ||
-      t == Porffor.TYPES.__porffor_filteriterator) {
+      t == Porffor.TYPES.__porffor_filteriterator ||
+      t == Porffor.TYPES.__porffor_concatiterator ||
+      t == Porffor.TYPES.object) {
     // Create lazy FilterIterator wrapping the source directly
-    const storage: any[] = [_this, predicate];
+    // Use Porffor.malloc() for dynamic allocation (static array literals reuse same memory)
+    const storage: any[] = Porffor.malloc();
+    storage[0] = _this;
+    storage[1] = predicate;
+    storage.length = 2;
     return __Porffor_FilterIterator(storage);
   }
 
   throw new TypeError('Iterator.prototype.filter called on non-iterator');
 };
 
-export const __Iterator_prototype_take = (_this: __Porffor_WrapperIterator, limit: any) => {
+export const __Iterator_prototype_take = (_this: any, limit: any) => {
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator ||
       t == Porffor.TYPES.__porffor_generator ||
       t == Porffor.TYPES.__porffor_takeiterator ||
       t == Porffor.TYPES.__porffor_dropiterator ||
       t == Porffor.TYPES.__porffor_mapiterator ||
-      t == Porffor.TYPES.__porffor_filteriterator) {
+      t == Porffor.TYPES.__porffor_filteriterator ||
+      t == Porffor.TYPES.__porffor_concatiterator ||
+      t == Porffor.TYPES.object) {
     // Create lazy TakeIterator wrapping the source directly
-    const storage: any[] = [_this, limit];
+    // Use Porffor.malloc() for dynamic allocation (static array literals reuse same memory)
+    const storage: any[] = Porffor.malloc();
+    storage[0] = _this;
+    storage[1] = limit;
+    storage.length = 2;
     return __Porffor_TakeIterator(storage);
   }
 
   throw new TypeError('Iterator.prototype.take called on non-iterator');
 };
 
-export const __Iterator_prototype_drop = (_this: __Porffor_WrapperIterator, count: any) => {
+export const __Iterator_prototype_drop = (_this: any, count: any) => {
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator ||
       t == Porffor.TYPES.__porffor_generator ||
       t == Porffor.TYPES.__porffor_takeiterator ||
       t == Porffor.TYPES.__porffor_dropiterator ||
       t == Porffor.TYPES.__porffor_mapiterator ||
-      t == Porffor.TYPES.__porffor_filteriterator) {
+      t == Porffor.TYPES.__porffor_filteriterator ||
+      t == Porffor.TYPES.__porffor_concatiterator ||
+      t == Porffor.TYPES.object) {
     // Create lazy DropIterator wrapping the source directly
-    const storage: any[] = [_this, count];
+    // Use Porffor.malloc() for dynamic allocation (static array literals reuse same memory)
+    const storage: any[] = Porffor.malloc();
+    storage[0] = _this;
+    storage[1] = count;
+    storage.length = 2;
     return __Porffor_DropIterator(storage);
   }
 

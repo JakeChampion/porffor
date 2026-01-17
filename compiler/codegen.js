@@ -4051,23 +4051,31 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
         for (const [typeName, builtinName] of Object.entries(lazyIteratorHandlers)) {
           const type = TYPES[typeName];
           if (type != null) {
-            protoBC[type] = () => generate(scope, {
-              type: 'CallExpression',
-              optional: decl.optional,
-              callee: {
-                type: 'Identifier',
-                name: builtinName
-              },
-              arguments: [
-                {
+            protoBC[type] = () => {
+              const result = generate(scope, {
+                type: 'CallExpression',
+                optional: decl.optional,
+                callee: {
                   type: 'Identifier',
-                  name: '#proto_target'
+                  name: builtinName
                 },
-                ...decl.arguments
-              ],
-              _protoInternalCall: true,
-              _skipBuiltinLookup: globalThis.precompile // Skip builtinFuncs lookup during precompile
-            });
+                arguments: [
+                  {
+                    type: 'Identifier',
+                    name: '#proto_target'
+                  },
+                  ...decl.arguments
+                ],
+                _protoInternalCall: true,
+                _skipBuiltinLookup: globalThis.precompile // Skip builtinFuncs lookup during precompile
+              });
+              // These functions return object but have static return type (typedReturns=false),
+              // so we need to explicitly set #last_type for getNodeType to work correctly
+              return [
+                ...result,
+                ...setLastType(scope, TYPES.object)
+              ];
+            };
           }
         }
       }
@@ -4596,6 +4604,9 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
     idx = importedFuncs[name];
     scope.usesImports = true;
   } else if (name in builtinFuncs) {
+    if (name === '__Porffor_FilterIterator_prototype_next' && !globalThis.precompile) {
+      console.log('DEBUG: Found FilterIterator_prototype_next in builtinFuncs, calling includeBuiltin');
+    }
     if (decl._new && !builtinFuncs[name].constr) return internalThrow(scope, 'TypeError', `${unhackName(name)} is not a constructor`, true);
     if (builtinFuncs[name].comptime && !decl._noComptime) return builtinFuncs[name].comptime(scope, decl, { generate, getNodeType, knownType, knownTypeWithGuess, makeString, printStaticStr });
 
