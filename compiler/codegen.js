@@ -4078,6 +4078,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             };
           }
         }
+
       }
 
       // Override generator.throw() to properly inject exception at yield point
@@ -4404,6 +4405,46 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
 
           return out;
         };
+
+        // Add handlers for lazy iterator return methods
+        const lazyIteratorReturnHandlers = {
+          '__porffor_wrapperiterator': '__Porffor_WrapperIterator_prototype_return',
+          '__porffor_takeiterator': '__Porffor_TakeIterator_prototype_return',
+          '__porffor_dropiterator': '__Porffor_DropIterator_prototype_return',
+          '__porffor_mapiterator': '__Porffor_MapIterator_prototype_return',
+          '__porffor_filteriterator': '__Porffor_FilterIterator_prototype_return',
+          '__porffor_concatiterator': '__Porffor_ConcatIterator_prototype_return'
+        };
+        for (const [typeName, builtinName] of Object.entries(lazyIteratorReturnHandlers)) {
+          const type = TYPES[typeName];
+          if (type != null) {
+            protoBC[type] = () => {
+              const result = generate(scope, {
+                type: 'CallExpression',
+                optional: decl.optional,
+                callee: {
+                  type: 'Identifier',
+                  name: builtinName
+                },
+                arguments: [
+                  {
+                    type: 'Identifier',
+                    name: '#proto_target'
+                  },
+                  ...decl.arguments
+                ],
+                _protoInternalCall: true,
+                _skipBuiltinLookup: globalThis.precompile
+              });
+              // These functions return object but have static return type (typedReturns=false),
+              // so we need to explicitly set #last_type for getNodeType to work correctly
+              return [
+                ...result,
+                ...setLastType(scope, TYPES.object)
+              ];
+            };
+          }
+        }
       }
 
       protoBC.default = decl.optional ?
