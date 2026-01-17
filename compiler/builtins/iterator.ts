@@ -1339,6 +1339,32 @@ export const __Iterator_prototype_reduce = (_this: __Porffor_WrapperIterator, re
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_reduce(wrapper, reducer, initialValue);
   }
+  // Handle plain objects with next method (iterator protocol)
+  if (t == Porffor.TYPES.object) {
+    const nextMethod: any = _this.next;
+    if (nextMethod == null) {
+      throw new TypeError('Iterator.prototype.reduce called on non-iterator');
+    }
+    let accumulator: any = initialValue;
+    let index: i32 = 0;
+    let hasInitial: boolean = Porffor.type(initialValue) != Porffor.TYPES.undefined;
+    while (true) {
+      const result: any = nextMethod.call(_this);
+      if (result.done) break;
+      const value: any = result.value;
+      if (!hasInitial) {
+        accumulator = value;
+        hasInitial = true;
+      } else {
+        accumulator = reducer(accumulator, value, index);
+      }
+      index++;
+    }
+    if (!hasInitial) {
+      throw new TypeError('Reduce of empty iterator with no initial value');
+    }
+    return accumulator;
+  }
 
   throw new TypeError('Iterator.prototype.reduce called on non-iterator');
 };
@@ -1408,6 +1434,22 @@ export const __Iterator_prototype_toArray = (_this: any) => {
     out.length = len;
     return out;
   }
+  // Handle plain objects with next method (iterator protocol)
+  if (t == Porffor.TYPES.object) {
+    const nextMethod: any = _this.next;
+    if (nextMethod == null) {
+      throw new TypeError('Iterator.prototype.toArray called on non-iterator');
+    }
+    const out: any[] = Porffor.malloc();
+    let len: i32 = 0;
+    while (true) {
+      const result: any = nextMethod.call(_this);
+      if (result.done) break;
+      out[len++] = result.value;
+    }
+    out.length = len;
+    return out;
+  }
 
   throw new TypeError('Iterator.prototype.toArray called on non-iterator');
 };
@@ -1424,6 +1466,20 @@ export const __Iterator_prototype_forEach = (_this: __Porffor_WrapperIterator, c
   if (t == Porffor.TYPES.__porffor_generator) {
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_forEach(wrapper, callback);
+  }
+  // Handle plain objects with next method (iterator protocol)
+  if (t == Porffor.TYPES.object) {
+    const nextMethod: any = _this.next;
+    if (nextMethod == null) {
+      throw new TypeError('Iterator.prototype.forEach called on non-iterator');
+    }
+    let index: i32 = 0;
+    while (true) {
+      const result: any = nextMethod.call(_this);
+      if (result.done) break;
+      callback(result.value, index++);
+    }
+    return undefined;
   }
 
   throw new TypeError('Iterator.prototype.forEach called on non-iterator');
@@ -1442,6 +1498,20 @@ export const __Iterator_prototype_some = (_this: __Porffor_WrapperIterator, pred
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_some(wrapper, predicate);
   }
+  // Handle plain objects with next method (iterator protocol)
+  if (t == Porffor.TYPES.object) {
+    const nextMethod: any = _this.next;
+    if (nextMethod == null) {
+      throw new TypeError('Iterator.prototype.some called on non-iterator');
+    }
+    let index: i32 = 0;
+    while (true) {
+      const result: any = nextMethod.call(_this);
+      if (result.done) break;
+      if (predicate(result.value, index++)) return true;
+    }
+    return false;
+  }
 
   throw new TypeError('Iterator.prototype.some called on non-iterator');
 };
@@ -1459,6 +1529,20 @@ export const __Iterator_prototype_every = (_this: __Porffor_WrapperIterator, pre
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_every(wrapper, predicate);
   }
+  // Handle plain objects with next method (iterator protocol)
+  if (t == Porffor.TYPES.object) {
+    const nextMethod: any = _this.next;
+    if (nextMethod == null) {
+      throw new TypeError('Iterator.prototype.every called on non-iterator');
+    }
+    let index: i32 = 0;
+    while (true) {
+      const result: any = nextMethod.call(_this);
+      if (result.done) break;
+      if (!predicate(result.value, index++)) return false;
+    }
+    return true;
+  }
 
   throw new TypeError('Iterator.prototype.every called on non-iterator');
 };
@@ -1475,6 +1559,21 @@ export const __Iterator_prototype_find = (_this: __Porffor_WrapperIterator, pred
   if (t == Porffor.TYPES.__porffor_generator) {
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_find(wrapper, predicate);
+  }
+  // Handle plain objects with next method (iterator protocol)
+  if (t == Porffor.TYPES.object) {
+    const nextMethod: any = _this.next;
+    if (nextMethod == null) {
+      throw new TypeError('Iterator.prototype.find called on non-iterator');
+    }
+    let index: i32 = 0;
+    while (true) {
+      const result: any = nextMethod.call(_this);
+      if (result.done) break;
+      const value: any = result.value;
+      if (predicate(value, index++)) return value;
+    }
+    return undefined;
   }
 
   throw new TypeError('Iterator.prototype.find called on non-iterator');
