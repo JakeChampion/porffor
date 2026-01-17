@@ -89,6 +89,19 @@ export const __Porffor_iterator_getElement = (iterable: any, index: i32): any =>
   return undefined;
 };
 
+// IteratorClose helper - close an iterator by calling its return method if present
+// Per spec 7.4.9 IteratorClose
+export const __Porffor_iterator_close = (iterator: any): void => {
+  const t: i32 = Porffor.type(iterator);
+  if (t == Porffor.TYPES.object) {
+    const returnMethod: any = iterator.return;
+    if (returnMethod != null) {
+      returnMethod.call(iterator);
+    }
+  } else if (iterator != null && iterator.return != null) {
+    iterator.return();
+  }
+};
 
 export const __Porffor_WrapperIterator_prototype_next = (storage: any[]) => {
   // storage is the WrapperIterator array: [0] = iterable, [1] = index
@@ -1746,6 +1759,8 @@ export const __Iterator_toWrapperIterator = (it: any): any[] => {
 export const __Iterator_prototype_map = (_this: any, mapper: any) => {
   if (_this == null) throw new TypeError('Iterator.prototype.map called on null or undefined');
   if (typeof mapper !== 'function') {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
     throw new TypeError('Iterator.prototype.map requires a callable');
   }
 
@@ -1780,6 +1795,8 @@ export const __Iterator_prototype_map = (_this: any, mapper: any) => {
 export const __Iterator_prototype_filter = (_this: any, predicate: any) => {
   if (_this == null) throw new TypeError('Iterator.prototype.filter called on null or undefined');
   if (typeof predicate !== 'function') {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
     throw new TypeError('Iterator.prototype.filter requires a callable');
   }
 
@@ -1815,9 +1832,17 @@ export const __Iterator_prototype_take = (_this: any, limit: any) => {
   if (_this == null) throw new TypeError('Iterator.prototype.take called on null or undefined');
   // Per spec: ToNumber then ToIntegerOrInfinity, throw RangeError if NaN or negative
   const numLimit: number = +limit;
-  if (Number.isNaN(numLimit)) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  if (Number.isNaN(numLimit)) {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
+    throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  }
   const intLimit: i32 = Math.trunc(numLimit);
-  if (intLimit < 0) throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  if (intLimit < 0) {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
+    throw new RangeError('Iterator.prototype.take requires a non-negative number');
+  }
 
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator ||
@@ -1850,9 +1875,17 @@ export const __Iterator_prototype_drop = (_this: any, count: any) => {
   if (_this == null) throw new TypeError('Iterator.prototype.drop called on null or undefined');
   // Per spec: ToNumber then ToIntegerOrInfinity, throw RangeError if NaN or negative
   const numCount: number = +count;
-  if (Number.isNaN(numCount)) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  if (Number.isNaN(numCount)) {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
+    throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  }
   const intCount: i32 = Math.trunc(numCount);
-  if (intCount < 0) throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  if (intCount < 0) {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
+    throw new RangeError('Iterator.prototype.drop requires a non-negative number');
+  }
 
   const t: i32 = Porffor.type(_this);
   if (t == Porffor.TYPES.__porffor_wrapperiterator ||
@@ -1883,6 +1916,8 @@ export const __Iterator_prototype_drop = (_this: any, count: any) => {
 
 export const __Iterator_prototype_flatMap = (_this: any, mapper: any) => {
   if (typeof mapper !== 'function') {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
     throw new TypeError('Iterator.prototype.flatMap requires a callable');
   }
 
@@ -1900,6 +1935,8 @@ export const __Iterator_prototype_flatMap = (_this: any, mapper: any) => {
 
 export const __Iterator_prototype_reduce = (_this: any, reducer: any, initialValue: any) => {
   if (typeof reducer !== 'function') {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
     throw new TypeError('Iterator.prototype.reduce requires a callable');
   }
 
@@ -2029,6 +2066,8 @@ export const __Iterator_prototype_toArray = (_this: any) => {
 
 export const __Iterator_prototype_forEach = (_this: any, callback: any) => {
   if (typeof callback !== 'function') {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
     throw new TypeError('Iterator.prototype.forEach requires a callable');
   }
 
@@ -2060,6 +2099,8 @@ export const __Iterator_prototype_forEach = (_this: any, callback: any) => {
 
 export const __Iterator_prototype_some = (_this: any, predicate: any) => {
   if (typeof predicate !== 'function') {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
     throw new TypeError('Iterator.prototype.some requires a callable');
   }
 
@@ -2091,6 +2132,8 @@ export const __Iterator_prototype_some = (_this: any, predicate: any) => {
 
 export const __Iterator_prototype_every = (_this: any, predicate: any) => {
   if (typeof predicate !== 'function') {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
     throw new TypeError('Iterator.prototype.every requires a callable');
   }
 
@@ -2122,6 +2165,8 @@ export const __Iterator_prototype_every = (_this: any, predicate: any) => {
 
 export const __Iterator_prototype_find = (_this: any, predicate: any) => {
   if (typeof predicate !== 'function') {
+    // Per spec: close iterator before throwing on argument validation failure
+    __Porffor_iterator_close(_this);
     throw new TypeError('Iterator.prototype.find requires a callable');
   }
 
