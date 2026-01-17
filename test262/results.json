@@ -16067,6 +16067,7 @@
     "language/expressions/yield/rhs-yield.js",
     "language/expressions/yield/star-array.js",
     "language/expressions/yield/star-in-iteration-stmt.js",
+    "language/expressions/yield/star-rhs-unresolvable.js",
     "language/expressions/yield/then-return.js",
     "language/expressions/yield/within-for.js",
     "language/function-code/10.4.3-1-103.js",
@@ -20698,12 +20699,7 @@
     "language/statements/generators/scope-paramsbody-var-open.js"
   ],
   "compileErrors": [],
-  "wasmErrors": [
-    "language/expressions/yield/star-rhs-unresolvable.js",
-    "language/statements/async-generator/yield-star-normal-notdone-iter-value-throws.js",
-    "language/statements/async-generator/yield-star-return-notdone-iter-value-throws.js",
-    "language/statements/async-generator/yield-star-throw-notdone-iter-value-throws.js"
-  ],
+  "wasmErrors": [],
   "runtimeErrors": [
     "built-ins/Array/fromAsync/this-constructor-with-readonly-elements.js",
     "built-ins/Array/fromAsync/thisarg-object.js",
@@ -21186,9 +21182,12 @@
     "language/statements/async-generator/yield-star-async-from-sync-iterator-inaccessible.js",
     "language/statements/async-generator/yield-star-async-return.js",
     "language/statements/async-generator/yield-star-async-throw.js",
+    "language/statements/async-generator/yield-star-normal-notdone-iter-value-throws.js",
     "language/statements/async-generator/yield-star-promise-not-unwrapped.js",
     "language/statements/async-generator/yield-star-return-missing-value-is-awaited.js",
+    "language/statements/async-generator/yield-star-return-notdone-iter-value-throws.js",
     "language/statements/async-generator/yield-star-return-then-getter-ticks.js",
+    "language/statements/async-generator/yield-star-throw-notdone-iter-value-throws.js",
     "language/statements/class/async-gen-method-static/yield-star-async-return.js",
     "language/statements/class/async-gen-method-static/yield-star-async-throw.js",
     "language/statements/class/async-gen-method/yield-star-async-return.js",
