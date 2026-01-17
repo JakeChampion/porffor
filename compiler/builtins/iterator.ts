@@ -1291,13 +1291,50 @@ export const __Porffor_WrapperIterator_prototype_flatMap = (storage: any[], mapp
     const value: any = __Porffor_iterator_getElement(iterable, i);
     const mapped: any = mapper(value, i);
 
-    // If mapped is iterable, flatten one level
+    // GetIteratorFlattenable per spec - flatten iterables/iterators one level
     const mt: i32 = Porffor.type(mapped);
+
+    // Arrays - flatten
     if (mt == Porffor.TYPES.array) {
       for (const item of (mapped as any[])) {
         result.push(item);
       }
-    } else {
+    }
+    // Strings - per spec, strings are NOT flattened by flatMap (only depth-1 non-string iterables)
+    else if (mt == Porffor.TYPES.string || mt == Porffor.TYPES.bytestring) {
+      throw new TypeError('Iterator.prototype.flatMap mapper returned a string');
+    }
+    // Objects - check for iterator protocol (next method) or iterable protocol (Symbol.iterator)
+    else if (mt == Porffor.TYPES.object) {
+      // First check for Symbol.iterator (iterable)
+      const symbolIterator: any = mapped[Symbol.iterator];
+      if (symbolIterator != null) {
+        const innerIter: any = symbolIterator.call(mapped);
+        const innerNext: any = innerIter.next;
+        while (true) {
+          const innerResult: any = innerNext.call(innerIter);
+          if (innerResult.done) break;
+          result.push(innerResult.value);
+        }
+      }
+      // Then check for next method (non-iterable iterator)
+      else {
+        const nextMethod: any = mapped.next;
+        if (nextMethod != null) {
+          // It's an iterator - iterate through it
+          while (true) {
+            const innerResult: any = nextMethod.call(mapped);
+            if (innerResult.done) break;
+            result.push(innerResult.value);
+          }
+        } else {
+          // No iterator protocol - throw TypeError
+          throw new TypeError('Iterator.prototype.flatMap mapper returned non-iterator object');
+        }
+      }
+    }
+    // Other types - not iterable, don't flatten
+    else {
       result.push(mapped);
     }
   }
