@@ -11,7 +11,10 @@ export const __Porffor_WrapperIterator = (storage: any[]): __Porffor_WrapperIter
 
 // Create wrapper iterator storage array
 export const __Porffor_WrapperIterator_create = (iterable: any): any[] => {
-  return [iterable, 0];
+  const storage: any[] = Porffor.malloc();
+  storage[0] = iterable;
+  storage[1] = 0;
+  return storage;
 };
 
 // Get the iterable from a wrapper iterator

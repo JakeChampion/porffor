@@ -501,6 +501,13 @@ const transformLoopsWithYields = (body, func) => {
       body.splice(i, 1, ...transformed);
       i += transformed.length - 1;
     }
+
+    // Transform ForOfStatement with yields
+    if (stmt.type === 'ForOfStatement' && loopContainsYield(stmt.body)) {
+      const transformed = transformForOfLoop(stmt, func);
+      body.splice(i, 1, ...transformed);
+      i += transformed.length - 1;
+    }
   }
 };
 
@@ -737,6 +744,186 @@ const transformDoWhileLoop = (stmt, func) => {
   });
 
   // 4. After loop label marker
+  result.push({
+    type: '_GeneratorLabelMarker',
+    label: afterLabel
+  });
+
+  return result;
+};
+
+// Transform a for-of-loop with yields into flat code
+// Converts: for (const x of iterable) { body }
+// Into: var __iter = iterable[Symbol.iterator](); var __result = __iter.next();
+//       while (!__result.done) { const x = __result.value; body; __result = __iter.next(); }
+const transformForOfLoop = (stmt, func) => {
+  const loopId = generatorLoopId++;
+  const testLabel = `_forof_test_${loopId}`;
+  const afterLabel = `_forof_after_${loopId}`;
+  const continueLabel = `_forof_continue_${loopId}`;
+
+  // Get the loop variable name
+  let loopVarName;
+  let loopVarDeclaration = null;
+  if (stmt.left.type === 'VariableDeclaration') {
+    loopVarName = stmt.left.declarations[0].id.name;
+    // Create variable declaration without init (will assign in loop)
+    loopVarDeclaration = {
+      type: 'VariableDeclaration',
+      kind: 'var', // Use var for generator state persistence
+      declarations: [{
+        type: 'VariableDeclarator',
+        id: { type: 'Identifier', name: loopVarName },
+        init: null
+      }]
+    };
+  } else {
+    // Assignment to existing variable
+    loopVarName = stmt.left.name;
+  }
+
+  // Transform the body statements
+  let bodyStmts = stmt.body.type === 'BlockStatement' ? [...stmt.body.body] : [stmt.body];
+
+  // Transform break/continue in the body
+  bodyStmts = bodyStmts.map(s => transformBreakContinue(s, afterLabel, continueLabel));
+
+  // Build the transformed statements using flat generator state machine:
+  // var __iter_N = __Iterator_from(iterable);
+  // var __result_N = __iter_N.next();
+  // __forof_test_N:
+  // if (__result_N.done) goto __forof_after_N
+  // loopVar = __result_N.value;
+  // ... body ...
+  // __forof_continue_N:
+  // __result_N = __iter_N.next();
+  // goto __forof_test_N
+  // __forof_after_N:
+
+  const iterName = `_forof_iter_${loopId}`;
+  const resultName = `_forof_result_${loopId}`;
+
+  const result = [];
+
+  // Add loop variable declaration if needed
+  if (loopVarDeclaration) {
+    result.push(loopVarDeclaration);
+  }
+
+  // var __iter_N = __Iterator_from(iterable);
+  result.push({
+    type: 'VariableDeclaration',
+    kind: 'var',
+    declarations: [{
+      type: 'VariableDeclarator',
+      id: { type: 'Identifier', name: iterName },
+      init: {
+        type: 'CallExpression',
+        optional: false,
+        callee: { type: 'Identifier', name: '__Iterator_from' },
+        arguments: [stmt.right]
+      }
+    }]
+  });
+
+  // var __result_N = __iter_N.next();
+  result.push({
+    type: 'VariableDeclaration',
+    kind: 'var',
+    declarations: [{
+      type: 'VariableDeclarator',
+      id: { type: 'Identifier', name: resultName },
+      init: {
+        type: 'CallExpression',
+        optional: false,
+        callee: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: iterName },
+          property: { type: 'Identifier', name: 'next' },
+          computed: false,
+          optional: false
+        },
+        arguments: []
+      }
+    }]
+  });
+
+  // Loop test label marker
+  result.push({
+    type: '_GeneratorLoopTestMarker',
+    label: testLabel,
+    afterLabel: afterLabel
+  });
+
+  // Conditional branch: if __result_N.done is true, goto after loop
+  result.push({
+    type: '_GeneratorConditionalGoto',
+    test: {
+      type: 'MemberExpression',
+      object: { type: 'Identifier', name: resultName },
+      property: { type: 'Identifier', name: 'done' },
+      computed: false,
+      optional: false
+    },
+    targetLabel: afterLabel,
+    branchIf: true  // branch if done is true
+  });
+
+  // loopVar = __result_N.value;
+  result.push({
+    type: 'ExpressionStatement',
+    expression: {
+      type: 'AssignmentExpression',
+      operator: '=',
+      left: { type: 'Identifier', name: loopVarName },
+      right: {
+        type: 'MemberExpression',
+        object: { type: 'Identifier', name: resultName },
+        property: { type: 'Identifier', name: 'value' },
+        computed: false,
+        optional: false
+      }
+    }
+  });
+
+  // Add original body statements
+  result.push(...bodyStmts);
+
+  // Continue label marker
+  result.push({
+    type: '_GeneratorLabelMarker',
+    label: continueLabel
+  });
+
+  // __result_N = __iter_N.next();
+  result.push({
+    type: 'ExpressionStatement',
+    expression: {
+      type: 'AssignmentExpression',
+      operator: '=',
+      left: { type: 'Identifier', name: resultName },
+      right: {
+        type: 'CallExpression',
+        optional: false,
+        callee: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: iterName },
+          property: { type: 'Identifier', name: 'next' },
+          computed: false,
+          optional: false
+        },
+        arguments: []
+      }
+    }
+  });
+
+  // Goto back to test
+  result.push({
+    type: '_GeneratorGotoMarker',
+    targetLabel: testLabel
+  });
+
+  // After loop label marker
   result.push({
     type: '_GeneratorLabelMarker',
     label: afterLabel
@@ -1684,9 +1871,9 @@ const generateYield = (scope, decl) => {
 
   // yield* delegation: iterate and yield each value
   if (decl.delegate) {
-    // Transform `yield* iterable` into `for (const #x of iterable) yield #x;`
+    // Transform `yield* iterable` into iterator-based while loop with yields
     const delegateVar = `#yield_delegate_${uniqId()}`;
-    return generate(scope, {
+    const forOfStmt = {
       type: 'ForOfStatement',
       left: {
         type: 'VariableDeclaration',
@@ -1705,6 +1892,15 @@ const generateYield = (scope, decl) => {
           delegate: false
         }
       }
+    };
+
+    // For generators, transform the for-of into an iterator-based while loop
+    // that properly persists state across yields
+    const transformedStmts = transformForOfLoop(forOfStmt, scope.generator ? scope : null);
+
+    return generate(scope, {
+      type: 'BlockStatement',
+      body: transformedStmts
     });
   }
 
