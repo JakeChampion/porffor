@@ -1715,15 +1715,18 @@ const generateYield = (scope, decl) => {
   // - offset 60: throw_requested (i32)
   // - offset 64-71: throw value (f64)
   // - offset 72-75: throw type (i32)
-  // - offset 80+: user parameters (12 bytes each: 8 bytes value + 4 bytes type)
-  // - offset 80 + userParams*12: yield input slots (12 bytes each)
+  // - offset 76-79: executing flag (i32)
+  // - offset 80-87: #this value (f64)
+  // - offset 88-91: #this type (i32)
+  // - offset 96+: user parameters (12 bytes each: 8 bytes value + 4 bytes type)
+  // - offset 96 + userParams*12: yield input slots (12 bytes each)
   //   Each yield stores the input value received when resuming at that point
 
   // Get the compile-time yield state for memory slot calculation
   const yieldState = decl._yieldState ?? 0;
-  // Yield slots start AFTER user params (which also use offset 80+)
+  // Yield slots start AFTER user params (which start at offset 96)
   const userParamsCount = scope._userParamsCount ?? 0;
-  const slotOffset = 80 + userParamsCount * 12 + yieldState * 12; // 12 bytes per slot: 8 (f64) + 4 (i32)
+  const slotOffset = 96 + userParamsCount * 12 + yieldState * 12; // 12 bytes per slot: 8 (f64) + 4 (i32)
 
   // First, evaluate the argument (may contain inner yields that suspend)
   // Store in a temp so we can use it after the yield check
@@ -10573,10 +10576,10 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // Calculate allocation size: base 88 bytes + 12 bytes per param + 12 bytes per yield slot + 12 bytes per user local
         // Base layout: state(8) + indirect(8) + value(8) + valueType(4) + done(4) + input(8) + inputType(4) +
         //              return_requested(4) + return_value(8) + return_type(4) + throw_requested(4) + throw_value(8) + throw_type(4) +
-        //              this_value(8) + this_type(4) = 88
+        //              executing(4) + this_value(8) + this_type(4) + padding(4) = 96
         // Then: user params (12 bytes each), then yield input slots (12 bytes each), then user locals (12 bytes each)
         const yieldCount = func._yieldCount ?? 0;
-        const localsBaseOffset = 88 + userParams.length * 12 + yieldCount * 12;
+        const localsBaseOffset = 96 + userParams.length * 12 + yieldCount * 12;
         const genAllocSize = localsBaseOffset + userLocals.length * 12;
 
         // Store generator locals info for use by generateYield
@@ -10666,19 +10669,21 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
             // Apply default parameter initializers during creation only
             ...(func._defaultParamWasm ?? []),
 
-            // Store #this in generator object at offset 76-87 (value + type)
+            // Store #this in generator object at offset 80-91 (value + type)
+            // Layout: 80-87 = #this value (f64), 88-91 = #this type (i32)
+            // Note: offset 76 is used for executing flag, offset 64-75 for throw value/type
             [ Opcodes.local_get, func.locals['#generator_out'].idx ],
             Opcodes.i32_to_u,
             [ Opcodes.local_get, func.locals['#this'].idx ],
-            [ Opcodes.f64_store, 0, 76 ],
+            [ Opcodes.f64_store, 0, 80 ],
             [ Opcodes.local_get, func.locals['#generator_out'].idx ],
             Opcodes.i32_to_u,
             [ Opcodes.local_get, func.locals['#this#type'].idx ],
-            [ Opcodes.i32_store, 0, 84 ],
+            [ Opcodes.i32_store, 0, 88 ],
 
-            // Store user parameters in generator object (starting at offset 88)
+            // Store user parameters in generator object (starting at offset 96)
             ...userParams.flatMap((paramName, i) => {
-              const paramOffset = 88 + i * 12;
+              const paramOffset = 96 + i * 12;
               const local = func.locals[paramName];
               const typeLocal = func.locals[paramName + '#type'];
               if (!local || !typeLocal) return []; // skip if param not found
@@ -10721,19 +10726,19 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           [ Opcodes.f64_convert_i32_s ],
           [ Opcodes.local_set, func.locals['#generator_input_type'].idx ],
 
-          // Restore #this from generator object (offset 76-87)
+          // Restore #this from generator object (offset 80-91)
           [ Opcodes.local_get, func.locals['#generator_out'].idx ],
           Opcodes.i32_to_u,
-          [ Opcodes.f64_load, 0, 76 ],
+          [ Opcodes.f64_load, 0, 80 ],
           [ Opcodes.local_set, func.locals['#this'].idx ],
           [ Opcodes.local_get, func.locals['#generator_out'].idx ],
           Opcodes.i32_to_u,
-          [ Opcodes.i32_load, 0, 84 ],
+          [ Opcodes.i32_load, 0, 88 ],
           [ Opcodes.local_set, func.locals['#this#type'].idx ],
 
-          // Restore user parameters from generator object (starting at offset 88)
+          // Restore user parameters from generator object (starting at offset 96)
           ...userParams.flatMap((paramName, i) => {
-            const paramOffset = 88 + i * 12;
+            const paramOffset = 96 + i * 12;
             const local = func.locals[paramName];
             const typeLocal = func.locals[paramName + '#type'];
             if (!local || !typeLocal) return []; // skip if param not found
