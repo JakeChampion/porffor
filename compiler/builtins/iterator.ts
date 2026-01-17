@@ -2040,7 +2040,13 @@ export const __Iterator_prototype_reduce = (_this: any, reducer: any, initialVal
         accumulator = value;
         hasInitial = true;
       } else {
-        accumulator = reducer(accumulator, value, index);
+        // Per spec: If reducer throws, close the iterator (IfAbruptCloseIterator)
+        try {
+          accumulator = reducer(accumulator, value, index);
+        } catch (e) {
+          __Porffor_iterator_return(_this, undefined);
+          throw e;
+        }
       }
       index++;
     }
@@ -2164,7 +2170,13 @@ export const __Iterator_prototype_forEach = (_this: any, callback: any) => {
     while (true) {
       const result: any = nextMethod.call(_this);
       if (result.done) break;
-      callback(result.value, index++);
+      // Per spec: If callback throws, close the iterator (IfAbruptCloseIterator)
+      try {
+        callback(result.value, index++);
+      } catch (e) {
+        __Porffor_iterator_return(_this, undefined);
+        throw e;
+      }
     }
     return undefined;
   }
@@ -2197,7 +2209,19 @@ export const __Iterator_prototype_some = (_this: any, predicate: any) => {
     while (true) {
       const result: any = nextMethod.call(_this);
       if (result.done) break;
-      if (predicate(result.value, index++)) return true;
+      // Per spec: If predicate throws, close the iterator (IfAbruptCloseIterator)
+      let matches: boolean;
+      try {
+        matches = predicate(result.value, index++);
+      } catch (e) {
+        __Porffor_iterator_return(_this, undefined);
+        throw e;
+      }
+      if (matches) {
+        // Close iterator when returning early
+        __Porffor_iterator_return(_this, undefined);
+        return true;
+      }
     }
     return false;
   }
@@ -2230,7 +2254,19 @@ export const __Iterator_prototype_every = (_this: any, predicate: any) => {
     while (true) {
       const result: any = nextMethod.call(_this);
       if (result.done) break;
-      if (!predicate(result.value, index++)) return false;
+      // Per spec: If predicate throws, close the iterator (IfAbruptCloseIterator)
+      let matches: boolean;
+      try {
+        matches = predicate(result.value, index++);
+      } catch (e) {
+        __Porffor_iterator_return(_this, undefined);
+        throw e;
+      }
+      if (!matches) {
+        // Close iterator when returning early
+        __Porffor_iterator_return(_this, undefined);
+        return false;
+      }
     }
     return true;
   }
@@ -2264,7 +2300,19 @@ export const __Iterator_prototype_find = (_this: any, predicate: any) => {
       const result: any = nextMethod.call(_this);
       if (result.done) break;
       const value: any = result.value;
-      if (predicate(value, index++)) return value;
+      // Per spec: If predicate throws, close the iterator (IfAbruptCloseIterator)
+      let matches: boolean;
+      try {
+        matches = predicate(value, index++);
+      } catch (e) {
+        __Porffor_iterator_return(_this, undefined);
+        throw e;
+      }
+      if (matches) {
+        // Close iterator when returning early
+        __Porffor_iterator_return(_this, undefined);
+        return value;
+      }
     }
     return undefined;
   }
