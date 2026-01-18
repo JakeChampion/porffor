@@ -10728,6 +10728,7 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
 
       func.identFailEarly = true;
       let localInd = args.length * 2;
+      const destructuringParams = []; // Track params with destructuring for generators
       for (let i = 0; i < args.length; i++) {
         const { name, def, destr, type } = args[i];
 
@@ -10851,12 +10852,23 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           }
         }
 
-        if (destr) wasm.push(
-          ...generateVarDstr(func, 'var', destr, { type: 'Identifier', name }, undefined, false)
-        );
+        if (destr) {
+          // For generators, defer destructuring to step call section (after param restoration)
+          // because preface runs before we can restore params from the generator object
+          if (!decl.generator) {
+            wasm.push(
+              ...generateVarDstr(func, 'var', destr, { type: 'Identifier', name }, undefined, false)
+            );
+          }
+          // Track for generators - need to run destructuring after param restoration on step calls
+          destructuringParams.push({ name, destr });
+        }
 
         localInd = func.localInd;
       }
+
+      // Store destructuring info for generator step calls
+      func._destructuringParams = destructuringParams;
 
       func.identFailEarly = false;
 
@@ -10901,7 +10913,8 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         transformGeneratorToStateMachine(body, func);
 
         // Store user params count for yield slot offset calculation in generateYield
-        const userParamsCount = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern').length;
+        // Count all params including destructuring patterns (ArrayPattern, ObjectPattern)
+        const userParamsCount = params.length;
         func._userParamsCount = userParamsCount;
 
         // Add state local for state machine tracking (resume state, set only on yield)
@@ -11044,8 +11057,14 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         );
 
         // Get user parameter names (from AST params, not args which includes #this)
-        const userParams = params.filter(p => p.type === 'Identifier' || p.type === 'AssignmentPattern')
-          .map(p => p.type === 'Identifier' ? p.name : p.left.name);
+        // For destructuring patterns (ArrayPattern, ObjectPattern), use the synthetic param name
+        const userParams = params.map((p, i) => {
+          if (p.type === 'Identifier') return p.name;
+          if (p.type === 'AssignmentPattern') return p.left.name ?? '#arg_dstr' + i;
+          if (p.type === 'RestElement') return p.argument.name;
+          // ArrayPattern, ObjectPattern - use synthetic name
+          return '#arg_dstr' + i;
+        });
 
         // Identify user locals (variables declared in the generator body, not params or internal)
         // These need to be saved/restored across yields
@@ -11246,6 +11265,13 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
               [ Opcodes.i32_load, 0, paramOffset + 8 ],
               [ Opcodes.local_set, typeLocal.idx ]
             ];
+          }),
+
+          // Re-run parameter destructuring after restoration (for step calls)
+          // On step calls, params were restored from the generator object, so we need to
+          // re-destructure to populate the destructured variables (x, y, z from [x, y, z])
+          ...func._destructuringParams.flatMap(({ name, destr }) => {
+            return generateVarDstr(func, 'var', destr, { type: 'Identifier', name }, undefined, false);
           }),
 
           // Restore user locals from generator object (only if state > 0, i.e., resuming)
