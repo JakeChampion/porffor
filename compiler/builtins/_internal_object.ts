@@ -494,7 +494,7 @@ local.set ${obj+1}`;
     } else obj = __Porffor_object_getPrototypeWithHidden(obj, trueType);
 
     // todo/opt: put this behind comptime flag if only __proto__ is used
-    if (hash == 593337848) if (Porffor.strcmp(key, '__proto__')) {
+    if (hash == 3302497702) if (Porffor.strcmp(key, '__proto__')) {
       // get prototype
       Porffor.wasm`
 local.get ${obj}
@@ -707,7 +707,7 @@ export const __Porffor_object_set = (_obj: any, key: any, value: any): any => {
   let entryPtr: i32 = __Porffor_object_lookup(obj, key, hash);
   let flags: i32;
   if (entryPtr == -1) {
-    if (hash == 593337848) if (Porffor.strcmp(key, '__proto__')) {
+    if (hash == 3302497702) if (Porffor.strcmp(key, '__proto__')) {
       // set prototype
       __Porffor_object_setPrototype(obj, value);
       return value;
@@ -898,7 +898,7 @@ export const __Porffor_object_setStrict = (_obj: any, key: any, value: any): any
   let entryPtr: i32 = __Porffor_object_lookup(obj, key, hash);
   let flags: i32;
   if (entryPtr == -1) {
-    if (hash == 593337848) if (Porffor.strcmp(key, '__proto__')) {
+    if (hash == 3302497702) if (Porffor.strcmp(key, '__proto__')) {
       // set prototype
       __Porffor_object_setPrototype(obj, value);
       return value;
@@ -1261,7 +1261,7 @@ export const __Porffor_object_expr_init = (obj: any, key: any, value: any): void
   const hash: i32 = __Porffor_object_hash(key);
   let entryPtr: i32 = __Porffor_object_lookup(obj, key, hash);
   if (entryPtr == -1) {
-    if (hash == 593337848) if (Porffor.strcmp(key, '__proto__')) {
+    if (hash == 3302497702) if (Porffor.strcmp(key, '__proto__')) {
       // set prototype
       __Porffor_object_setPrototype(obj, value);
       return value;
