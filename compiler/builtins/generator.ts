@@ -177,7 +177,27 @@ export const __Porffor_AsyncGenerator = (values: any[]): __Porffor_AsyncGenerato
   return values as __Porffor_AsyncGenerator;
 };
 
-export const __Porffor_AsyncGenerator_prototype_next = async (gen: any[], inputValue: any) => {
+// Validate that a value is an async generator object
+// Returns true if valid, false otherwise (for async methods that need to reject)
+export const __Porffor_AsyncGenerator_validate = (gen: any): boolean => {
+  // 1. If generator is not an object, invalid
+  if (!Porffor.object.isObjectOrSymbol(gen)) {
+    return false;
+  }
+  // 2. If generator does not have [[AsyncGeneratorState]] internal slot, invalid
+  if (Porffor.type(gen) != Porffor.TYPES.__porffor_asyncgenerator) {
+    return false;
+  }
+  return true;
+};
+
+export const __Porffor_AsyncGenerator_prototype_next = async (gen: any, inputValue: any) => {
+  // Validate that gen is an async generator - if not, reject with TypeError
+  // Inline the validation to avoid function call issues in async context
+  if (!Porffor.object.isObjectOrSymbol(gen) || Porffor.type(gen) != Porffor.TYPES.__porffor_asyncgenerator) {
+    throw new TypeError('AsyncGenerator method called on incompatible receiver');
+  }
+
   // This is called after call_indirect has been done by codegen.js
   // Just read the values from the generator object and return result wrapped in Promise
   const obj: object = {};
@@ -197,25 +217,37 @@ local.get ${valueType}
 i32.to_u
 local.set ${value+1}`;
 
-  // Await the value (for yield* of promises or async iteration)
-  obj.value = await value;
+  // Assign value directly (like sync generators) - don't await primitive yields
+  obj.value = value;
   obj.done = isDone != 0;
 
   return obj;
 };
 
-export const __Porffor_AsyncGenerator_prototype_return = async (gen: any[], value: any) => {
-  gen.length = 0;
+export const __Porffor_AsyncGenerator_prototype_return = async (gen: any, value: any) => {
+  // Validate that gen is an async generator
+  if (!Porffor.object.isObjectOrSymbol(gen) || Porffor.type(gen) != Porffor.TYPES.__porffor_asyncgenerator) {
+    throw new TypeError('AsyncGenerator method called on incompatible receiver');
+  }
+
+  // Mark generator as done
+  Porffor.wasm.i32.store(gen, 1, 0, 28); // done = 1
 
   const obj: object = {};
-  obj.value = await value;
+  obj.value = value;
   obj.done = true;
   return obj;
 };
 
-export const __Porffor_AsyncGenerator_prototype_throw = async (gen: any[], value: any) => {
-  gen.length = 0;
-  throw await value;
+export const __Porffor_AsyncGenerator_prototype_throw = async (gen: any, value: any) => {
+  // Validate that gen is an async generator
+  if (!Porffor.object.isObjectOrSymbol(gen) || Porffor.type(gen) != Porffor.TYPES.__porffor_asyncgenerator) {
+    throw new TypeError('AsyncGenerator method called on incompatible receiver');
+  }
+
+  // Mark generator as done
+  Porffor.wasm.i32.store(gen, 1, 0, 28); // done = 1
+  throw value;
 };
 
 // Iterator.prototype methods for generators
