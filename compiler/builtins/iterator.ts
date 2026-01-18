@@ -2018,6 +2018,14 @@ export const __Iterator_prototype_flatMap = (_this: any, mapper: any) => {
     const wrapper: any[] = __Iterator_toWrapperIterator(_this);
     return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
   }
+  // Handle plain objects with next method (iterator protocol)
+  if (t == Porffor.TYPES.object) {
+    const nextMethod: any = _this.next;
+    if (nextMethod != null) {
+      const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+      return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
+    }
+  }
 
   throw new TypeError('Iterator.prototype.flatMap called on non-iterator');
 };
