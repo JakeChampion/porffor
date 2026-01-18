@@ -1219,14 +1219,14 @@ const funcRef = (func, scope = null) => {
       }
     }
 
-    // Pack: (envPtr / 16) << 16 | indirectIndex
+    // Pack: (envPtr / 16) << 12 | indirectIndex
     // We divide by 16 because malloc returns 16-byte aligned pointers
-    // This lets us fit the pointer in 16 bits (supporting up to 1MB of closure envs)
+    // Using 20 bits for env pointer (supports up to 16MB) and 12 bits for index (supports 4095 functions)
     out.push(
       [ Opcodes.local_get, envPtrLocal ],
       number(4, Valtype.i32),  // divide by 16 = shift right by 4
       [ Opcodes.i32_shr_u ],
-      number(16, Valtype.i32), // shift left by 16 to put in high bits
+      number(12, Valtype.i32), // shift left by 12 to put in high bits
       [ Opcodes.i32_shl ],
       number(indirectIndex, Valtype.i32),
       [ Opcodes.i32_or ],
@@ -5293,16 +5293,16 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             Opcodes.i32_to_u,
             [ Opcodes.local_tee, calleeI32Tmp ],
 
-            // Extract environment pointer from high 16 bits, multiply by 16 for alignment
-            number(16, Valtype.i32),
+            // Extract environment pointer from high 20 bits, multiply by 16 for alignment
+            number(12, Valtype.i32),
             [ Opcodes.i32_shr_u ],
             number(16, Valtype.i32),
             [ Opcodes.i32_mul ],
             [ Opcodes.global_set, globals['#closure_env'].idx ],
 
-            // Use low 16 bits as function index
+            // Use low 12 bits as function index
             [ Opcodes.local_get, calleeI32Tmp ],
-            number(0xffff, Valtype.i32),
+            number(0xfff, Valtype.i32),
             [ Opcodes.i32_and ],
             [ Opcodes.call_indirect, args.length + 2, 0 ],
 
