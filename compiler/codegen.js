@@ -1681,6 +1681,19 @@ const hoistLookupType = (scope, name) => {
 const lookup = (scope, name, failEarly = false) => {
   let local = scope.locals[name];
 
+  // Closure support: if this variable is captured by inner functions,
+  // read from the closure global instead of the local (inner functions may have modified it)
+  if (local?.idx !== undefined && scope._capturedVars?.includes(name)) {
+    const closureGlobal = '#closure_' + name;
+    const closureTypeGlobal = closureGlobal + '#type';
+    if (closureGlobal in globals && closureTypeGlobal in globals) {
+      return [
+        [ Opcodes.global_get, globals[closureGlobal].idx ],
+        ...setLastType(scope, [[ Opcodes.global_get, globals[closureTypeGlobal].idx ]])
+      ];
+    }
+  }
+
   if (name in builtinVars) {
     let wasm = builtinVars[name];
     if (wasm.usesImports) scope.usesImports = true;
@@ -3361,7 +3374,7 @@ const getType = (scope, name, failEarly = false) => {
     return [ number(TYPES.array, Valtype.i32) ];
   }
 
-  // Closure support: get type from closure environment
+  // Closure support: get type from closure environment (for inner functions)
   if (scope._usesCaptured?.includes(name)) {
     const varIndex = scope._usesCaptured.indexOf(name);
     if (varIndex !== -1) {
@@ -3370,6 +3383,16 @@ const getType = (scope, name, failEarly = false) => {
       return [
         [ Opcodes.global_get, globals['#closure_env'].idx ],
         [ Opcodes.i32_load8_u, 0, ...unsignedLEB128(offset) ]
+      ];
+    }
+  }
+
+  // Closure support: get type from closure global (for outer functions whose vars are captured)
+  if (scope._capturedVars?.includes(name)) {
+    const closureTypeGlobal = '#closure_' + name + '#type';
+    if (closureTypeGlobal in globals) {
+      return [
+        [ Opcodes.global_get, globals[closureTypeGlobal].idx ]
       ];
     }
   }
@@ -7043,21 +7066,39 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
           [ Opcodes.local_set, envLocal ]
         );
 
+        // Also update the closure global so outer function sees the change
+        const closureGlobal = '#closure_' + name;
+        const hasClosureGlobal = closureGlobal in globals;
+        const typeLocal = localTmp(scope, '#closure_type_tmp', Valtype.i32);
+
         if (op === '=') {
           out.push(
             ...generate(scope, decl.right),
             [ Opcodes.local_set, valLocal ],
+            // Get and save the type
+            ...getNodeType(scope, decl.right),
+            [ Opcodes.local_set, typeLocal ],
 
-            // Store value
+            // Store value to heap env
             [ Opcodes.local_get, envLocal ],
             [ Opcodes.local_get, valLocal ],
             [ Opcodes.f64_store, 0, ...unsignedLEB128(offset) ],
 
-            // Store type
+            // Store type to heap env
             [ Opcodes.local_get, envLocal ],
-            ...getNodeType(scope, decl.right),
+            [ Opcodes.local_get, typeLocal ],
             [ Opcodes.i32_store8, 0, ...unsignedLEB128(offset + 8) ]
           );
+
+          // Also update closure global for outer function
+          if (hasClosureGlobal) {
+            out.push(
+              [ Opcodes.local_get, valLocal ],
+              [ Opcodes.global_set, globals[closureGlobal].idx ],
+              [ Opcodes.local_get, typeLocal ],
+              [ Opcodes.global_set, globals[closureGlobal + '#type'].idx ]
+            );
+          }
         } else {
           out.push(
             ...performOp(scope, op, [
@@ -7065,17 +7106,30 @@ const generateAssign = (scope, decl, _global, _name, valueUnused = false) => {
               [ Opcodes.f64_load, 0, ...unsignedLEB128(offset) ]
             ], generate(scope, decl.right), getType(scope, name), getNodeType(scope, decl.right)),
             [ Opcodes.local_set, valLocal ],
+            // Get and save the type
+            ...getLastType(scope),
+            [ Opcodes.local_set, typeLocal ],
 
-            // Store value
+            // Store value to heap env
             [ Opcodes.local_get, envLocal ],
             [ Opcodes.local_get, valLocal ],
             [ Opcodes.f64_store, 0, ...unsignedLEB128(offset) ],
 
-            // Store type
+            // Store type to heap env
             [ Opcodes.local_get, envLocal ],
-            ...getLastType(scope),
+            [ Opcodes.local_get, typeLocal ],
             [ Opcodes.i32_store8, 0, ...unsignedLEB128(offset + 8) ]
           );
+
+          // Also update closure global for outer function
+          if (hasClosureGlobal) {
+            out.push(
+              [ Opcodes.local_get, valLocal ],
+              [ Opcodes.global_set, globals[closureGlobal].idx ],
+              [ Opcodes.local_get, typeLocal ],
+              [ Opcodes.global_set, globals[closureGlobal + '#type'].idx ]
+            );
+          }
         }
 
         if (!valueUnused) {

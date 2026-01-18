@@ -473,17 +473,18 @@ export const __Promise_prototype_toLocaleString = (_this: any) => __Promise_prot
 export const __Porffor_promise_await = (value: any): any => {
   if (Porffor.type(value) != Porffor.TYPES.promise) return value;
 
-  // hack: peek value instead of awaiting
+  // Run the job queue to process any pending promise resolutions
+  __Porffor_promise_runJobs();
+
   const state: i32 = (value as any[])[1];
-
-  // pending
-  if (state == 0) return value;
-
   const result: any = (value as any[])[0];
 
   // fulfilled
   if (state == 1) return result;
 
   // rejected
-  throw result;
+  if (state == 2) throw result;
+
+  // still pending - this is a limitation, true async suspension not yet implemented
+  return value;
 };
