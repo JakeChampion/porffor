@@ -6088,6 +6088,62 @@ const generateVarDstr = (scope, kind, pattern, init, defaultValue, global) => {
     const tmpName = '#destructure' + uniqId();
     let out = generateVarDstr(scope, 'const', tmpName, init, defaultValue, false);
 
+    // For non-indexable iterables (generators, Sets, Maps, etc.), convert to array first
+    // This ensures array destructuring works with any iterable, not just arrays/strings
+    // Store type in local for runtime check since type may not be known at compile time
+    const iterTypeLocal = localTmp(scope, '#destructure_type' + uniqId(), Valtype.i32);
+    out = out.concat([
+      ...getNodeType(scope, { type: 'Identifier', name: tmpName }),
+      [ Opcodes.local_set, iterTypeLocal ]
+    ]);
+    const iterType = [ [ Opcodes.local_get, iterTypeLocal ] ];
+    const nonIndexableTypes = [
+      TYPES.set, TYPES.map,
+      TYPES.__porffor_generator,
+      TYPES.__porffor_wrapperiterator,
+      TYPES.__porffor_takeiterator,
+      TYPES.__porffor_dropiterator,
+      TYPES.__porffor_mapiterator,
+      TYPES.__porffor_filteriterator,
+      TYPES.__porffor_concatiterator,
+      TYPES.object // objects with Symbol.iterator
+    ];
+    const convTmpName = '#destructure_arr' + uniqId();
+    out = out.concat([
+      ...typeIsOneOf(iterType, nonIndexableTypes),
+      [ Opcodes.if, Blocktype.void ],
+        // Convert to array using spread: [...tmpName]
+        ...generate(scope, {
+          type: 'VariableDeclaration',
+          kind: 'const',
+          declarations: [{
+            type: 'VariableDeclarator',
+            id: { type: 'Identifier', name: convTmpName },
+            init: {
+              type: 'ArrayExpression',
+              elements: [{
+                type: 'SpreadElement',
+                argument: { type: 'Identifier', name: tmpName }
+              }]
+            }
+          }]
+        }),
+        [ Opcodes.drop ], // VariableDeclaration pushes undefined
+        // Copy converted array back to tmpName
+        ...generate(scope, { type: 'Identifier', name: convTmpName }),
+        [ Opcodes.local_set, scope.locals[tmpName].idx ],
+        // Also update the type local to reflect it's now an array
+        number(TYPES.array, Valtype.i32),
+        [ Opcodes.local_set, scope.locals[tmpName + '#type'].idx ],
+      [ Opcodes.end ]
+    ]);
+
+    // Clear compile-time type inference so MemberExpression uses runtime type checking
+    // This is needed because tmpName's type may have changed at runtime
+    if (scope.locals[tmpName]?.metadata) {
+      scope.locals[tmpName].metadata.type = null;
+    }
+
     let i = 0;
     const elements = pattern.elements.slice();
     for (const e of elements) {
