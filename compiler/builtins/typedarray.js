@@ -10,6 +10,24 @@ export default async () => {
   throw new TypeError('Abstract class TypedArray not directly constructable');
 };
 
+export const __TypedArray_prototype_toReversed = (_this: any) => {
+  const t: i32 = Porffor.type(_this);
+  if (!(t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
+    throw new TypeError('TypedArray.prototype.toReversed called on non-TypedArray');
+  }
+  if (_this.buffer.detached) throw new TypeError('TypedArray has a detached buffer');
+
+  const len: i32 = _this.length;
+  const out: Uint8Array = Porffor.malloc();
+  out.length = len;
+
+  for (let k: i32 = 0; k < len; k++) {
+    out[k] = _this[len - k - 1];
+  }
+
+  return out;
+};
+
 `;
 
   // TypedArrays are stored like this in memory:

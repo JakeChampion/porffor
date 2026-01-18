@@ -1072,9 +1072,15 @@ export const __Array_prototype_toReversed = (_this: any) => {
   // 1. Let O be ? ToObject(this value).
   if (_this == null) throw new TypeError('Cannot convert nullish to object');
 
+  // For TypedArrays: ValidateTypedArray - check for detached buffer
+  const t: i32 = Porffor.type(_this);
+  if (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array) {
+    if (_this.buffer.detached) throw new TypeError('TypedArray has a detached buffer');
+  }
+
   // 2. Let len be ? LengthOfArrayLike(O).
   let len: i32;
-  if (Porffor.type(_this) == Porffor.TYPES.object) {
+  if (t == Porffor.TYPES.object) {
     len = ecma262.ToIntegerOrInfinity((_this as object)['length']);
   } else {
     len = _this.length;
@@ -1087,7 +1093,7 @@ export const __Array_prototype_toReversed = (_this: any) => {
 
   // 4. Let k be 0.
   // 5. Repeat, while k < len
-  if (Porffor.type(_this) == Porffor.TYPES.object) {
+  if (t == Porffor.TYPES.object) {
     for (let k: i32 = 0; k < len; k++) {
       // a. Let from be len - k - 1.
       // b. Let Pk be ! ToString(k).
