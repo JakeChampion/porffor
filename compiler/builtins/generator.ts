@@ -178,31 +178,28 @@ export const __Porffor_AsyncGenerator = (values: any[]): __Porffor_AsyncGenerato
 };
 
 export const __Porffor_AsyncGenerator_prototype_next = async (gen: any[], inputValue: any) => {
+  // This is called after call_indirect has been done by codegen.js
+  // Just read the values from the generator object and return result wrapped in Promise
   const obj: object = {};
 
-  const len: i32 = gen.length;
+  // Read yielded value from generator object (same layout as sync generators)
+  // Generator memory layout:
+  // - offset 16-23: yielded value (f64)
+  // - offset 24-27: yielded value type (i32)
+  // - offset 28-31: done flag (i32)
+  const value: any = Porffor.wasm.f64.load(gen, 0, 16);
+  const valueType: i32 = Porffor.wasm.i32.load(gen, 0, 24);
+  const isDone: i32 = Porffor.wasm.i32.load(gen, 0, 28);
 
-  if (len == 0) {
-    obj.value = undefined;
-    obj.done = true;
-    return obj;
-  }
+  // Set the type of value using inline wasm to preserve exact type
+  Porffor.wasm`
+local.get ${valueType}
+i32.to_u
+local.set ${value+1}`;
 
-  const value: any = gen.shift();
-
-  // Check if this is the return marker
-  if (value == RETURN_MARKER) {
-    if (gen.length > 0) {
-      obj.value = await gen.shift();
-    } else {
-      obj.value = undefined;
-    }
-    obj.done = true;
-    return obj;
-  }
-
+  // Await the value (for yield* of promises or async iteration)
   obj.value = await value;
-  obj.done = false;
+  obj.done = isDone != 0;
 
   return obj;
 };
