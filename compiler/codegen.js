@@ -1177,10 +1177,18 @@ const funcRef = (func, scope = null) => {
     const envPtrLocal = localTmp(scope, '#env_ptr', Valtype.i32);
 
     // Allocate memory for closure environment
+    // IMPORTANT: The address must be 16-byte aligned because we pack it by doing (addr >> 4)
+    // and unpack by doing (packed >> 16) * 16. If not aligned, we lose the low bits.
+    // Allocate extra 15 bytes and align: aligned = (addr + 15) & ~15
     out.push(
-      number(envSize, Valtype.i32),
+      number(envSize + 15, Valtype.i32),
       [ Opcodes.call, includeBuiltin(scope, '__Porffor_malloc').index ],
-      [ Opcodes.local_set, envPtrLocal ]  // Use set, not tee - don't leave value on stack
+      // Align to 16 bytes: (addr + 15) & ~15
+      number(15, Valtype.i32),
+      [ Opcodes.i32_add ],
+      number(-16, Valtype.i32),  // ~15 = -16 in two's complement
+      [ Opcodes.i32_and ],
+      [ Opcodes.local_set, envPtrLocal ]
     );
 
     // Copy each captured variable into the environment
@@ -3488,6 +3496,11 @@ const getNodeType = (scope, node) => {
       // hack: try reading from member if call
       if (name == null && node.callee.type === 'MemberExpression' && node.callee.property.name === 'call') {
         name = node.callee.object.name;
+      }
+
+      // Check if callee is a generator function expression (IIFE generator)
+      if (name == null && isFuncType(node.callee.type) && node.callee.generator) {
+        return node.callee.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator;
       }
 
       if (name == null) {
@@ -5813,7 +5826,19 @@ const generateVarDstr = (scope, kind, pattern, init, defaultValue, global) => {
         delete funcIndex[funcName];
       }
 
-      out.push([ Opcodes.drop ]);
+      // Closure support: write to closure global if this var is captured by inner functions
+      const closureGlobal = '#closure_' + name;
+      if (scope._capturedVars?.includes(name) && closureGlobal in globals) {
+        // Function reference is on stack (as f64), store to closure global (value and type)
+        out.push(
+          [ Opcodes.global_set, globals[closureGlobal].idx ],
+          // Set type to function (or generator if applicable)
+          number(init.generator ? (init.async ? TYPES.__porffor_asyncgenerator : TYPES.__porffor_generator) : TYPES.function, Valtype.i32),
+          [ Opcodes.global_set, globals[closureGlobal + '#type'].idx ]
+        );
+      } else {
+        out.push([ Opcodes.drop ]);
+      }
       return out;
     }
 
