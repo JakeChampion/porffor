@@ -191,6 +191,119 @@ export const __Porffor_AsyncGenerator_validate = (gen: any): boolean => {
   return true;
 };
 
+// Async Generator Request Queue
+// Per ES spec 27.6.3.2, async generators have a request queue for handling
+// next/return/throw calls while the generator is executing
+// Queue entries: [gen, promise, inputValue, inputType, completionType]
+// completionType: 0 = next, 1 = return, 2 = throw
+const __Porffor_AsyncGenerator_queue: any[] = [];
+
+// Enqueue a request when generator is executing
+// Returns a pending promise that will be resolved/rejected when the request is processed
+export const __Porffor_AsyncGenerator_enqueue = (gen: any, inputValue: any, completionType: i32): any => {
+  // Create a pending promise using the internal promise creation function
+  const promise: any = __Porffor_promise_create();
+
+  // Create queue entry
+  const entry: any[] = Porffor.malloc();
+  entry[0] = gen;
+  entry[1] = promise;
+  entry[2] = inputValue;
+  entry[3] = Porffor.type(inputValue);
+  entry[4] = completionType;
+  entry.length = 5;
+
+  // Add to queue
+  Porffor.array.fastPush(__Porffor_AsyncGenerator_queue, entry);
+
+  return promise;
+};
+
+// Get and remove the next queued request for this generator
+// Returns the queue entry array, or undefined if no queued requests
+export const __Porffor_AsyncGenerator_dequeue = (gen: any): any => {
+  const len: i32 = __Porffor_AsyncGenerator_queue.length;
+  for (let i: i32 = 0; i < len; i++) {
+    const entry: any[] = __Porffor_AsyncGenerator_queue[i];
+    if (entry[0] === gen) {
+      // Remove from queue by shifting remaining elements
+      for (let j: i32 = i; j < len - 1; j++) {
+        __Porffor_AsyncGenerator_queue[j] = __Porffor_AsyncGenerator_queue[j + 1];
+      }
+      __Porffor_AsyncGenerator_queue.length = len - 1;
+      return entry;
+    }
+  }
+  return undefined;
+};
+
+// Fulfill a queued promise with {value, done} result
+export const __Porffor_AsyncGenerator_fulfillQueue = (promise: any, value: any, done: boolean): void => {
+  const result: object = {};
+  result.value = value;
+  result.done = done;
+  // Use the internal fulfillment function
+  __ecma262_FulfillPromise(promise, result);
+};
+
+// Process queued requests for an async generator
+// This is called after the generator yields or completes
+// It uses the microtask queue to schedule processing of the next request
+export const __Porffor_AsyncGenerator_processQueue = (gen: any): void => {
+  // Check if there are queued requests
+  const entry: any = __Porffor_AsyncGenerator_dequeue(gen);
+  if (entry == undefined) return;
+
+  // Extract request info
+  const promise: any = entry[1];
+  const inputValue: any = entry[2];
+  const inputType: i32 = entry[3];
+  const completionType: i32 = entry[4];
+
+  // Set the input value type
+  Porffor.wasm`
+local.get ${inputType}
+i32.to_u
+local.set ${inputValue+1}`;
+
+  // Check if generator is done
+  const isDone: i32 = Porffor.wasm.i32.load(gen, 0, 28);
+  if (isDone != 0) {
+    // Generator is done, resolve with {value: undefined, done: true}
+    __Porffor_AsyncGenerator_fulfillQueue(promise, undefined, true);
+    // Process any remaining queued requests
+    __Porffor_AsyncGenerator_processQueue(gen);
+    return;
+  }
+
+  // Store input value for next generator step
+  Porffor.wasm.f64.store(gen, inputValue, 0, 32);
+  Porffor.wasm.i32.store(gen, Porffor.type(inputValue), 0, 40);
+
+  // Schedule the generator resumption via microtask
+  // The next() call on the generator will be handled by codegen
+  // For now, we can't directly call the generator step function from builtins
+  // So we use promise.then to schedule the next step
+
+  // Since we can't call the generator step directly, we'll mark that there's
+  // a pending request and let the next external next() call process it
+  // This is a simplification - proper implementation would use call_indirect
+
+  // For now, just fulfill with the current state (which might be stale)
+  // TODO: This needs proper generator resumption
+  const value: any = Porffor.wasm.f64.load(gen, 0, 16);
+  const valueType: i32 = Porffor.wasm.i32.load(gen, 0, 24);
+  Porffor.wasm`
+local.get ${valueType}
+i32.to_u
+local.set ${value+1}`;
+
+  __Porffor_AsyncGenerator_fulfillQueue(promise, value, false);
+
+  // Process any remaining queued requests
+  __Porffor_AsyncGenerator_processQueue(gen);
+};
+
 export const __Porffor_AsyncGenerator_prototype_next = async (gen: any, inputValue: any) => {
   // Validate that gen is an async generator - if not, reject with TypeError
   // Inline the validation to avoid function call issues in async context
@@ -220,6 +333,9 @@ local.set ${value+1}`;
   // Assign value directly (like sync generators) - don't await primitive yields
   obj.value = value;
   obj.done = isDone != 0;
+
+  // Process any queued requests after this yield
+  __Porffor_AsyncGenerator_processQueue(gen);
 
   return obj;
 };

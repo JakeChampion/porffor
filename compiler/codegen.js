@@ -4319,6 +4319,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
           const genLocal = localTmp(scope, '#async_gen_next_gen');
           const inputLocal = localTmp(scope, '#async_gen_next_input');
           const inputTypeLocal = localTmp(scope, '#async_gen_next_input_type', Valtype.i32);
+          const enqueuedLocal = localTmp(scope, '#async_gen_next_enqueued');
+          const enqueuedTypeLocal = localTmp(scope, '#async_gen_next_enqueued_type', Valtype.i32);
 
           // Get generator
           out.push(
@@ -4343,6 +4345,14 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             );
           }
 
+          // Initialize enqueued to 0 (not enqueued)
+          out.push(
+            number(0),
+            [ Opcodes.local_set, enqueuedLocal ],
+            number(0, Valtype.i32),
+            [ Opcodes.local_set, enqueuedTypeLocal ]
+          );
+
           // Check if NOT already done (offset 28) - if not done, run the generator
           out.push(
             [ Opcodes.local_get, genLocal ],
@@ -4365,58 +4375,65 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               Opcodes.i32_to_u,
               [ Opcodes.i32_load, 0, 76 ],
               [ Opcodes.if, Blocktype.void ],
-                // Mark as done
+                // Generator is executing - enqueue request and return promise
+                // Call __Porffor_AsyncGenerator_enqueue(gen, inputValue, completionType)
+                // Push args: gen, genType, inputValue, inputType, completionType, completionTypeType
+                [ Opcodes.local_get, genLocal ],
+                number(TYPES.__porffor_asyncgenerator, Valtype.i32),
+                [ Opcodes.local_get, inputLocal ],
+                [ Opcodes.local_get, inputTypeLocal ],
+                number(0), // completionType = next (as f64)
+                number(TYPES.number, Valtype.i32), // completionType type
+                [ Opcodes.call, includeBuiltin(scope, '__Porffor_AsyncGenerator_enqueue').index ],
+                [ Opcodes.local_set, enqueuedTypeLocal ],
+                [ Opcodes.local_set, enqueuedLocal ],
+              [ Opcodes.else ],
+                // Not executing - run the generator normally
+
+                // Set executing flag before calling generator
                 [ Opcodes.local_get, genLocal ],
                 Opcodes.i32_to_u,
                 number(1, Valtype.i32),
-                [ Opcodes.i32_store, 0, 28 ],
-                // Throw TypeError
-                ...internalThrow(scope, 'TypeError', 'Generator is already executing'),
-              [ Opcodes.end ],
-
-              // Set executing flag before calling generator
-              [ Opcodes.local_get, genLocal ],
-              Opcodes.i32_to_u,
-              number(1, Valtype.i32),
-              [ Opcodes.i32_store, 0, 76 ],
-
-              // Call the generator function via call_indirect (wrapped in try/catch)
-              [ Opcodes.try, Blocktype.void ],
-                number(0, Valtype.i32), // argc = 0
-                number(0), // newTarget = undefined
-                number(TYPES.undefined, Valtype.i32), // newTargetType
-                [ Opcodes.local_get, genLocal ], // this = generator
-                number(TYPES.__porffor_asyncgenerator, Valtype.i32), // thisType
-                // Pad with undefined for remaining wrapperArgc args
-                ...(new Array(Prefs.indirectWrapperArgc ?? 16).fill(0).flatMap(() => [
-                  number(UNDEFINED), number(TYPES.undefined, Valtype.i32)
-                ])),
-                // Get indirect function index from generator (offset 8)
-                [ Opcodes.local_get, genLocal ],
-                Opcodes.i32_to_u,
-                [ Opcodes.f64_load, 0, 8 ],
-                Opcodes.i32_trunc_sat_f64_u,
-                [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ],
-                [ Opcodes.drop ],
-                [ Opcodes.drop ],
-                // Clear executing flag after generator returns normally
-                [ Opcodes.local_get, genLocal ],
-                Opcodes.i32_to_u,
-                number(0, Valtype.i32),
                 [ Opcodes.i32_store, 0, 76 ],
-              [ Opcodes.catch, 0 ],
-                // Clear executing flag before rethrowing
-                [ Opcodes.local_get, genLocal ],
-                Opcodes.i32_to_u,
-                number(0, Valtype.i32),
-                [ Opcodes.i32_store, 0, 76 ],
-                // Mark generator as done
-                [ Opcodes.local_get, genLocal ],
-                Opcodes.i32_to_u,
-                number(1, Valtype.i32),
-                [ Opcodes.i32_store, 0, 28 ],
-                // Rethrow
-                [ Opcodes.throw, globalThis.precompile ? 1 : 0 ],
+
+                // Call the generator function via call_indirect (wrapped in try/catch)
+                [ Opcodes.try, Blocktype.void ],
+                  number(0, Valtype.i32), // argc = 0
+                  number(0), // newTarget = undefined
+                  number(TYPES.undefined, Valtype.i32), // newTargetType
+                  [ Opcodes.local_get, genLocal ], // this = generator
+                  number(TYPES.__porffor_asyncgenerator, Valtype.i32), // thisType
+                  // Pad with undefined for remaining wrapperArgc args
+                  ...(new Array(Prefs.indirectWrapperArgc ?? 16).fill(0).flatMap(() => [
+                    number(UNDEFINED), number(TYPES.undefined, Valtype.i32)
+                  ])),
+                  // Get indirect function index from generator (offset 8)
+                  [ Opcodes.local_get, genLocal ],
+                  Opcodes.i32_to_u,
+                  [ Opcodes.f64_load, 0, 8 ],
+                  Opcodes.i32_trunc_sat_f64_u,
+                  [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ],
+                  [ Opcodes.drop ],
+                  [ Opcodes.drop ],
+                  // Clear executing flag after generator returns normally
+                  [ Opcodes.local_get, genLocal ],
+                  Opcodes.i32_to_u,
+                  number(0, Valtype.i32),
+                  [ Opcodes.i32_store, 0, 76 ],
+                [ Opcodes.catch, 0 ],
+                  // Clear executing flag before rethrowing
+                  [ Opcodes.local_get, genLocal ],
+                  Opcodes.i32_to_u,
+                  number(0, Valtype.i32),
+                  [ Opcodes.i32_store, 0, 76 ],
+                  // Mark generator as done
+                  [ Opcodes.local_get, genLocal ],
+                  Opcodes.i32_to_u,
+                  number(1, Valtype.i32),
+                  [ Opcodes.i32_store, 0, 28 ],
+                  // Rethrow
+                  [ Opcodes.throw, globalThis.precompile ? 1 : 0 ],
+                [ Opcodes.end ],
               [ Opcodes.end ],
             [ Opcodes.else ],
               // Generator is already done - set value to undefined
