@@ -4247,6 +4247,10 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               number(1, Valtype.i32),
               [ Opcodes.i32_store, 0, 76 ],
 
+              // Save closure env before generator call, restore after (generator may corrupt it)
+              [ Opcodes.global_get, globals['#closure_env'].idx ],
+              [ Opcodes.local_set, localTmp(scope, '#gen_saved_closure_env', Valtype.i32) ],
+
               // Call the generator function via call_indirect (wrapped in try/catch to clear executing on throw)
               [ Opcodes.try, Blocktype.void ],
                 // Stack order: argc, newTarget, newTargetType, this, thisType, args..., funcIndex
@@ -4268,12 +4272,18 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
                 [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ], // wrapperArgc + 2 pairs
                 [ Opcodes.drop ],
                 [ Opcodes.drop ],
+                // Restore closure env after generator returns normally
+                [ Opcodes.local_get, localTmp(scope, '#gen_saved_closure_env', Valtype.i32) ],
+                [ Opcodes.global_set, globals['#closure_env'].idx ],
                 // Clear executing flag after generator returns normally
                 [ Opcodes.local_get, genLocal ],
                 Opcodes.i32_to_u,
                 number(0, Valtype.i32),
                 [ Opcodes.i32_store, 0, 76 ],
               [ Opcodes.catch, 0 ],
+                // Restore closure env before rethrowing
+                [ Opcodes.local_get, localTmp(scope, '#gen_saved_closure_env', Valtype.i32) ],
+                [ Opcodes.global_set, globals['#closure_env'].idx ],
                 // Clear executing flag before rethrowing
                 [ Opcodes.local_get, genLocal ],
                 Opcodes.i32_to_u,
@@ -4403,6 +4413,10 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
                 number(1, Valtype.i32),
                 [ Opcodes.i32_store, 0, 76 ],
 
+                // Save closure env before generator call
+                [ Opcodes.global_get, globals['#closure_env'].idx ],
+                [ Opcodes.local_set, localTmp(scope, '#asyncgen_saved_closure_env', Valtype.i32) ],
+
                 // Call the generator function via call_indirect (wrapped in try/catch)
                 [ Opcodes.try, Blocktype.void ],
                   number(0, Valtype.i32), // argc = 0
@@ -4422,12 +4436,18 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
                   [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ],
                   [ Opcodes.drop ],
                   [ Opcodes.drop ],
+                  // Restore closure env after generator returns
+                  [ Opcodes.local_get, localTmp(scope, '#asyncgen_saved_closure_env', Valtype.i32) ],
+                  [ Opcodes.global_set, globals['#closure_env'].idx ],
                   // Clear executing flag after generator returns normally
                   [ Opcodes.local_get, genLocal ],
                   Opcodes.i32_to_u,
                   number(0, Valtype.i32),
                   [ Opcodes.i32_store, 0, 76 ],
                 [ Opcodes.catch, 0 ],
+                  // Restore closure env before rethrowing
+                  [ Opcodes.local_get, localTmp(scope, '#asyncgen_saved_closure_env', Valtype.i32) ],
+                  [ Opcodes.global_set, globals['#closure_env'].idx ],
                   // Clear executing flag before rethrowing
                   [ Opcodes.local_get, genLocal ],
                   Opcodes.i32_to_u,
@@ -4625,6 +4645,13 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             [ Opcodes.i32_store, 0, 76 ]
           );
 
+          // Save closure env before generator call
+          const throwSavedEnvLocal = localTmp(scope, '#gen_throw_saved_closure_env', Valtype.i32);
+          out.push(
+            [ Opcodes.global_get, globals['#closure_env'].idx ],
+            [ Opcodes.local_set, throwSavedEnvLocal ]
+          );
+
           // Call the generator function via call_indirect (wrapped in try/catch)
           out.push(
             [ Opcodes.try, Blocktype.void ],
@@ -4645,12 +4672,18 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ],
               [ Opcodes.drop ],
               [ Opcodes.drop ],
+              // Restore closure env after generator returns
+              [ Opcodes.local_get, throwSavedEnvLocal ],
+              [ Opcodes.global_set, globals['#closure_env'].idx ],
               // Clear executing flag after successful return
               [ Opcodes.local_get, genLocal ],
               Opcodes.i32_to_u,
               number(0, Valtype.i32),
               [ Opcodes.i32_store, 0, 76 ],
             [ Opcodes.catch, 0 ],
+              // Restore closure env before rethrowing
+              [ Opcodes.local_get, throwSavedEnvLocal ],
+              [ Opcodes.global_set, globals['#closure_env'].idx ],
               // Clear executing flag before rethrowing
               [ Opcodes.local_get, genLocal ],
               Opcodes.i32_to_u,
@@ -4794,6 +4827,10 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               number(1, Valtype.i32),
               [ Opcodes.i32_store, 0, 76 ],
 
+              // Save closure env before generator call
+              [ Opcodes.global_get, globals['#closure_env'].idx ],
+              [ Opcodes.local_set, localTmp(scope, '#gen_return_saved_closure_env', Valtype.i32) ],
+
               // Call the generator function via call_indirect to run finally blocks
               number(0, Valtype.i32), // argc = 0
               number(0), // newTarget = undefined
@@ -4810,6 +4847,10 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
               [ Opcodes.call_indirect, (Prefs.indirectWrapperArgc ?? 16) + 2, 0 ],
               [ Opcodes.drop ],
               [ Opcodes.drop ],
+
+              // Restore closure env after generator returns
+              [ Opcodes.local_get, localTmp(scope, '#gen_return_saved_closure_env', Valtype.i32) ],
+              [ Opcodes.global_set, globals['#closure_env'].idx ],
 
               // Clear executing flag after generator returns
               [ Opcodes.local_get, genLocal ],
@@ -8116,6 +8157,7 @@ const generateForOf = (scope, decl) => {
       // - offset 40-43: input value type (i32)
 
       const wrapperArgc = Prefs.indirectWrapperArgc ?? 16;
+      const savedEnvLocal = localTmp(scope, '#forof_saved_closure_env', Valtype.i32);
 
       return [
         // Check if already done (offset 28) - if so, break
@@ -8130,6 +8172,10 @@ const generateForOf = (scope, decl) => {
         [ Opcodes.local_get, pointer ],
         number(TYPES.undefined, Valtype.i32),
         [ Opcodes.i32_store, 0, 40 ],
+
+        // Save closure env before generator call (generator may corrupt it)
+        [ Opcodes.global_get, globals['#closure_env'].idx ],
+        [ Opcodes.local_set, savedEnvLocal ],
 
         // Call the generator function via call_indirect
         // Stack order: argc, newTarget, newTargetType, this, thisType, args..., funcIndex
@@ -8152,6 +8198,10 @@ const generateForOf = (scope, decl) => {
         [ Opcodes.call_indirect, wrapperArgc + 2, 0 ],
         [ Opcodes.drop ],
         [ Opcodes.drop ],
+
+        // Restore closure env after generator call
+        [ Opcodes.local_get, savedEnvLocal ],
+        [ Opcodes.global_set, globals['#closure_env'].idx ],
 
         // Check done flag again - if now done, break (don't yield final undefined)
         [ Opcodes.local_get, pointer ],
@@ -8604,6 +8654,7 @@ const generateIteratorClose = (scope, ctx) => {
   // Only close generators - they have a return() method
   // Check if iterator type is generator and if so, call return()
   const wrapperArgc = Prefs.indirectWrapperArgc ?? 16;
+  const savedEnvLocal = localTmp(scope, '#iterclose_saved_closure_env', Valtype.i32);
 
   const closeGeneratorInner = [
     // Set return_requested flag (offset 44)
@@ -8618,6 +8669,10 @@ const generateIteratorClose = (scope, ctx) => {
     [ Opcodes.local_get, ctx.pointer ],
     number(TYPES.undefined, Valtype.i32),
     [ Opcodes.i32_store, 0, 56 ],
+
+    // Save closure env before generator call
+    [ Opcodes.global_get, globals['#closure_env'].idx ],
+    [ Opcodes.local_set, savedEnvLocal ],
 
     // Call the generator function via call_indirect to run finally blocks
     number(0, Valtype.i32), // argc = 0
@@ -8639,6 +8694,10 @@ const generateIteratorClose = (scope, ctx) => {
     [ Opcodes.call_indirect, wrapperArgc + 2, 0 ],
     [ Opcodes.drop ],
     [ Opcodes.drop ],
+
+    // Restore closure env after generator returns
+    [ Opcodes.local_get, savedEnvLocal ],
+    [ Opcodes.global_set, globals['#closure_env'].idx ],
   ];
 
   return [
