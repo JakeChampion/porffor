@@ -233,6 +233,8 @@ export const __Porffor_AsyncGenerator_prototype_return = async (gen: any, value:
   // Mark generator as done
   Porffor.wasm.i32.store(gen, 1, 0, 28); // done = 1
 
+  // Note: Per spec, should unwrap promise values (AsyncGeneratorResolve steps 6-10)
+  // but Porffor's await doesn't properly wait for pending promises yet
   const obj: object = {};
   obj.value = value;
   obj.done = true;
