@@ -1192,8 +1192,12 @@ const funcRef = (func, scope = null) => {
     );
 
     // Copy each captured variable into the environment
+    // Skip function names - they are accessed directly via funcRef, not through closure env
     for (let i = 0; i < capturedVars.length; i++) {
       const varName = capturedVars[i];
+      // Skip if this is a function declaration - it's accessed via funcRef, not closure
+      if (varName in funcIndex) continue;
+
       const closureGlobal = '#closure_' + varName;
       const offset = i * 9;
 
@@ -1800,8 +1804,9 @@ const lookup = (scope, name, failEarly = false) => {
 
     // Closure support: check if this is a captured variable from outer scope
     // Read from heap-allocated closure environment
+    // Skip if the name is a function - functions should be accessed directly via funcRef
     if (Prefs.d) console.log(`lookup: ${scope.name} checking if ${name} is captured, _usesCaptured=${JSON.stringify(scope._usesCaptured)}`);
-    if (scope._usesCaptured?.includes(name)) {
+    if (scope._usesCaptured?.includes(name) && !(name in funcIndex)) {
       const varIndex = scope._usesCaptured.indexOf(name);
       if (Prefs.d) console.log(`lookup: ${name} is captured at index ${varIndex}, #closure_env idx=${globals['#closure_env']?.idx}`);
       if (varIndex !== -1) {
@@ -3375,7 +3380,8 @@ const getType = (scope, name, failEarly = false) => {
   }
 
   // Closure support: get type from closure environment (for inner functions)
-  if (scope._usesCaptured?.includes(name)) {
+  // Skip if this is a function - functions are accessed directly via funcRef
+  if (scope._usesCaptured?.includes(name) && !(name in funcIndex)) {
     const varIndex = scope._usesCaptured.indexOf(name);
     if (varIndex !== -1) {
       // Each captured var takes 9 bytes: 8 bytes for f64 value + 1 byte for type
@@ -3388,7 +3394,8 @@ const getType = (scope, name, failEarly = false) => {
   }
 
   // Closure support: get type from closure global (for outer functions whose vars are captured)
-  if (scope._capturedVars?.includes(name)) {
+  // Skip if this is a function - functions are accessed directly via funcRef
+  if (scope._capturedVars?.includes(name) && !(name in funcIndex)) {
     const closureTypeGlobal = '#closure_' + name + '#type';
     if (closureTypeGlobal in globals) {
       return [
@@ -5216,6 +5223,8 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
         [TYPES.function]: () => {
           // Closure support: extract environment pointer from high bits before call
           const calleeI32Tmp = localTmp(scope, '#callee_i32', Valtype.i32);
+          // Save and restore closure env around the call, so nested calls don't corrupt our env
+          const savedEnvLocal = localTmp(scope, '#saved_closure_env', Valtype.i32);
           // Compute argc: for spreads, use nonSpreadArgCount + spread.length at runtime
           // Note: spreadSetupWasm must run before argcWasm since argcWasm reads #spread.length
           const argcWasm = hadSpread ? [
@@ -5228,6 +5237,10 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             number(wrapperArgc - underflow, Valtype.i32)
           ];
           return [
+            // Save current closure env before the call
+            [ Opcodes.global_get, globals['#closure_env'].idx ],
+            [ Opcodes.local_set, savedEnvLocal ],
+
             ...spreadSetupWasm, // Must run before argcWasm to set #spread
             ...argcWasm,
             ...forceDuoValtype(scope, newTargetWasm, Valtype.f64),
@@ -5251,6 +5264,11 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             number(0xffff, Valtype.i32),
             [ Opcodes.i32_and ],
             [ Opcodes.call_indirect, args.length + 2, 0 ],
+
+            // Restore closure env after the call
+            [ Opcodes.local_get, savedEnvLocal ],
+            [ Opcodes.global_set, globals['#closure_env'].idx ],
+
             ...setLastType(scope)
           ];
         },
@@ -5901,10 +5919,13 @@ const setLocalWithType = (scope, name, isGlobal, decl, tee = false, overrideType
   if (scope._capturedVars?.includes(name)) {
     const closureGlobal = '#closure_' + name;
     if (closureGlobal in globals) {
+      // Get the type from the local type variable, not from getType which would read the closure global
+      const typeLocal = isGlobal ? globals[name + '#type'] : scope.locals[name + '#type'];
       out.push(
         [ Opcodes.local_get, local.idx ],
         [ Opcodes.global_set, globals[closureGlobal].idx ],
-        ...getType(scope, name),
+        // Read from local/global type variable which was just set by setType above
+        [ isGlobal ? Opcodes.global_get : Opcodes.local_get, typeLocal.idx ],
         [ Opcodes.global_set, globals[closureGlobal + '#type'].idx ]
       );
     }
@@ -10970,10 +10991,12 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
           // If this is a parameter, copy it to the closure global at function entry
           if (Prefs.d) console.log(`generateFunc: ${name} locals[${varName}]=${func.locals[varName]?.idx}, closureGlobal idx=${globals[closureGlobal]?.idx}`);
           if (func.locals[varName]) {
+            // Read type from the local type variable, not from getType which would read the closure global
+            const typeLocal = func.locals[varName + '#type'];
             const copyWasm = [
               [ Opcodes.local_get, func.locals[varName].idx ],
               [ Opcodes.global_set, globals[closureGlobal].idx ],
-              ...getType(func, varName),
+              [ Opcodes.local_get, typeLocal.idx ],
               [ Opcodes.global_set, globals[closureGlobal + '#type'].idx ]
             ];
             if (Prefs.d) console.log(`generateFunc: ${name} copying ${varName} to closure, wasm:`, JSON.stringify(copyWasm));
