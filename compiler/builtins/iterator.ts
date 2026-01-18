@@ -107,12 +107,35 @@ export const __Porffor_iterator_close = (iterator: any): void => {
 };
 
 export const __Porffor_WrapperIterator_prototype_next = (storage: any[]) => {
-  // storage is the WrapperIterator array: [0] = iterable, [1] = index
+  // storage is the WrapperIterator array:
+  // Index-based mode: [0] = iterable, [1] = index (>= 0)
+  // Lazy mode: [0] = source iterator, [1] = -1 (flag), [2] = cached next method, [3] = done flag
   const iterable: any = storage[0];
   let index: i32 = storage[1];
-  const length: i32 = __Porffor_iterator_getLength(iterable);
 
   const result: object = {};
+
+  // Check for lazy mode (index == -1)
+  if (index == -1) {
+    // Lazy mode - call source iterator's next method
+    if (storage[3]) {
+      // Already done
+      result.value = undefined;
+      result.done = true;
+      return result;
+    }
+    const nextMethod: any = storage[2];
+    const sourceResult: any = nextMethod.call(iterable);
+    if (sourceResult.done) {
+      storage[3] = true; // Mark as done
+    }
+    result.value = sourceResult.value;
+    result.done = sourceResult.done;
+    return result;
+  }
+
+  // Index-based mode
+  const length: i32 = __Porffor_iterator_getLength(iterable);
 
   if (index >= length) {
     result.value = undefined;
@@ -127,14 +150,29 @@ export const __Porffor_WrapperIterator_prototype_next = (storage: any[]) => {
 };
 
 export const __Porffor_WrapperIterator_prototype_return = (storage: any[], value: any) => {
-  // Mark iterator as done by setting index past length
+  const result: object = {};
+  result.value = value;
+  result.done = true;
+
+  const index: i32 = storage[1];
+
+  // Check for lazy mode (index == -1)
+  if (index == -1) {
+    storage[3] = true; // Mark as done
+    // Forward return to source iterator if it has a return method
+    const source: any = storage[0];
+    const returnMethod: any = source.return;
+    if (returnMethod != null) {
+      returnMethod.call(source, value);
+    }
+    return result;
+  }
+
+  // Index-based mode - mark as done by setting index past length
   const iterable: any = storage[0];
   const length: i32 = __Porffor_iterator_getLength(iterable);
   storage[1] = length;
 
-  const result: object = {};
-  result.value = value;
-  result.done = true;
   return result;
 };
 
@@ -1220,14 +1258,13 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
     // Fall back to iterator-like object with next() method
     const next: any = obj.next;
     if (typeof next === 'function') {
-      // Eagerly consume the iterator into an array
-      const result: any[] = Porffor.malloc();
-      let iterResult: any = next.call(obj);
-      while (!iterResult.done) {
-        result.push(iterResult.value);
-        iterResult = next.call(obj);
-      }
-      const storage: any[] = __Porffor_WrapperIterator_create(result);
+      // Lazy mode - store source iterator and its next method
+      // Storage: [0] = source, [1] = -1 (lazy flag), [2] = next method, [3] = done flag
+      const storage: any[] = Porffor.malloc();
+      storage[0] = obj;
+      storage[1] = -1; // Lazy mode flag
+      storage[2] = next;
+      storage[3] = false; // Not done yet
       return __Porffor_WrapperIterator(storage);
     }
   }
@@ -1328,6 +1365,54 @@ export const __Porffor_WrapperIterator_prototype_drop = (storage: any[], count: 
   return __Porffor_WrapperIterator(newStorage);
 };
 
+// Helper to push flattened mapped value to result array
+export const __Porffor_flatMap_pushMapped = (result: any[], mapped: any): void => {
+  // GetIteratorFlattenable per spec - flatten iterables/iterators one level
+  const mt: i32 = Porffor.type(mapped);
+
+  // Arrays - flatten
+  if (mt == Porffor.TYPES.array) {
+    for (const item of (mapped as any[])) {
+      result.push(item);
+    }
+    return;
+  }
+  // Strings - per spec, strings are NOT flattened by flatMap (only depth-1 non-string iterables)
+  if (mt == Porffor.TYPES.string || mt == Porffor.TYPES.bytestring) {
+    throw new TypeError('Iterator.prototype.flatMap mapper returned a string');
+  }
+  // Objects - check for iterator protocol (next method) or iterable protocol (Symbol.iterator)
+  if (mt == Porffor.TYPES.object) {
+    // First check for Symbol.iterator (iterable)
+    const symbolIterator: any = mapped[Symbol.iterator];
+    if (symbolIterator != null) {
+      const innerIter: any = symbolIterator.call(mapped);
+      const innerNext: any = innerIter.next;
+      while (true) {
+        const innerResult: any = innerNext.call(innerIter);
+        if (innerResult.done) break;
+        result.push(innerResult.value);
+      }
+      return;
+    }
+    // Then check for next method (non-iterable iterator)
+    const nextMethod: any = mapped.next;
+    if (nextMethod != null) {
+      // It's an iterator - iterate through it
+      while (true) {
+        const innerResult: any = nextMethod.call(mapped);
+        if (innerResult.done) break;
+        result.push(innerResult.value);
+      }
+      return;
+    }
+    // No iterator protocol - throw TypeError
+    throw new TypeError('Iterator.prototype.flatMap mapper returned non-iterator object');
+  }
+  // Other types - not iterable, don't flatten
+  result.push(mapped);
+};
+
 export const __Porffor_WrapperIterator_prototype_flatMap = (storage: any[], mapper: any) => {
   if (typeof mapper !== 'function') {
     throw new TypeError('Iterator.prototype.flatMap requires a callable');
@@ -1335,59 +1420,28 @@ export const __Porffor_WrapperIterator_prototype_flatMap = (storage: any[], mapp
 
   const iterable: any = storage[0];
   let index: i32 = storage[1];
-  const length: i32 = __Porffor_iterator_getLength(iterable);
-
   const result: any[] = Porffor.malloc();
+
+  // Check for lazy mode (index == -1)
+  if (index == -1) {
+    const nextMethod: any = storage[2];
+    let counter: i32 = 0;
+    while (true) {
+      const sourceResult: any = nextMethod.call(iterable);
+      if (sourceResult.done) break;
+      const mapped: any = mapper(sourceResult.value, counter++);
+      __Porffor_flatMap_pushMapped(result, mapped);
+    }
+    storage[3] = true; // Mark as done
+    const newStorage: any[] = __Porffor_WrapperIterator_create(result);
+    return __Porffor_WrapperIterator(newStorage);
+  }
+
+  const length: i32 = __Porffor_iterator_getLength(iterable);
   for (let i: i32 = index; i < length; i++) {
     const value: any = __Porffor_iterator_getElement(iterable, i);
     const mapped: any = mapper(value, i);
-
-    // GetIteratorFlattenable per spec - flatten iterables/iterators one level
-    const mt: i32 = Porffor.type(mapped);
-
-    // Arrays - flatten
-    if (mt == Porffor.TYPES.array) {
-      for (const item of (mapped as any[])) {
-        result.push(item);
-      }
-    }
-    // Strings - per spec, strings are NOT flattened by flatMap (only depth-1 non-string iterables)
-    else if (mt == Porffor.TYPES.string || mt == Porffor.TYPES.bytestring) {
-      throw new TypeError('Iterator.prototype.flatMap mapper returned a string');
-    }
-    // Objects - check for iterator protocol (next method) or iterable protocol (Symbol.iterator)
-    else if (mt == Porffor.TYPES.object) {
-      // First check for Symbol.iterator (iterable)
-      const symbolIterator: any = mapped[Symbol.iterator];
-      if (symbolIterator != null) {
-        const innerIter: any = symbolIterator.call(mapped);
-        const innerNext: any = innerIter.next;
-        while (true) {
-          const innerResult: any = innerNext.call(innerIter);
-          if (innerResult.done) break;
-          result.push(innerResult.value);
-        }
-      }
-      // Then check for next method (non-iterable iterator)
-      else {
-        const nextMethod: any = mapped.next;
-        if (nextMethod != null) {
-          // It's an iterator - iterate through it
-          while (true) {
-            const innerResult: any = nextMethod.call(mapped);
-            if (innerResult.done) break;
-            result.push(innerResult.value);
-          }
-        } else {
-          // No iterator protocol - throw TypeError
-          throw new TypeError('Iterator.prototype.flatMap mapper returned non-iterator object');
-        }
-      }
-    }
-    // Other types - not iterable, don't flatten
-    else {
-      result.push(mapped);
-    }
+    __Porffor_flatMap_pushMapped(result, mapped);
   }
 
   storage[1] = length;
@@ -2022,7 +2076,8 @@ export const __Iterator_prototype_flatMap = (_this: any, mapper: any) => {
   if (t == Porffor.TYPES.object) {
     const nextMethod: any = _this.next;
     if (nextMethod != null) {
-      const wrapper: any[] = __Iterator_toWrapperIterator(_this);
+      // Use lazy Iterator.from to wrap the object iterator
+      const wrapper: any[] = __Iterator_from(_this) as any[];
       return __Porffor_WrapperIterator_prototype_flatMap(wrapper, mapper);
     }
   }
