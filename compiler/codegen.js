@@ -4800,7 +4800,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
       // Note: we use a Wasm node to bypass type inference and read type dynamically
       ...(!globalThis.precompile ? [
         ...typeIsOneOf([ [ Opcodes.local_get, localTmp(scope, '#spread#type', Valtype.i32) ] ],
-          [ TYPES.object, TYPES.__porffor_takeiterator, TYPES.__porffor_dropiterator, TYPES.__porffor_mapiterator, TYPES.__porffor_filteriterator, TYPES.__porffor_concatiterator ]),
+          [ TYPES.object, TYPES.__porffor_generator, TYPES.__porffor_asyncgenerator, TYPES.__porffor_takeiterator, TYPES.__porffor_dropiterator, TYPES.__porffor_mapiterator, TYPES.__porffor_filteriterator, TYPES.__porffor_concatiterator ]),
         [ Opcodes.if, Blocktype.void ],
           // Generate: let #spread_arr = []; for (const #x of <object>) #spread_arr.push(#x);
           // Declare and initialize #spread_arr as a local (drops undefined result)
