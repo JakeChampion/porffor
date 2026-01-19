@@ -202,6 +202,173 @@ const extractYieldsFromExpressions = (body) => {
   }
 };
 
+// Transform yield* expressions into expanded while loops at AST level
+// This allows transformLoopsWithYields to process them for proper segment-based dispatch
+let yieldStarCounter = 0;
+const transformYieldStar = (body, isAsync) => {
+  const createYieldStarExpansion = (yieldStarArg, iterName, resultName) => {
+    // For async, wrap calls in await
+    const maybeAwait = (expr) => isAsync ? { type: 'AwaitExpression', argument: expr } : expr;
+
+    // var iter = __Iterator_from(arg) or __AsyncIterator_from(arg)
+    const iterDecl = {
+      type: 'VariableDeclaration',
+      kind: 'var',
+      declarations: [{
+        type: 'VariableDeclarator',
+        id: { type: 'Identifier', name: iterName },
+        init: {
+          type: 'CallExpression',
+          optional: false,
+          callee: { type: 'Identifier', name: isAsync ? '__AsyncIterator_from' : '__Iterator_from' },
+          arguments: [yieldStarArg]
+        }
+      }]
+    };
+
+    // var result = iter.next() (await for async)
+    const resultDecl = {
+      type: 'VariableDeclaration',
+      kind: 'var',
+      declarations: [{
+        type: 'VariableDeclarator',
+        id: { type: 'Identifier', name: resultName },
+        init: maybeAwait({
+          type: 'CallExpression',
+          optional: false,
+          callee: {
+            type: 'MemberExpression',
+            object: { type: 'Identifier', name: iterName },
+            property: { type: 'Identifier', name: 'next' },
+            computed: false,
+            optional: false
+          },
+          arguments: []
+        })
+      }]
+    };
+
+    // while (!result.done) { yield result.value; result = iter.next(); }
+    const whileLoop = {
+      type: 'WhileStatement',
+      test: {
+        type: 'UnaryExpression',
+        operator: '!',
+        prefix: true,
+        argument: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: resultName },
+          property: { type: 'Identifier', name: 'done' },
+          computed: false,
+          optional: false
+        }
+      },
+      body: {
+        type: 'BlockStatement',
+        body: [
+          // yield result.value
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'YieldExpression',
+              argument: {
+                type: 'MemberExpression',
+                object: { type: 'Identifier', name: resultName },
+                property: { type: 'Identifier', name: 'value' },
+                computed: false,
+                optional: false
+              },
+              delegate: false
+            }
+          },
+          // result = iter.next() (await for async)
+          {
+            type: 'ExpressionStatement',
+            expression: {
+              type: 'AssignmentExpression',
+              operator: '=',
+              left: { type: 'Identifier', name: resultName },
+              right: maybeAwait({
+                type: 'CallExpression',
+                optional: false,
+                callee: {
+                  type: 'MemberExpression',
+                  object: { type: 'Identifier', name: iterName },
+                  property: { type: 'Identifier', name: 'next' },
+                  computed: false,
+                  optional: false
+                },
+                arguments: []
+              })
+            }
+          }
+        ]
+      }
+    };
+
+    return [iterDecl, resultDecl, whileLoop];
+  };
+
+  // Process each statement, collecting yield* expansions
+  for (let i = 0; i < body.length; i++) {
+    const stmt = body[i];
+
+    // Collect all yield* in this statement before modifying
+    const yieldStars = [];
+    const collectYieldStars = (node, parent, key) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        for (let j = 0; j < node.length; j++) {
+          collectYieldStars(node[j], node, j);
+        }
+        return;
+      }
+      // Don't descend into nested functions
+      if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' ||
+          node.type === 'ArrowFunctionExpression') return;
+
+      if (node.type === 'YieldExpression' && node.delegate) {
+        yieldStars.push({ node, parent, key });
+      }
+
+      for (const k in node) {
+        if (k[0] === '_' || k === 'type' || k === 'loc' || k === 'range') continue;
+        collectYieldStars(node[k], node, k);
+      }
+    };
+    collectYieldStars(stmt, body, i);
+
+    if (yieldStars.length === 0) continue;
+
+    // Transform each yield* (in reverse order to preserve indices when there are multiple)
+    const expansionStmts = [];
+    for (const { node, parent, key } of yieldStars.reverse()) {
+      const id = yieldStarCounter++;
+      const iterName = `_yieldstar_iter_${id}`;
+      const resultName = `_yieldstar_result_${id}`;
+
+      // Get the completion value expression: result.value
+      const completionExpr = {
+        type: 'MemberExpression',
+        object: { type: 'Identifier', name: resultName },
+        property: { type: 'Identifier', name: 'value' },
+        computed: false,
+        optional: false
+      };
+
+      // Replace the yield* with the completion expression
+      parent[key] = completionExpr;
+
+      // Create expansion statements (add to front since we're processing in reverse)
+      expansionStmts.unshift(...createYieldStarExpansion(node.argument, iterName, resultName));
+    }
+
+    // Insert expansion statements before this statement
+    body.splice(i, 0, ...expansionStmts);
+    i += expansionStmts.length;
+  }
+};
+
 // Check if a node contains any yield expressions (non-recursive into nested functions)
 const containsYield = (node) => {
   if (!node) return false;
@@ -761,6 +928,7 @@ const transformForOfLoop = (stmt, func) => {
   const testLabel = `_forof_test_${loopId}`;
   const afterLabel = `_forof_after_${loopId}`;
   const continueLabel = `_forof_continue_${loopId}`;
+  const isAsync = stmt.await === true;
 
   // Get the loop variable name
   let loopVarName;
@@ -789,14 +957,14 @@ const transformForOfLoop = (stmt, func) => {
   bodyStmts = bodyStmts.map(s => transformBreakContinue(s, afterLabel, continueLabel));
 
   // Build the transformed statements using flat generator state machine:
-  // var __iter_N = __Iterator_from(iterable);
-  // var __result_N = __iter_N.next();
+  // var __iter_N = __Iterator_from(iterable); // or __AsyncIterator_from for async
+  // var __result_N = __iter_N.next();         // await for async
   // __forof_test_N:
   // if (__result_N.done) goto __forof_after_N
   // loopVar = __result_N.value;
   // ... body ...
   // __forof_continue_N:
-  // __result_N = __iter_N.next();
+  // __result_N = __iter_N.next();             // await for async
   // goto __forof_test_N
   // __forof_after_N:
 
@@ -810,8 +978,12 @@ const transformForOfLoop = (stmt, func) => {
     result.push(loopVarDeclaration);
   }
 
-  // var __iter_N = __Iterator_from(iterable);
-  result.push({
+  // Helper to wrap expression in AwaitExpression if async
+  const maybeAwait = (expr) => isAsync ? { type: 'AwaitExpression', argument: expr } : expr;
+
+  // var __iter_N = __Iterator_from(iterable); or __AsyncIterator_from for async
+  // NOTE: Temporarily removed _generatorPreYield marking to debug the loop issue
+  const iterDecl = {
     type: 'VariableDeclaration',
     kind: 'var',
     declarations: [{
@@ -820,20 +992,21 @@ const transformForOfLoop = (stmt, func) => {
       init: {
         type: 'CallExpression',
         optional: false,
-        callee: { type: 'Identifier', name: '__Iterator_from' },
+        callee: { type: 'Identifier', name: isAsync ? '__AsyncIterator_from' : '__Iterator_from' },
         arguments: [stmt.right]
       }
     }]
-  });
+  };
+  result.push(iterDecl);
 
-  // var __result_N = __iter_N.next();
-  result.push({
+  // var __result_N = __iter_N.next(); (await for async)
+  const resultDecl = {
     type: 'VariableDeclaration',
     kind: 'var',
     declarations: [{
       type: 'VariableDeclarator',
       id: { type: 'Identifier', name: resultName },
-      init: {
+      init: maybeAwait({
         type: 'CallExpression',
         optional: false,
         callee: {
@@ -844,9 +1017,10 @@ const transformForOfLoop = (stmt, func) => {
           optional: false
         },
         arguments: []
-      }
+      })
     }]
-  });
+  };
+  result.push(resultDecl);
 
   // Loop test label marker
   result.push({
@@ -895,14 +1069,14 @@ const transformForOfLoop = (stmt, func) => {
     label: continueLabel
   });
 
-  // __result_N = __iter_N.next();
+  // __result_N = __iter_N.next(); (await for async)
   result.push({
     type: 'ExpressionStatement',
     expression: {
       type: 'AssignmentExpression',
       operator: '=',
       left: { type: 'Identifier', name: resultName },
-      right: {
+      right: maybeAwait({
         type: 'CallExpression',
         optional: false,
         callee: {
@@ -913,7 +1087,7 @@ const transformForOfLoop = (stmt, func) => {
           optional: false
         },
         arguments: []
-      }
+      })
     }
   });
 
@@ -1895,40 +2069,8 @@ const generateYield = (scope, decl) => {
     ];
   }
 
-  // yield* delegation: iterate and yield each value
-  if (decl.delegate) {
-    // Transform `yield* iterable` into iterator-based while loop with yields
-    const delegateVar = `#yield_delegate_${uniqId()}`;
-    const forOfStmt = {
-      type: 'ForOfStatement',
-      left: {
-        type: 'VariableDeclaration',
-        kind: 'const',
-        declarations: [{
-          type: 'VariableDeclarator',
-          id: { type: 'Identifier', name: delegateVar }
-        }]
-      },
-      right: arg,
-      body: {
-        type: 'ExpressionStatement',
-        expression: {
-          type: 'YieldExpression',
-          argument: { type: 'Identifier', name: delegateVar },
-          delegate: false
-        }
-      }
-    };
-
-    // For generators, transform the for-of into an iterator-based while loop
-    // that properly persists state across yields
-    const transformedStmts = transformForOfLoop(forOfStmt, scope.generator ? scope : null);
-
-    return generate(scope, {
-      type: 'BlockStatement',
-      body: transformedStmts
-    });
-  }
+  // Note: yield* (decl.delegate) is transformed at AST level by transformYieldStar
+  // before code generation, so we don't handle it here.
 
   // Runtime yield counting with support for nested yields:
   // For `yield yield 1`, the inner yield must complete first, then the outer yield.
@@ -11047,6 +11189,9 @@ const generateFunc = (scope, decl, forceNoExpr = false) => {
         // into extracted temp variables before processing
         if (body.type === 'BlockStatement') {
           extractYieldsFromExpressions(body.body);
+          // Transform yield* into expanded while loops at AST level
+          // This must happen before transformGeneratorToStateMachine so the loops can be transformed
+          transformYieldStar(body.body, func.async);
         }
 
         // Transform generator body into state machine form

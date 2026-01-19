@@ -1298,13 +1298,17 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
     if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
       // Call Symbol.iterator to get the iterator
       const iter: any = iteratorMethod.call(obj);
-      // Eagerly consume the iterator into an array (since WrapperIterator uses index-based iteration)
-      const result: any[] = Porffor.malloc();
-      for (const x of iter) {
-        result.push(x);
+      // Check if the iterator has a next method
+      const nextMethod: any = iter.next;
+      if (Porffor.type(nextMethod) == Porffor.TYPES.function) {
+        // Use lazy mode with the iterator's next method
+        const storage: any[] = Porffor.malloc();
+        storage[0] = iter;
+        storage[1] = -1; // Lazy mode flag
+        storage[2] = nextMethod;
+        storage[3] = false; // Not done yet
+        return __Porffor_WrapperIterator(storage);
       }
-      const storage: any[] = __Porffor_WrapperIterator_create(result);
-      return __Porffor_WrapperIterator(storage);
     }
 
     // Fall back to iterator-like object with next() method
@@ -1322,6 +1326,59 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
   }
 
   throw new TypeError('Iterator.from requires an iterable or iterator-like object');
+};
+
+// __AsyncIterator_from - gets an async iterator from an object for for-await-of loops
+// Returns an iterator object that can be used with await iter.next()
+export const __AsyncIterator_from = (obj: any): any => {
+  const t: i32 = Porffor.type(obj);
+
+  // For built-in indexable types, create a WrapperIterator
+  // (same as __Iterator_from, the await on next() handles sync results)
+  if (t == Porffor.TYPES.array ||
+      t == Porffor.TYPES.string ||
+      t == Porffor.TYPES.bytestring ||
+      t == Porffor.TYPES.stringobject ||
+      t == Porffor.TYPES.set ||
+      (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
+    const storage: any[] = __Porffor_WrapperIterator_create(obj);
+    return __Porffor_WrapperIterator(storage);
+  }
+
+  // Generators - return as-is, they have a next() method
+  if (t == Porffor.TYPES.__porffor_generator) {
+    return obj;
+  }
+
+  // Async generators - return as-is
+  if (t == Porffor.TYPES.__porffor_asyncgenerator) {
+    return obj;
+  }
+
+  // If it's already a WrapperIterator, return as-is
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return obj;
+  }
+
+  // If it's an object, check for Symbol.asyncIterator first, then Symbol.iterator
+  if (t == Porffor.TYPES.object) {
+    // Check for async iterator protocol first
+    const asyncIteratorMethod: any = obj[Symbol.asyncIterator];
+    if (Porffor.type(asyncIteratorMethod) == Porffor.TYPES.function) {
+      // Call Symbol.asyncIterator to get the async iterator
+      return asyncIteratorMethod.call(obj);
+    }
+
+    // Fall back to sync iterator (AsyncFromSyncIterator behavior)
+    const iteratorMethod: any = obj[Symbol.iterator];
+    if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
+      // Call Symbol.iterator to get the sync iterator
+      // The await on next() will handle wrapping sync results as promises
+      return iteratorMethod.call(obj);
+    }
+  }
+
+  throw new TypeError('Value is not async iterable');
 };
 
 // WrapperIterator.prototype methods
