@@ -1685,19 +1685,27 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
       t == Porffor.TYPES.bytestring ||
       t == Porffor.TYPES.set ||
       (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
-    const result: any[] = Porffor.malloc();
     const length: i32 = __Porffor_iterator_getLength(iterable);
+    const result: any[] = Porffor.malloc();
+    result.length = length;
     for (let i: i32 = 0; i < length; i++) {
-      result.push(__Porffor_iterator_getElement(iterable, i));
+      result[i] = __Porffor_iterator_getElement(iterable, i);
     }
     return result;
   }
 
   // Generators need to be consumed using for..of
+  // Use a temporary array then copy to avoid push corruption
   if (t == Porffor.TYPES.__porffor_generator) {
-    const result: any[] = Porffor.malloc();
+    const temp: any[] = [];
     for (const x of iterable) {
-      result.push(x);
+      temp.push(x);
+    }
+    const len: i32 = temp.length;
+    const result: any[] = Porffor.malloc();
+    result.length = len;
+    for (let i: i32 = 0; i < len; i++) {
+      result[i] = temp[i];
     }
     return result;
   }
@@ -1707,16 +1715,25 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
   if (t == Porffor.TYPES.object) {
     const iteratorMethod: any = iterable[Symbol.iterator];
     if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
-      // Get the iterator and use for..of on it (not on the original object)
+      // Get the iterator and manually call next() (can't use for..of on raw iterator)
       const iterator: any = iteratorMethod.call(iterable);
-      const result: any[] = Porffor.malloc();
-      for (const x of iterator) {
-        result.push(x);
+      const nextMethod: any = iterator.next;
+      const temp: any[] = [];
+      while (true) {
+        const result: any = nextMethod.call(iterator);
+        if (result.done) break;
+        temp.push(result.value);
+      }
+      const len: i32 = temp.length;
+      const out: any[] = Porffor.malloc();
+      out.length = len;
+      for (let i: i32 = 0; i < len; i++) {
+        out[i] = temp[i];
       }
       // Dummy reference to ensure __Porffor_object_getIterator is compiled
       // This function is needed for runtime for..of on objects in user code
       if (false) __Porffor_object_getIterator(iterable);
-      return result;
+      return out;
     }
   }
 
@@ -1725,7 +1742,7 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
 
 // Iterator.zip - zips multiple iterables together
 // options has default value so length property is 1
-export const __Iterator_zip = (iterables: any[], options: any = undefined): __Porffor_WrapperIterator => {
+export const __Iterator_zip = (iterables: any, options: any = undefined): __Porffor_WrapperIterator => {
   // Get mode from options (default: 'shortest')
   let mode: string = 'shortest';
   if (options !== undefined && options !== null) {
@@ -1737,13 +1754,8 @@ export const __Iterator_zip = (iterables: any[], options: any = undefined): __Po
     }
   }
 
-  // Validate iterables is an array-like
-  const t: i32 = Porffor.type(iterables);
-  if (t != Porffor.TYPES.array) {
-    throw new TypeError('Iterator.zip requires an array of iterables');
-  }
-
-  const iterablesArr: any[] = iterables as any[];
+  // Convert iterables to array - accepts any iterable
+  const iterablesArr: any[] = __Porffor_iterableToArray(iterables);
   const numIterables: i32 = iterablesArr.length;
 
   if (numIterables === 0) {
