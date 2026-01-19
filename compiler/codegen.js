@@ -6190,20 +6190,24 @@ const generateVarDstr = (scope, kind, pattern, init, defaultValue, global) => {
     const hasActualBindings = pattern.elements.some(e => e !== null);
     const elisionCount = pattern.elements.filter(e => e === null).length;
 
-    if (!hasActualBindings && elisionCount > 0) {
-      // Pure elision pattern - advance iterator without spreading
-      // Use __Porffor_destructureSkip to call next() the required number of times
-      out = out.concat([
-        ...generate(scope, {
-          type: 'CallExpression',
-          callee: { type: 'Identifier', name: '__Porffor_destructureSkip' },
-          arguments: [
-            { type: 'Identifier', name: tmpName },
-            { type: 'Literal', value: elisionCount }
-          ]
-        }),
-        [ Opcodes.drop ] // discard undefined result
-      ]);
+    if (!hasActualBindings) {
+      // No actual bindings - either empty pattern [] or pure elisions [,]
+      if (elisionCount > 0) {
+        // Pure elision pattern - advance iterator without spreading
+        // Use __Porffor_destructureSkip to call next() the required number of times
+        out = out.concat([
+          ...generate(scope, {
+            type: 'CallExpression',
+            callee: { type: 'Identifier', name: '__Porffor_destructureSkip' },
+            arguments: [
+              { type: 'Identifier', name: tmpName },
+              { type: 'Literal', value: elisionCount }
+            ]
+          }),
+          [ Opcodes.drop ] // discard undefined result
+        ]);
+      }
+      // For empty pattern [] (elisionCount === 0), do nothing - no iteration needed
       return out;
     }
 
