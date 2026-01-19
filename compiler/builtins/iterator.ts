@@ -1665,12 +1665,14 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
   const t: i32 = Porffor.type(iterable);
 
   if (t == Porffor.TYPES.array) {
-    // Already an array, return copy
+    // Already an array, return copy using direct assignment (not push)
     const arr: any[] = iterable as any[];
-    const result: any[] = Porffor.malloc();
     const len: i32 = arr.length;
+    const result: any[] = Porffor.malloc();
+    // Pre-set length
+    result.length = len;
     for (let i: i32 = 0; i < len; i++) {
-      result.push(arr[i]);
+      result[i] = arr[i];
     }
     return result;
   }
@@ -1751,12 +1753,15 @@ export const __Iterator_zip = (iterables: any[], options: any = undefined): __Po
   }
 
   // Convert all iterables to arrays and get their lengths
-  const arrays: any[] = [];
-  const lengths: any[] = [];
+  // Use direct indexing instead of push to avoid memory corruption
+  const arrays: any[] = Porffor.malloc();
+  const lengths: any[] = Porffor.malloc();
+  arrays.length = numIterables;
+  lengths.length = numIterables;
   for (let i: i32 = 0; i < numIterables; i++) {
     const arr: any[] = __Porffor_iterableToArray(iterablesArr[i]);
-    arrays.push(arr);
-    lengths.push(arr.length);
+    arrays[i] = arr;
+    lengths[i] = arr.length;
   }
 
   // Determine result length based on mode
@@ -1782,19 +1787,21 @@ export const __Iterator_zip = (iterables: any[], options: any = undefined): __Po
     }
   }
 
-  // Build result array of tuples
+  // Build result array of tuples using direct indexing (not push - push causes memory corruption)
   const result: any[] = Porffor.malloc();
+  result.length = resultLength;
   for (let j: i32 = 0; j < resultLength; j++) {
     const tuple: any[] = Porffor.malloc();
+    tuple.length = numIterables;
     for (let i: i32 = 0; i < numIterables; i++) {
       if (j < lengths[i]) {
         const arr: any[] = arrays[i];
-        tuple.push(arr[j]);
+        tuple[i] = arr[j];
       } else {
-        tuple.push(undefined);
+        tuple[i] = undefined;
       }
     }
-    result.push(tuple);
+    result[j] = tuple;
   }
 
   const storage: any[] = __Porffor_WrapperIterator_create(result);
@@ -1831,14 +1838,17 @@ export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): _
   }
 
   // Convert all iterables to arrays and get their lengths
-  const arrays: any[] = [];
-  const lengths: any[] = [];
+  // Use direct indexing instead of push to avoid memory corruption
+  const arrays: any[] = Porffor.malloc();
+  const lengths: any[] = Porffor.malloc();
+  arrays.length = numKeys;
+  lengths.length = numKeys;
   for (let i: i32 = 0; i < numKeys; i++) {
     const key: any = keys[i];
     const iter: any = iterables[key];
     const arr: any[] = __Porffor_iterableToArray(iter);
-    arrays.push(arr);
-    lengths.push(arr.length);
+    arrays[i] = arr;
+    lengths[i] = arr.length;
   }
 
   // Determine result length based on mode
@@ -1864,8 +1874,9 @@ export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): _
     }
   }
 
-  // Build result array of objects
+  // Build result array of objects using direct indexing (not push - push causes memory corruption)
   const result: any[] = Porffor.malloc();
+  result.length = resultLength;
   for (let j: i32 = 0; j < resultLength; j++) {
     const obj: object = {};
     for (let i: i32 = 0; i < numKeys; i++) {
@@ -1877,7 +1888,7 @@ export const __Iterator_zipKeyed = (iterables: any, options: any = undefined): _
         obj[key] = undefined;
       }
     }
-    result.push(obj);
+    result[j] = obj;
   }
 
   const storage: any[] = __Porffor_WrapperIterator_create(result);
