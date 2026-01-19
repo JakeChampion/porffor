@@ -8220,7 +8220,7 @@ const generateForOf = (scope, decl) => {
       ...setLastType(scope)
     ] ],
 
-    [ TYPES.string, () => [
+    [ [ TYPES.string, TYPES.stringobject ], () => [
       // if remaining length == 0 then break
       [ Opcodes.local_get, length ],
       [ Opcodes.i32_eqz ],

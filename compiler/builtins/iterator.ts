@@ -1724,7 +1724,11 @@ export const __Iterator_concat = (...iterables: any[]): __Porffor_ConcatIterator
     const t: i32 = Porffor.type(iterable);
 
     // Check that it's an iterable type
-    if (t == Porffor.TYPES.object) {
+    // For objects and wrapper objects, check Symbol.iterator property
+    if (t == Porffor.TYPES.object ||
+        t == Porffor.TYPES.booleanobject ||
+        t == Porffor.TYPES.numberobject ||
+        t == Porffor.TYPES.symbolobject) {
       const iteratorMethod: any = iterable[Symbol.iterator];
       if (typeof iteratorMethod !== 'function') {
         throw new TypeError('Iterator.concat requires iterable arguments');
@@ -1734,6 +1738,7 @@ export const __Iterator_concat = (...iterables: any[]): __Porffor_ConcatIterator
     } else if (t == Porffor.TYPES.array ||
                t == Porffor.TYPES.string ||
                t == Porffor.TYPES.bytestring ||
+               t == Porffor.TYPES.stringobject ||
                t == Porffor.TYPES.set ||
                t == Porffor.TYPES.__porffor_generator ||
                t == Porffor.TYPES.__porffor_wrapperiterator ||
@@ -1842,6 +1847,7 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
 
   if (t == Porffor.TYPES.string ||
       t == Porffor.TYPES.bytestring ||
+      t == Porffor.TYPES.stringobject ||
       t == Porffor.TYPES.set ||
       (t >= Porffor.TYPES.uint8clampedarray && t <= Porffor.TYPES.float64array)) {
     const length: i32 = __Porffor_iterator_getLength(iterable);
