@@ -4338,6 +4338,10 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
           const inputTypeLocal = localTmp(scope, '#async_gen_next_input_type', Valtype.i32);
           const enqueuedLocal = localTmp(scope, '#async_gen_next_enqueued');
           const enqueuedTypeLocal = localTmp(scope, '#async_gen_next_enqueued_type', Valtype.i32);
+          // Locals for storing exception when caught (to return rejected promise instead of throwing)
+          const exceptionLocal = localTmp(scope, '#async_gen_next_exception');
+          const exceptionTypeLocal = localTmp(scope, '#async_gen_next_exception_type', Valtype.i32);
+          const hadExceptionLocal = localTmp(scope, '#async_gen_next_had_exception', Valtype.i32);
 
           // Get generator
           out.push(
@@ -4368,6 +4372,12 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             [ Opcodes.local_set, enqueuedLocal ],
             number(0, Valtype.i32),
             [ Opcodes.local_set, enqueuedTypeLocal ]
+          );
+
+          // Initialize hadException to 0 (no exception)
+          out.push(
+            number(0, Valtype.i32),
+            [ Opcodes.local_set, hadExceptionLocal ]
           );
 
           // Check if NOT already done (offset 28) - if not done, run the generator
@@ -4445,10 +4455,17 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
                   number(0, Valtype.i32),
                   [ Opcodes.i32_store, 0, 76 ],
                 [ Opcodes.catch, 0 ],
-                  // Restore closure env before rethrowing
+                  // Catch block puts [value, valueType] on stack (f64, i32)
+                  // Store exception value and type in locals (for returning rejected promise)
+                  [ Opcodes.local_set, exceptionTypeLocal ],
+                  [ Opcodes.local_set, exceptionLocal ],
+                  // Set hadException flag
+                  number(1, Valtype.i32),
+                  [ Opcodes.local_set, hadExceptionLocal ],
+                  // Restore closure env
                   [ Opcodes.local_get, localTmp(scope, '#asyncgen_saved_closure_env', Valtype.i32) ],
                   [ Opcodes.global_set, globals['#closure_env'].idx ],
-                  // Clear executing flag before rethrowing
+                  // Clear executing flag
                   [ Opcodes.local_get, genLocal ],
                   Opcodes.i32_to_u,
                   number(0, Valtype.i32),
@@ -4458,8 +4475,7 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
                   Opcodes.i32_to_u,
                   number(1, Valtype.i32),
                   [ Opcodes.i32_store, 0, 28 ],
-                  // Rethrow
-                  [ Opcodes.throw, globalThis.precompile ? 1 : 0 ],
+                  // Don't rethrow - we'll return a rejected promise instead
                 [ Opcodes.end ],
               [ Opcodes.end ],
             [ Opcodes.else ],
@@ -4475,17 +4491,35 @@ const generateCall = (scope, decl, _global, _name, unusedValue = false) => {
             [ Opcodes.end ]
           );
 
-          // Call the builtin to read values and return result object (wrapped in Promise)
+          // Use a local to store the result
+          const resultLocal = localTmp(scope, '#async_gen_next_result');
+
+          // Check if exception occurred during generator execution
+          // If so, return a rejected promise instead of calling normal next
           out.push(
-            ...generate(scope, {
-              type: 'CallExpression',
-              callee: { type: 'Identifier', name: '__Porffor_AsyncGenerator_prototype_next' },
-              arguments: [
-                { type: 'Identifier', name: '#proto_target' },
-                ...(decl.arguments.length > 0 ? decl.arguments : [{ type: 'Identifier', name: 'undefined' }])
-              ],
-              _protoInternalCall: true
-            })
+            [ Opcodes.local_get, hadExceptionLocal ],
+            [ Opcodes.if, Blocktype.void ],
+              // Exception occurred - call Promise.reject(exception)
+              // __Promise_reject takes [f64, i32] and returns f64 (promise)
+              [ Opcodes.local_get, exceptionLocal ],
+              [ Opcodes.local_get, exceptionTypeLocal ],
+              [ Opcodes.call, includeBuiltin(scope, '__Promise_reject').index ],
+              [ Opcodes.local_set, resultLocal ],
+            [ Opcodes.else ],
+              // No exception - call the builtin to read values and return result object (wrapped in Promise)
+              // __Porffor_AsyncGenerator_prototype_next(gen, gen#type, inputValue, inputValue#type)
+              // returns [f64, i32] (promise value and type)
+              [ Opcodes.local_get, genLocal ],
+              number(TYPES.__porffor_asyncgenerator, Valtype.i32),
+              [ Opcodes.local_get, inputLocal ],
+              [ Opcodes.local_get, inputTypeLocal ],
+              [ Opcodes.call, includeBuiltin(scope, '__Porffor_AsyncGenerator_prototype_next').index ],
+              [ Opcodes.drop ], // Drop the type (i32)
+              [ Opcodes.local_set, resultLocal ],
+            [ Opcodes.end ],
+            // Push result back onto stack
+            [ Opcodes.local_get, resultLocal ],
+            ...setLastType(scope, TYPES.promise)
           );
 
           return out;
