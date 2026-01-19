@@ -6184,6 +6184,29 @@ const generateVarDstr = (scope, kind, pattern, init, defaultValue, global) => {
     const tmpName = '#destructure' + uniqId();
     let out = generateVarDstr(scope, 'const', tmpName, init, defaultValue, false);
 
+    // Check if pattern only has elisions (no actual bindings that need element access)
+    // For pure elision patterns like [,] or [, ,], we only need to advance the iterator
+    // without exhausting it (which spreading to array would do)
+    const hasActualBindings = pattern.elements.some(e => e !== null);
+    const elisionCount = pattern.elements.filter(e => e === null).length;
+
+    if (!hasActualBindings && elisionCount > 0) {
+      // Pure elision pattern - advance iterator without spreading
+      // Use __Porffor_destructureSkip to call next() the required number of times
+      out = out.concat([
+        ...generate(scope, {
+          type: 'CallExpression',
+          callee: { type: 'Identifier', name: '__Porffor_destructureSkip' },
+          arguments: [
+            { type: 'Identifier', name: tmpName },
+            { type: 'Literal', value: elisionCount }
+          ]
+        }),
+        [ Opcodes.drop ] // discard undefined result
+      ]);
+      return out;
+    }
+
     // For non-indexable iterables (generators, Sets, Maps, etc.), convert to array first
     // This ensures array destructuring works with any iterable, not just arrays/strings
     // Store type in local for runtime check since type may not be known at compile time

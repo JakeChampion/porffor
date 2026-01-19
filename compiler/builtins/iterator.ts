@@ -106,6 +106,58 @@ export const __Porffor_iterator_close = (iterator: any): void => {
   }
 };
 
+// Advance an iterator by `count` positions for destructuring elision patterns
+// This does NOT exhaust the iterator - it only calls next() `count` times
+export const __Porffor_destructureSkip = (iterable: any, count: i32): void => {
+  const t: i32 = Porffor.type(iterable);
+
+  // Generators have next() directly
+  if (t == Porffor.TYPES.__porffor_generator) {
+    for (let i: i32 = 0; i < count; i++) {
+      iterable.next();
+    }
+    return;
+  }
+
+  // Lazy iterators have next() directly
+  if (t == Porffor.TYPES.__porffor_wrapperiterator ||
+      t == Porffor.TYPES.__porffor_takeiterator ||
+      t == Porffor.TYPES.__porffor_dropiterator ||
+      t == Porffor.TYPES.__porffor_mapiterator ||
+      t == Porffor.TYPES.__porffor_filteriterator ||
+      t == Porffor.TYPES.__porffor_concatiterator) {
+    for (let i: i32 = 0; i < count; i++) {
+      iterable.next();
+    }
+    return;
+  }
+
+  // Sets and Maps - get iterator via Symbol.iterator
+  if (t == Porffor.TYPES.set || t == Porffor.TYPES.map) {
+    const iteratorMethod: any = iterable[Symbol.iterator];
+    const iterator: any = iteratorMethod.call(iterable);
+    for (let i: i32 = 0; i < count; i++) {
+      iterator.next();
+    }
+    return;
+  }
+
+  // Objects with Symbol.iterator
+  if (t == Porffor.TYPES.object) {
+    const iteratorMethod: any = iterable[Symbol.iterator];
+    if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
+      const iterator: any = iteratorMethod.call(iterable);
+      for (let i: i32 = 0; i < count; i++) {
+        iterator.next();
+      }
+    }
+    return;
+  }
+
+  // For arrays/strings/typed arrays, elisions don't need any action
+  // since they use index-based access and skipping indices is automatic
+};
+
 export const __Porffor_WrapperIterator_prototype_next = (storage: any[]) => {
   // storage is the WrapperIterator array:
   // Index-based mode: [0] = iterable, [1] = index (>= 0)
