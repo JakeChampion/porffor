@@ -1298,15 +1298,21 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
     if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
       // Call Symbol.iterator to get the iterator
       const iter: any = iteratorMethod.call(obj);
-      // Check if the iterator has a next method
+      // Get the next method from the iterator
       const nextMethod: any = iter.next;
       if (Porffor.type(nextMethod) == Porffor.TYPES.function) {
-        // Use lazy mode with the iterator's next method
-        const storage: any[] = Porffor.malloc();
-        storage[0] = iter;
-        storage[1] = -1; // Lazy mode flag
-        storage[2] = nextMethod;
-        storage[3] = false; // Not done yet
+        // Eagerly consume the iterator into an array using direct next() calls
+        // (cannot use for-of here as it would recurse back to __Iterator_from)
+        const result: any[] = Porffor.malloc();
+        let done: boolean = false;
+        while (!done) {
+          const iterResult: any = nextMethod.call(iter);
+          done = iterResult.done;
+          if (!done) {
+            result.push(iterResult.value);
+          }
+        }
+        const storage: any[] = __Porffor_WrapperIterator_create(result);
         return __Porffor_WrapperIterator(storage);
       }
     }
@@ -1314,13 +1320,17 @@ export const __Iterator_from = (obj: any): __Porffor_WrapperIterator => {
     // Fall back to iterator-like object with next() method
     const next: any = obj.next;
     if (typeof next === 'function') {
-      // Lazy mode - store source iterator and its next method
-      // Storage: [0] = source, [1] = -1 (lazy flag), [2] = next method, [3] = done flag
-      const storage: any[] = Porffor.malloc();
-      storage[0] = obj;
-      storage[1] = -1; // Lazy mode flag
-      storage[2] = next;
-      storage[3] = false; // Not done yet
+      // Eagerly consume the iterator into an array
+      const result: any[] = Porffor.malloc();
+      let done: boolean = false;
+      while (!done) {
+        const iterResult: any = next.call(obj);
+        done = iterResult.done;
+        if (!done) {
+          result.push(iterResult.value);
+        }
+      }
+      const storage: any[] = __Porffor_WrapperIterator_create(result);
       return __Porffor_WrapperIterator(storage);
     }
   }
@@ -1753,8 +1763,8 @@ export const __Iterator_concat = (...iterables: any[]): __Porffor_ConcatIterator
 };
 
 // Helper to get iterator from an object's Symbol.iterator
-// Returns the iterator (could be a generator or other iterator type)
-// Does NOT iterate - just gets the iterator, letting codegen handle iteration based on type
+// Returns a WrapperIterator for the object's iterator
+// This eagerly consumes the iterator into an array since WrapperIterator uses index-based iteration
 export const __Porffor_object_getIterator = (obj: any): any => {
   // Get Symbol.iterator method from object
   const iteratorMethod: any = obj[Symbol.iterator];
@@ -1762,11 +1772,51 @@ export const __Porffor_object_getIterator = (obj: any): any => {
     throw new TypeError('Object is not iterable (no Symbol.iterator method)');
   }
 
-  // Call the iterator method to get the iterator
-  // Note: We call with undefined as this because Porffor has a bug where
-  // generator functions called as methods don't advance their state properly
-  // when 'this' is an object. Most iterators don't use 'this' anyway.
-  return iteratorMethod();
+  // Call the iterator method with obj as this context
+  const iter: any = iteratorMethod.call(obj);
+
+  // Check type of returned iterator
+  const t: i32 = Porffor.type(iter);
+
+  // If it's a generator, we need to eagerly consume it into an array
+  if (t == Porffor.TYPES.__porffor_generator) {
+    const result: any[] = Porffor.malloc();
+    // Cannot use for-of here, use direct generator iteration
+    while (true) {
+      // Call generator via indirect call to advance it
+      const iterResult: any = iter.next();
+      if (iterResult.done) break;
+      result.push(iterResult.value);
+    }
+    const storage: any[] = __Porffor_WrapperIterator_create(result);
+    return __Porffor_WrapperIterator(storage);
+  }
+
+  // If it's already a WrapperIterator, return as-is
+  if (t == Porffor.TYPES.__porffor_wrapperiterator) {
+    return iter;
+  }
+
+  // For plain object iterators, eagerly consume into an array
+  if (t == Porffor.TYPES.object) {
+    const nextMethod: any = iter.next;
+    if (Porffor.type(nextMethod) == Porffor.TYPES.function) {
+      const result: any[] = Porffor.malloc();
+      let done: boolean = false;
+      while (!done) {
+        const iterResult: any = nextMethod.call(iter);
+        done = iterResult.done;
+        if (!done) {
+          result.push(iterResult.value);
+        }
+      }
+      const storage: any[] = __Porffor_WrapperIterator_create(result);
+      return __Porffor_WrapperIterator(storage);
+    }
+  }
+
+  // Fallback: try to use __Iterator_from
+  return __Iterator_from(iter);
 };
 
 // Helper to convert any iterable to an array
