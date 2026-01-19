@@ -1287,7 +1287,10 @@ export const BuiltinFuncs = () => {
     returns: [ Valtype.i32 ],
     returnType: TYPES.number,
     wasm: (scope, { allocLargePage, funcs }) => [
+      // Mask out env pointer bits from packed closure reference (low 12 bits = function index)
       [ Opcodes.local_get, 0 ],
+      number(0xfff, Valtype.i32),
+      [ Opcodes.i32_and ],
       [ null, () => [
         number(funcs.bytesPerFuncLut(), Valtype.i32)
       ] ],
@@ -1302,7 +1305,10 @@ export const BuiltinFuncs = () => {
     returns: [ Valtype.i32 ],
     returnType: TYPES.number,
     wasm: (scope, { allocLargePage, funcs }) => [
+      // Mask out env pointer bits from packed closure reference (low 12 bits = function index)
       [ Opcodes.local_get, 0 ],
+      number(0xfff, Valtype.i32),
+      [ Opcodes.i32_and ],
       [ null, () => [
         number(funcs.bytesPerFuncLut(), Valtype.i32)
       ] ],
@@ -1319,7 +1325,10 @@ export const BuiltinFuncs = () => {
     returns: [ Valtype.i32 ],
     returnType: TYPES.bytestring,
     wasm: (scope, { allocLargePage, funcs }) => [
+      // Mask out env pointer bits from packed closure reference (low 12 bits = function index)
       [ Opcodes.local_get, 0 ],
+      number(0xfff, Valtype.i32),
+      [ Opcodes.i32_and ],
       [ null, () => [
         number(funcs.bytesPerFuncLut(), Valtype.i32)
       ] ],

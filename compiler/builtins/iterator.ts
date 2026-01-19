@@ -1710,31 +1710,45 @@ export const __Porffor_iterableToArray = (iterable: any): any[] => {
     return result;
   }
 
-  // Handle objects with Symbol.iterator explicitly
+  // Handle objects with Symbol.iterator or direct iterators (per GetIteratorFlattenable spec)
   // This is needed because precompiled code doesn't include object handling in for..of
   if (t == Porffor.TYPES.object) {
     const iteratorMethod: any = iterable[Symbol.iterator];
+    let iterator: any;
+
     if (Porffor.type(iteratorMethod) == Porffor.TYPES.function) {
-      // Get the iterator and manually call next() (can't use for..of on raw iterator)
-      const iterator: any = iteratorMethod.call(iterable);
-      const nextMethod: any = iterator.next;
-      const temp: any[] = [];
-      while (true) {
-        const result: any = nextMethod.call(iterator);
-        if (result.done) break;
-        temp.push(result.value);
-      }
-      const len: i32 = temp.length;
-      const out: any[] = Porffor.malloc();
-      out.length = len;
-      for (let i: i32 = 0; i < len; i++) {
-        out[i] = temp[i];
-      }
-      // Dummy reference to ensure __Porffor_object_getIterator is compiled
-      // This function is needed for runtime for..of on objects in user code
-      if (false) __Porffor_object_getIterator(iterable);
-      return out;
+      // Object has Symbol.iterator - call it to get the iterator
+      iterator = iteratorMethod.call(iterable);
+    } else if (iteratorMethod === undefined || iteratorMethod === null) {
+      // No Symbol.iterator - per GetIteratorFlattenable spec, use object directly as iterator
+      // This handles raw iterator objects with just a next() method
+      iterator = iterable;
+    } else {
+      // Symbol.iterator exists but is not a function (and not undefined/null)
+      throw new TypeError('Symbol.iterator is not a function');
     }
+
+    const nextMethod: any = iterator.next;
+    if (Porffor.type(nextMethod) != Porffor.TYPES.function) {
+      throw new TypeError('iterator.next is not a function');
+    }
+
+    const temp: any[] = [];
+    while (true) {
+      const result: any = nextMethod.call(iterator);
+      if (result.done) break;
+      temp.push(result.value);
+    }
+    const len: i32 = temp.length;
+    const out: any[] = Porffor.malloc();
+    out.length = len;
+    for (let i: i32 = 0; i < len; i++) {
+      out[i] = temp[i];
+    }
+    // Dummy reference to ensure __Porffor_object_getIterator is compiled
+    // This function is needed for runtime for..of on objects in user code
+    if (false) __Porffor_object_getIterator(iterable);
+    return out;
   }
 
   throw new TypeError('Value is not iterable');
