@@ -85,7 +85,7 @@ if (cluster.isPrimary) {
 
       let change = arr[i] - lastCommitResults[i + 1];
       // let str = `${color}${icon} ${arr[i]}${resultOnly ? '' : ''}${overall && change !== 0 ? ` (${change > 0 ? '+' : ''}${change})` : ''}`;
-      let str = `${resultOnly ? '' : ''}${plainResults ? iconDesc : icon} ${arr[i]}${resultOnly ? '' : ''}${overall && change !== 0 ? ` (${change > 0 ? '+' : ''}${change})` : ''}`;
+      let str = `${resultOnly ? '' : ''}${plainResults ? iconDesc : icon} ${arr[i]}${resultOnly ? '' : ''}${overall && change !== 0 && !Number.isNaN(change) ? ` (${change > 0 ? '+' : ''}${change})` : ''}`;
 
       if (i !== arr.length - 1) str += resultOnly ? ' | ' : ' | ';
       out += str;
@@ -275,7 +275,7 @@ if (cluster.isPrimary) {
   const percentChange = parseFloat((percent - lastCommitResults[0]).toFixed(2));
 
   if (resultOnly) {
-    process.stdout.write(`test262: ${percent.toFixed(2)}%${percentChange !== 0 ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''} | `);
+    process.stdout.write(`test262: ${percent.toFixed(2)}%${percentChange !== 0 && !Number.isNaN(percentChange) ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''} | `);
     console.log(table(true, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts));
     process.exit();
   }
@@ -384,7 +384,7 @@ if (cluster.isPrimary) {
 
   if (allTests) {
     resultOnly = true;
-    console.log(`\ntest262: ${percent.toFixed(2)}%${percentChange !== 0 ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''} | ` + table(true, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts));
+    console.log(`\ntest262: ${percent.toFixed(2)}%${percentChange !== 0 && !Number.isNaN(percentChange) ? ` (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(2)})` : ''} | ` + table(true, total, passes, fails, runtimeErrors, wasmErrors, compileErrors, timeouts));
   }
 } else {
   const tests = JSON.parse(fs.readFileSync(workerDataPath, 'utf8'));
